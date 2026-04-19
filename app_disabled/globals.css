@@ -1,0 +1,27 @@
+html,
+body {
+  padding: 0;
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  background: #f9f9fb;
+  color: #111;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+li {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
