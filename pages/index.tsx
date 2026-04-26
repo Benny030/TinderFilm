@@ -686,7 +686,7 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
     );
   }
 
-  // ─── Matches screen ───────────────────────────────────────────────────────────
+  // ─── Matches screen ──────────────────────────────
   if (screen === 'matches') {
     const matched = getMatches();
     return (
