@@ -46,10 +46,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   try {
     const supabase = createClient();
     const { data, error } = await supabase.from('movies').insert(newMovie).select().single();
-    
-    console.log("URL:", process.env.NEXT_PUBLIC_SUPABASE_URL)
-    console.log("KEY:", process.env.SUPABASE_SERVICE_ROLE_KEY)
-
+  
     if (error) {
       
       return res.status(500).json({ error: error.message });
