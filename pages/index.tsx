@@ -749,86 +749,501 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
 
   return null;
 }
-
-const styles = {
-  screen: { display: 'flex' as const, flexDirection: 'column' as const, height: '100vh', background: '#FBF0B7' },
-  logo: { textAlign: 'center' as const, padding: '40px 24px', flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '20px' },
-  logoIcon: { fontSize: 'clamp(40px, 15vw, 60px)' },
-  logoName: { fontSize: 'clamp(24px, 8vw, 32px)', fontWeight: 'bold' as const, color: '#FFB8C3', letterSpacing: '3px' },
-  logoSub: { fontSize: '14px', color: '#C5E8EB' },
-  roomCode: { fontSize: '12px', color: '#FFB8C3', marginTop: '10px', fontFamily: 'monospace' },
-  shareBtn: { background: '#FFB8C3', color: '#fff', border: 'none', borderRadius: '999px', padding: '12px 20px', fontSize: '14px', cursor: 'pointer' },
-  copyInfo: { fontSize: '12px', color: '#555', marginTop: '10px' },
-  joinForm: { display: 'grid', gap: '12px', padding: '0 24px 24px' },
-  statusCard: { background: '#F8D2D7', borderRadius: '16px', padding: '16px', border: '1px solid #C5E8EB', margin: '0 24px 24px' },
-  statusTitle: { fontSize: '16px', fontWeight: '600' as const, marginBottom: '8px' },
-  statusText: { fontSize: '14px', lineHeight: '1.5', color: '#555' },
-  pendingText: { fontSize: '14px', color: '#FFB8C3' },
-  matchFull: { fontWeight: '700' as const, color: '#C5E8EB' },
-  matchBadge: { display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#FFB8C3', color: '#fff', padding: '8px 12px', borderRadius: '999px', fontSize: '12px', marginTop: '10px' },
-  matchImageLarge: { width: '100%', maxHeight: '320px', objectFit: 'cover' as const, borderRadius: '16px', marginBottom: '18px' },
-  matchTitleLarge: { fontSize: '22px', fontWeight: '700' as const, marginBottom: '10px' },
-  matchMeta: { fontSize: '14px', color: '#666', marginBottom: '20px' },
-  watchBtn: { background: '#C5E8EB', color: '#333', border: 'none', borderRadius: '12px', padding: '12px 20px', fontSize: '14px', cursor: 'pointer' },
-  popupOverlay: { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', zIndex: 30 },
-  popupCard: { background: '#FBF0B7', borderRadius: '24px', padding: '24px', width: '100%', maxWidth: '420px', boxShadow: '0 24px 60px rgba(0,0,0,0.12)' },
-  popupTitle: { fontSize: '20px', fontWeight: '700' as const, marginBottom: '12px' },
-  popupMovie: { fontSize: '16px', color: '#333', marginBottom: '18px' },
-  popupClose: { background: 'none', border: 'none', fontSize: '14px', color: '#666', cursor: 'pointer', marginTop: '18px' },
-  partnerRow: { display: 'flex', gap: '20px', justifyContent: 'center', padding: '0 24px 40px', flexWrap: 'wrap' as const },
-  partnerCard: { background: '#F8D2D7', border: '1px solid #C5E8EB', borderRadius: '12px', padding: '30px 20px', cursor: 'pointer', textAlign: 'center' as const, flex: '1 1 140px' },
-  partnerIcon: { fontSize: '40px', marginBottom: '10px' },
-  partnerName: { fontSize: '16px', fontWeight: '500' as const },
-  partnerSub: { fontSize: '12px', color: '#999', marginTop: '5px' },
-  footer: { padding: '20px 24px', borderTop: '1px solid #C5E8EB', textAlign: 'center' as const },
-  footerBtn: { background: 'none', border: 'none', fontSize: '12px', color: '#333', cursor: 'pointer', textDecoration: 'underline' },
-  header: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 18px', borderBottom: '1px solid #C5E8EB', background: '#F8D2D7' },
-  headerBtn: { background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', padding: '6px' },
-  matchPill: { background: '#B3FBB7', color: '#333', border: 'none', borderRadius: '20px', padding: '6px 12px', fontSize: '12px', cursor: 'pointer' },
-  emptyState: { flex: 1, display: 'flex', flexDirection: 'column' as const, alignItems: 'center', justifyContent: 'center', gap: '15px', textAlign: 'center' as const },
-  emptyIcon: { fontSize: '60px' },
-  emptyTitle: { fontSize: '20px', fontWeight: '500' as const },
-  emptySub: { fontSize: '14px', color: '#999' },
-  addBtn: { background: '#B3FBB7', color: '#333', border: 'none', borderRadius: '8px', padding: '10px 20px', fontSize: '14px', cursor: 'pointer' },
-  cardZone: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
-  card: { position: 'relative' as const, width: 'min(300px, 90vw)', height: 'min(400px, 70vh)', borderRadius: '16px', overflow: 'hidden', background: '#C5E8EB' },
-  cardImage: { width: '100%', height: '100%', objectFit: 'cover' as const },
-  cardGradient: { position: 'absolute' as const, inset: 0, background: 'linear-gradient(transparent 40%, rgba(0,0,0,0.8) 100%)' },
-  cardInfo: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, padding: '15px', color: '#fff' },
-  cardTitle: { fontSize: 'clamp(16px, 5vw, 20px)', fontWeight: '500' as const, marginBottom: '5px' },
-  cardMeta: { fontSize: '12px', color: 'rgba(255,255,255,0.7)' },
-  swipeOverlay: { position: 'absolute' as const, inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '16px' },
-  swipeText: { fontSize: '32px', fontWeight: 'bold' as const, color: '#fff', textShadow: '0 2px 4px rgba(0,0,0,0.5)' },
-  trailerOverlay: { position: 'absolute' as const, inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.7)', borderRadius: '16px' },
-  trailerButton: { background: '#FFB8C3', color: '#333', border: 'none', borderRadius: '12px', padding: '12px 20px', fontSize: '16px', cursor: 'pointer', fontWeight: 'bold' },
-  progressBar: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, height: '4px', background: 'rgba(255,255,255,0.6)', borderRadius: '0 0 16px 16px' },
-  progressFill: { height: '100%', background: '#FFB8C3', borderRadius: '0 0 16px 0', transition: 'width 0.3s ease' },
-  actionRow: { display: 'flex', gap: '30px', alignItems: 'center', justifyContent: 'center', padding: '15px 20px', borderTop: '1px solid #eee' },
-  actionBtn: { width: '60px', height: '60px', borderRadius: '50%', border: '2px solid', fontSize: '20px', cursor: 'pointer', background: '#fff' },
-  passBtn: { borderColor: '#F8D2D7', color: '#F8D2D7' },
-  likeBtn: { borderColor: '#B3FBB7', color: '#39B54A' },
-  resetRow: { display: 'flex', justifyContent: 'center', padding: '10px 20px' },
-  resetBtn: { background: '#C5E8EB', color: '#333', border: 'none', borderRadius: '8px', padding: '8px 16px', fontSize: '12px', cursor: 'pointer' },
-  prog: { textAlign: 'center' as const, fontSize: '12px', color: '#999', padding: '8px' },
-  fbody: { padding: '20px', flex: 1, overflowY: 'auto' as const },
-  form: { display: 'flex', flexDirection: 'column' as const, gap: '12px', marginBottom: '20px' },
-  input: { padding: '10px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', fontFamily: 'system-ui' },
-  twoCol: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
-  submitBtn: { background: '#FFB8C3', color: '#333', border: 'none', borderRadius: '8px', padding: '12px', fontSize: '14px', cursor: 'pointer' },
-  message: { padding: '12px', background: '#B3FBB7', border: '1px solid #C5E8EB', borderRadius: '8px', color: '#333', marginBottom: '20px' },
-  divider: { borderTop: '1px solid #C5E8EB', margin: '20px 0' },
-  sectionTitle: { fontSize: '14px', color: '#C5E8EB', marginBottom: '12px', fontWeight: '500' as const },
-  table: { width: '100%', borderCollapse: 'collapse' as const, fontSize: '14px' },
-  tableHeader: { textAlign: 'left' as const, padding: '10px', borderBottom: '1px solid #C5E8EB', fontWeight: '500' as const, fontSize: '12px', color: '#333' },
-  tableCell: { padding: '10px', borderBottom: '1px solid #F8D2D7' },
-  deleteBtn: { background: 'none', border: 'none', fontSize: '16px', cursor: 'pointer', padding: '5px' },
-  matchGrid: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', padding: '16px', flex: 1, overflowY: 'auto' as const },
-  matchCard: { borderRadius: '12px', overflow: 'hidden', background: '#F8D2D7', border: '1px solid #C5E8EB' },
-  matchImage: { width: '100%', aspectRatio: '2/3', objectFit: 'cover' as const },
-  matchInfo: { padding: '10px' },
-  matchTitle: { fontSize: '14px', fontWeight: '500' as const },
+// ─── Design Tokens ───────────────────────────────────────────────────────────
+// Palette pastel aggiornata — più coerente e leggibile
+const C = {
+  cream:      '#FAF3E0',   // sfondo principale (meno giallo acceso)
+  rose:       '#F4B8C8',   // accento rosa — invariato come richiesto
+  roseDeep:   '#E8869E',   // rosa più scuro per testo su sfondo chiaro
+  mint:       '#B8E4E8',   // accento menta
+  mintDeep:   '#5BBEC8',   // menta più scuro per testo/bordi
+  sage:       '#C8DDD0',   // verde salvia neutro
+  green:      '#9EE6A4',   // verde conferma
+  greenDeep:  '#3CA648',   // verde testo
+  blush:      '#F9E0E6',   // card / superfici rosa pallido
+  fog:        '#EEE8D8',   // superficie secondaria
+  white:      '#FFFFFF',
+  ink:        '#2E2A26',   // testo principale — molto più leggibile del #333
+  muted:      '#7A6F65',   // testo secondario — leggibile ma quieto
+  faint:      '#B0A899',   // placeholder / hint
+  border:     '#E0D6C8',   // bordi neutri
+  shadow:     'rgba(46,42,38,0.08)',
+  shadowMd:   'rgba(46,42,38,0.14)',
+  shadowLg:   'rgba(46,42,38,0.20)',
 };
-
+ 
+// ─── Shared primitives ────────────────────────────────────────────────────────
+const radius = {
+  sm:  '8px',
+  md:  '12px',
+  lg:  '18px',
+  xl:  '24px',
+  full:'999px',
+};
+ 
+const font = {
+  body:    "'DM Sans', 'Helvetica Neue', sans-serif",
+  mono:    "'DM Mono', 'Courier New', monospace",
+};
+ 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const styles = {
+ 
+  // Layout
+  screen: {
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    height: '100vh',
+    background: C.cream,
+    fontFamily: font.body,
+    color: C.ink,
+  },
+ 
+  // Logo / Hero area
+  logo: {
+    textAlign: 'center' as const,
+    padding: '48px 24px',
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '16px',
+  },
+  logoIcon:  { fontSize: 'clamp(44px, 14vw, 64px)' },
+  logoName:  {
+    fontSize: 'clamp(26px, 8vw, 36px)',
+    fontWeight: '700' as const,
+    color: C.roseDeep,        // più scuro → leggibile
+    letterSpacing: '4px',
+    textTransform: 'uppercase' as const,
+  },
+  logoSub:   { fontSize: '13px', color: C.mintDeep, letterSpacing: '0.5px' },
+  roomCode:  {
+    fontSize: '11px',
+    color: C.muted,
+    marginTop: '8px',
+    fontFamily: font.mono,
+    background: C.fog,
+    padding: '4px 10px',
+    borderRadius: radius.full,
+    letterSpacing: '1px',
+  },
+ 
+  // Buttons
+  shareBtn: {
+    background: C.rose,
+    color: C.ink,
+    border: 'none',
+    borderRadius: radius.full,
+    padding: '13px 22px',
+    fontSize: '14px',
+    fontWeight: '600' as const,
+    cursor: 'pointer',
+    boxShadow: `0 2px 8px ${C.shadow}`,
+    transition: 'box-shadow 0.2s, transform 0.15s',
+  },
+  copyInfo: { fontSize: '12px', color: C.muted, marginTop: '8px' },
+ 
+  // Forms
+  joinForm: { display: 'grid', gap: '12px', padding: '0 24px 28px' },
+  input: {
+    padding: '12px 14px',
+    border: `1.5px solid ${C.border}`,
+    borderRadius: radius.md,
+    fontSize: '14px',
+    fontFamily: font.body,
+    color: C.ink,
+    background: C.white,
+    outline: 'none',
+    transition: 'border-color 0.2s',
+    '::placeholder': { color: C.faint },
+  },
+ 
+  // Status card
+  statusCard: {
+    background: C.blush,
+    borderRadius: radius.xl,
+    padding: '20px',
+    border: `1.5px solid ${C.border}`,
+    margin: '0 20px 24px',
+    boxShadow: `0 4px 16px ${C.shadow}`,
+  },
+  statusTitle: {
+    fontSize: '15px',
+    fontWeight: '700' as const,
+    color: C.ink,
+    marginBottom: '8px',
+  },
+  statusText:  { fontSize: '14px', lineHeight: '1.6', color: C.muted },
+  pendingText: { fontSize: '14px', color: C.roseDeep, fontWeight: '500' as const },
+  matchFull:   { fontWeight: '700' as const, color: C.mintDeep },
+  matchBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    background: C.roseDeep,   // contrasto sufficiente con testo bianco
+    color: C.white,
+    padding: '7px 14px',
+    borderRadius: radius.full,
+    fontSize: '12px',
+    fontWeight: '600' as const,
+    marginTop: '12px',
+  },
+ 
+  // Match detail (large)
+  matchImageLarge: {
+    width: '100%',
+    maxHeight: '300px',
+    objectFit: 'cover' as const,
+    borderRadius: radius.lg,
+    marginBottom: '16px',
+    boxShadow: `0 8px 24px ${C.shadowMd}`,
+  },
+  matchTitleLarge: { fontSize: '22px', fontWeight: '700' as const, color: C.ink, marginBottom: '8px' },
+  matchMeta: { fontSize: '13px', color: C.muted, marginBottom: '20px', lineHeight: '1.5' },
+  watchBtn: {
+    background: C.mint,
+    color: C.ink,
+    border: 'none',
+    borderRadius: radius.md,
+    padding: '13px 22px',
+    fontSize: '14px',
+    fontWeight: '600' as const,
+    cursor: 'pointer',
+    boxShadow: `0 2px 8px ${C.shadow}`,
+  },
+ 
+  // Modal / Popup
+  popupOverlay: {
+    position: 'fixed' as const,
+    inset: 0,
+    background: 'rgba(46,42,38,0.30)',
+    backdropFilter: 'blur(4px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '24px',
+    zIndex: 30,
+  },
+  popupCard: {
+    background: C.cream,
+    borderRadius: radius.xl,
+    padding: '28px 24px',
+    width: '100%',
+    maxWidth: '420px',
+    boxShadow: `0 32px 80px ${C.shadowLg}`,
+    border: `1px solid ${C.border}`,
+  },
+  popupTitle: { fontSize: '20px', fontWeight: '700' as const, color: C.ink, marginBottom: '10px' },
+  popupMovie: { fontSize: '15px', color: C.muted, marginBottom: '18px', lineHeight: '1.5' },
+  popupClose: {
+    background: 'none',
+    border: 'none',
+    fontSize: '13px',
+    color: C.faint,
+    cursor: 'pointer',
+    marginTop: '18px',
+    textDecoration: 'underline',
+    fontFamily: font.body,
+  },
+ 
+  // Streaming partner cards
+  partnerRow: {
+    display: 'flex',
+    gap: '14px',
+    justifyContent: 'center',
+    padding: '0 20px 44px',
+    flexWrap: 'wrap' as const,
+  },
+  partnerCard: {
+    background: C.blush,
+    border: `1.5px solid ${C.border}`,
+    borderRadius: radius.lg,
+    padding: '28px 18px',
+    cursor: 'pointer',
+    textAlign: 'center' as const,
+    flex: '1 1 140px',
+    boxShadow: `0 2px 8px ${C.shadow}`,
+    transition: 'box-shadow 0.2s, transform 0.15s',
+  },
+  partnerIcon: { fontSize: '38px', marginBottom: '10px' },
+  partnerName: { fontSize: '15px', fontWeight: '600' as const, color: C.ink },
+  partnerSub:  { fontSize: '12px', color: C.faint, marginTop: '4px' },
+ 
+  // Footer
+  footer: {
+    padding: '18px 24px',
+    borderTop: `1px solid ${C.border}`,
+    textAlign: 'center' as const,
+    background: C.fog,
+  },
+  footerBtn: {
+    background: 'none',
+    border: 'none',
+    fontSize: '12px',
+    color: C.muted,
+    cursor: 'pointer',
+    textDecoration: 'underline',
+    fontFamily: font.body,
+  },
+ 
+  // Header
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '14px 18px',
+    borderBottom: `1px solid ${C.border}`,
+    background: C.blush,
+    boxShadow: `0 2px 8px ${C.shadow}`,
+  },
+  headerBtn:  { background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', padding: '6px' },
+  matchPill: {
+    background: C.green,
+    color: C.greenDeep,
+    border: 'none',
+    borderRadius: radius.full,
+    padding: '6px 14px',
+    fontSize: '12px',
+    fontWeight: '600' as const,
+    cursor: 'pointer',
+  },
+ 
+  // Empty state
+  emptyState: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '14px',
+    textAlign: 'center' as const,
+    padding: '40px 24px',
+  },
+  emptyIcon:  { fontSize: '64px', opacity: 0.7 },
+  emptyTitle: { fontSize: '20px', fontWeight: '600' as const, color: C.ink },
+  emptySub:   { fontSize: '14px', color: C.muted, lineHeight: '1.5' },
+  addBtn: {
+    background: C.green,
+    color: C.greenDeep,
+    border: 'none',
+    borderRadius: radius.md,
+    padding: '11px 22px',
+    fontSize: '14px',
+    fontWeight: '600' as const,
+    cursor: 'pointer',
+    boxShadow: `0 2px 8px ${C.shadow}`,
+  },
+ 
+  // Swipe card zone
+  cardZone: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative' as const,
+  },
+  card: {
+    position: 'relative' as const,
+    width: 'min(300px, 88vw)',
+    height: 'min(420px, 68vh)',
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+    background: C.mint,
+    boxShadow: `0 16px 48px ${C.shadowMd}`,
+  },
+  cardImage:    { width: '100%', height: '100%', objectFit: 'cover' as const },
+  cardGradient: {
+    position: 'absolute' as const,
+    inset: 0,
+    background: 'linear-gradient(transparent 35%, rgba(0,0,0,0.85) 100%)',
+  },
+  cardInfo: {
+    position: 'absolute' as const,
+    bottom: 0, left: 0, right: 0,
+    padding: '18px 16px',
+    color: C.white,
+  },
+  cardTitle: {
+    fontSize: 'clamp(17px, 5vw, 21px)',
+    fontWeight: '700' as const,
+    marginBottom: '4px',
+    lineHeight: '1.3',
+  },
+  cardMeta: { fontSize: '12px', color: 'rgba(255,255,255,0.65)', letterSpacing: '0.3px' },
+ 
+  // Swipe overlay labels
+  swipeOverlay: {
+    position: 'absolute' as const,
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.xl,
+  },
+  swipeText: {
+    fontSize: '34px',
+    fontWeight: '800' as const,
+    color: C.white,
+    textShadow: '0 3px 8px rgba(0,0,0,0.5)',
+    letterSpacing: '2px',
+  },
+ 
+  // Trailer overlay
+  trailerOverlay: {
+    position: 'absolute' as const,
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'rgba(0,0,0,0.65)',
+    borderRadius: radius.xl,
+    backdropFilter: 'blur(2px)',
+  },
+  trailerButton: {
+    background: C.rose,
+    color: C.ink,
+    border: 'none',
+    borderRadius: radius.md,
+    padding: '13px 22px',
+    fontSize: '16px',
+    cursor: 'pointer',
+    fontWeight: '700' as const,
+    boxShadow: `0 4px 16px rgba(0,0,0,0.25)`,
+  },
+ 
+  // Progress bar
+  progressBar: {
+    position: 'absolute' as const,
+    bottom: 0, left: 0, right: 0,
+    height: '3px',
+    background: 'rgba(255,255,255,0.3)',
+    borderRadius: `0 0 ${radius.xl} ${radius.xl}`,
+  },
+  progressFill: {
+    height: '100%',
+    background: C.rose,
+    borderRadius: `0 0 ${radius.xl} 0`,
+    transition: 'width 0.3s ease',
+  },
+ 
+  // Action row (like / pass)
+  actionRow: {
+    display: 'flex',
+    gap: '32px',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '16px 20px',
+    borderTop: `1px solid ${C.border}`,
+    background: C.white,
+  },
+  actionBtn: {
+    width: '62px',
+    height: '62px',
+    borderRadius: '50%',
+    border: '2px solid',
+    fontSize: '22px',
+    cursor: 'pointer',
+    background: C.white,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: `0 2px 10px ${C.shadow}`,
+    transition: 'transform 0.15s, box-shadow 0.15s',
+  },
+  passBtn: { borderColor: C.rose, color: C.roseDeep },
+  likeBtn: { borderColor: C.green, color: C.greenDeep },
+ 
+  // Reset / misc
+  resetRow: { display: 'flex', justifyContent: 'center', padding: '10px 20px' },
+  resetBtn: {
+    background: C.fog,
+    color: C.muted,
+    border: `1px solid ${C.border}`,
+    borderRadius: radius.md,
+    padding: '8px 18px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    fontFamily: font.body,
+  },
+  prog: { textAlign: 'center' as const, fontSize: '12px', color: C.faint, padding: '8px' },
+ 
+  // Filter / form body
+  fbody: { padding: '22px', flex: 1, overflowY: 'auto' as const },
+  form:  { display: 'flex', flexDirection: 'column' as const, gap: '14px', marginBottom: '22px' },
+  twoCol: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' },
+  submitBtn: {
+    background: C.rose,
+    color: C.ink,
+    border: 'none',
+    borderRadius: radius.md,
+    padding: '13px',
+    fontSize: '14px',
+    fontWeight: '600' as const,
+    cursor: 'pointer',
+    boxShadow: `0 2px 8px ${C.shadow}`,
+  },
+ 
+  // Inline messages
+  message: {
+    padding: '13px 16px',
+    background: C.green,
+    border: `1px solid ${C.mintDeep}`,
+    borderRadius: radius.md,
+    color: C.greenDeep,
+    fontWeight: '500' as const,
+    fontSize: '14px',
+    marginBottom: '20px',
+  },
+ 
+  // Section headers & tables
+  divider:      { borderTop: `1px solid ${C.border}`, margin: '22px 0' },
+  sectionTitle: {
+    fontSize: '11px',
+    color: C.mintDeep,
+    marginBottom: '12px',
+    fontWeight: '700' as const,
+    letterSpacing: '1px',
+    textTransform: 'uppercase' as const,
+  },
+  table:      { width: '100%', borderCollapse: 'collapse' as const, fontSize: '14px' },
+  tableHeader: {
+    textAlign: 'left' as const,
+    padding: '10px 12px',
+    borderBottom: `2px solid ${C.border}`,
+    fontWeight: '700' as const,
+    fontSize: '11px',
+    color: C.muted,
+    letterSpacing: '0.8px',
+    textTransform: 'uppercase' as const,
+  },
+  tableCell:  { padding: '11px 12px', borderBottom: `1px solid ${C.fog}`, color: C.ink },
+  deleteBtn:  { background: 'none', border: 'none', fontSize: '16px', cursor: 'pointer', padding: '4px', color: C.roseDeep },
+ 
+  // Match grid
+  matchGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: '14px',
+    padding: '16px',
+    flex: 1,
+    overflowY: 'auto' as const,
+  },
+  matchCard: {
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    background: C.blush,
+    border: `1px solid ${C.border}`,
+    boxShadow: `0 4px 14px ${C.shadow}`,
+  },
+  matchImage: { width: '100%', aspectRatio: '2/3', objectFit: 'cover' as const },
+  matchInfo:  { padding: '10px 12px' },
+  matchTitle: { fontSize: '13px', fontWeight: '600' as const, color: C.ink, lineHeight: '1.4' },
+};
+ 
+export default styles;
+export { C, radius, font };
 export const getServerSideProps: GetServerSideProps<Props> = async ({ query }) => {
   let roomId = query.room as string;
   if (!roomId) {

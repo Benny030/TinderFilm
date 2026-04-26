@@ -47,10 +47,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const supabase = createClient();
     const { data, error } = await supabase.from('movies').insert(newMovie).select().single();
   
-    if (error) {
-      
-      return res.status(500).json({ error: error.message });
-    }
+   if (error) {
+  console.error("SUPABASE ERROR:", error);
+  return res.status(500).json({ error: error.message });
+  }
 
     return res.status(201).json({ movie: data as ResponseData['movie'] });
   } catch (error) {
