@@ -198,7 +198,7 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
   const handleJoinRoom = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault();
     if (!nameInput.trim()) {
-      setStatusMessage('Inserisci un nome valido');
+      setStatusMessage('Inserisci un nome valido!');
       return;
     }
 
@@ -265,7 +265,7 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
         }),
       });
       if (!response.ok) {
-        throw new Error('Errore durante il salvataggio');
+        throw new Error('Errore durante il salvataggio!');
       }
       const newMovie: Movie = await response.json();
       setMovies((prev) => [newMovie, ...prev]);
@@ -277,7 +277,7 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
       setStatusMessage('Film aggiunto!');
     } catch (error) {
       console.error(error);
-      setStatusMessage('Errore durante l aggiunta del film');
+      setStatusMessage('Errore durante l aggiunta del film!');
     } finally {
       setIsSubmitting(false);
     }
@@ -292,9 +292,11 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
       setMovies((prev) => prev.filter((movie) => movie.id.toString() !== movieId.toString()));
     } catch (error) {
       console.error(error);
-      setStatusMessage('Errore durante l eliminazione del film');
+      setStatusMessage('Errore durante l eliminazione del film!');
     }
   };
+
+  
 
   const handleStart = (clientX: number) => {
     setIsDragging(true);
@@ -433,9 +435,15 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
   const currentMovie = remaining[0];
 
   // ─── Welcome screen ──────────────────────────────────────────────────────────
+  // 
   if (screen === 'welcome') {
     return (
       <div style={styles.screen}>
+        <div style={styles.headerMain}>
+          <span style={styles.headerTitle}></span>
+           <button style={styles.addFilm} onClick={() => setScreen('add')}>⚙️</button>
+        </div>
+  
         <div style={styles.logo}>
           <div style={styles.logoIcon}>🎬</div>
           <div style={styles.logoName}>CineDate</div>
@@ -608,6 +616,7 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
               )}
               {showTrailerButton && currentMovie?.trailer && (
                 (() => {
+                  console.log('Opening trailer:', currentMovie.trailer);
                   window.open(currentMovie.trailer, '_blank');
                   setShowTrailerButton(false);
                   return null;
@@ -637,7 +646,7 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
     return (
       <div style={styles.screen}>
         <div style={styles.header}>
-          <button style={styles.headerBtn} onClick={() => setScreen('swipe')}>←</button>
+          <button style={styles.headerBtn} onClick={() => setScreen('welcome')}>←</button>
           <span style={styles.headerTitle}>Aggiungi Film</span>
           <span />
         </div>
@@ -669,6 +678,8 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
                 <tr key={m.id}>
                   <td style={styles.tableCell}>{m.title}</td>
                   <td style={{ ...styles.tableCell, textAlign: 'center' }}>
+                    <button style={styles.deleteBtn} onClick={() => handleDeleteMovie(m.id)}>✏️</button>
+                    <br></br>
                     <button style={styles.deleteBtn} onClick={() => handleDeleteMovie(m.id)}>🗑️</button>
                   </td>
                 </tr>
@@ -741,7 +752,7 @@ const C = {
   shadowLg:  'rgba(46,42,38,0.22)',
 };
 
-const R = { sm: '8px', md: '12px', lg: '18px', xl: '24px', full: '999px' };
+const R = { sm: '8px', md: '12px', lg: '18px', xl: '24px', full: '999px', };
 
 const FONT = "'DM Sans', 'Helvetica Neue', sans-serif";
 const MONO = "'DM Mono', 'Courier New', monospace";
@@ -768,6 +779,15 @@ const styles = {
     background: C.blush,
     boxShadow: `0 2px 8px ${C.shadow}`,
   },
+
+   headerMain: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '13px 18px',
+    borderBottom: `1px solid ${C.border}`,
+  },
+
   headerBtn: {
     background: 'none',
     border: 'none',
@@ -1002,6 +1022,21 @@ const styles = {
     cursor: 'pointer',
     fontFamily: FONT,
   },
+
+    // addFilm (header badge)
+  addFilm: {
+    background: C.white,
+    color: C.ink,
+    border: 'none',
+    borderRadius: R.full,
+    padding: '10px 10px ',
+    fontSize: '12px',
+    fontWeight: '700' as const,
+    cusor: 'pointer',
+    fontFamily: FONT,
+    borderBottom: `2px solid ${C.border}`,
+  },
+
 
   // Empty state
   emptyState: {
