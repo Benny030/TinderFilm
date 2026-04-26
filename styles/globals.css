@@ -7,10 +7,11 @@ body {
   
     background: linear-gradient(
     135deg,
-    #fff1f6 0%,
-    #ffe0eb 40%,
-    #ffc9dd 70%,
-    #f8a8c4 100%
+    black 0%,
+    #1a1a1a 25%,
+    #333 50%,
+    #1a1a1a 75%,
+    black 100%
     );
 }
 
