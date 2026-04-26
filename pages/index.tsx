@@ -607,17 +607,11 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
                 </div>
               )}
               {showTrailerButton && currentMovie?.trailer && (
-                <div style={styles.trailerOverlay}>
-                  <button
-                    style={styles.trailerButton}
-                    onClick={() => {
-                      if (currentMovie?.trailer) window.open(currentMovie.trailer, '_blank');
-                      setShowTrailerButton(false);
-                    }}
-                  >
-                    🎬 Guarda Trailer
-                  </button>
-                </div>
+                (() => {
+                  window.open(currentMovie.trailer, '_blank');
+                  setShowTrailerButton(false);
+                  return null;
+                })()
               )}
             </div>
           )}
@@ -686,7 +680,7 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
     );
   }
 
-  // ─── Matches screen ──────────────────────────────
+  // ─── Matches screen ───────────────────────────────────────────────────────────
   if (screen === 'matches') {
     const matched = getMatches();
     return (
