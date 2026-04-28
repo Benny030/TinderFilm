@@ -12,6 +12,7 @@ import SwipeScreen from '@/components/screens/swipeScreen';
 import MatchesScreen from '@/components/screens/matchesScreen';
 import FinalMatchScreen from '@/components/screens/finalmatchescreen';
 import AddFilmScreen from '@/components/screens/addFilmscreen';
+import AdminGate from '@/components/screens/adminGate';
 
 // ─────────────────────────────────────────────
 // TYPES
@@ -54,6 +55,8 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
   const [finalMatch, setFinalMatch] = useState<Movie | null>(null);
   const [matchPopup, setMatchPopup] = useState<Movie | null>(null);
  
+  // ───── STATO ADMIN ──────────────────────────────────────────────────────────
+  const [isAdminAuthed, setIsAdminAuthed] = useState(false);
 
   // ───── FORM AGGIUNTA FILM ─────
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -227,6 +230,35 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
     }
   };
 
+
+// ─── handler bulk import ─────────────────────────────────────────────────────
+const handleBulkImport = async (rows: JsonMovieRow[]) => {
+  let ok = 0;
+  let errors = 0;
+  for (const row of rows) {
+    try {
+      const response = await fetch('/api/movies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: row.title,
+          year: Number(row.year),
+          genre: row.genre,
+          cover: row.cover ?? null,
+          trailer: row.trailer ?? null,
+          trama_c: row.trama_c ?? null,
+          trama_l: row.trama_l ?? null,
+        }),
+      });
+      if (!response.ok) { errors++; continue; }
+      const newMovie: Movie = await response.json();
+      setMovies((prev) => [newMovie, ...prev]);
+      ok++;
+    } catch { errors++; }
+  }
+  return { ok, errors };
+};
+
   // ─────────────────────────────────────────────
   // SWIPE LOGIC
   // ─────────────────────────────────────────────
@@ -361,25 +393,30 @@ const handleEditMovie = async (movieId: string | number, data: Partial<Movie>) =
   }
 
   if (screen === 'add') {
+    // Mostra il gate se non ancora autenticato come admin
+  if (!isAdminAuthed) {
+    return (
+      <AdminGate
+        onSuccess={() => setIsAdminAuthed(true)}
+        onBack={() => setScreen('welcome')}
+      />
+    );
+  }
   return (
     <AddFilmScreen
-      title={title}
-      setTitle={setTitle}
-      year={year}
-      setYear={setYear}
-      genre={genre}
-      setGenre={setGenre}
-      cover={cover}
-      setCover={setCover}
-      trailer={trailer}
-      setTrailer={setTrailer}
-      onEdit={handleEditMovie} 
+      title={title} setTitle={setTitle}
+      year={year} setYear={setYear}
+      genre={genre} setGenre={setGenre}
+      cover={cover} setCover={setCover}
+      trailer={trailer} setTrailer={setTrailer}
       isSubmitting={isSubmitting}
       statusMessage={statusMessage}
       movies={movies}
       onSubmit={handleAddMovie}
       onDelete={handleDeleteMovie}
-      onBack={() => setScreen('welcome')}
+      onEdit={handleEditMovie}
+      onBulkImport={handleBulkImport}
+      onBack={() => { setIsAdminAuthed(false); setScreen('welcome'); }}
     />
   );
 }
