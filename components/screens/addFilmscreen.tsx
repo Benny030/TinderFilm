@@ -15,6 +15,10 @@ type Props = {
   setCover: (v: string) => void;
   trailer: string;
   setTrailer: (v: string) => void;
+  tramaCorta: string;
+  setTramaCorta: (v: string) => void;
+  tramaLunga: string;
+  setTramaLunga: (v: string) => void;
   isSubmitting: boolean;
   statusMessage: string;
   movies: Movie[];
@@ -31,6 +35,8 @@ export default function AddFilmScreen({
   genre, setGenre,
   cover, setCover,
   trailer, setTrailer,
+  tramaCorta, setTramaCorta,
+  tramaLunga, setTramaLunga,
   isSubmitting,
   statusMessage,
   movies,
@@ -51,6 +57,8 @@ export default function AddFilmScreen({
   const [editGenre, setEditGenre] = useState('');
   const [editCover, setEditCover] = useState('');
   const [editTrailer, setEditTrailer] = useState('');
+  const [editTramaCorta, setEditTramaCorta] = useState('');
+  const [editTramaLunga, setEditTramaLunga] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
   // ───── IMPORT JSON ─────
@@ -67,6 +75,8 @@ export default function AddFilmScreen({
     setEditGenre(m.genre);
     setEditCover(m.cover ?? '');
     setEditTrailer(m.trailer ?? '');
+    setEditTramaCorta(m.trama_c ?? '');
+    setEditTramaLunga(m.trama_l ?? '');
   };
 
   const closeEdit = () => { setEditTarget(null); setIsEditing(false); };
@@ -81,6 +91,8 @@ export default function AddFilmScreen({
       genre: editGenre.trim(),
       cover: editCover.trim() || null,
       trailer: editTrailer.trim() || null,
+      trama_c: editTramaCorta.trim() || null,
+      trama_l: editTramaLunga.trim() || null,
     });
     setIsEditing(false);
     closeEdit();
@@ -145,6 +157,10 @@ export default function AddFilmScreen({
           </div>
           <input value={cover} onChange={(e) => setCover(e.target.value)} placeholder="URL copertina" style={styles.input} />
           <input value={trailer} onChange={(e) => setTrailer(e.target.value)} placeholder="URL trailer" style={styles.input} />
+          <input value={tramaCorta} onChange={(e) => setTramaCorta(e.target.value)} placeholder="Trama Corta" style={styles.input} />
+          <input value={tramaLunga} onChange={(e) => setTramaLunga(e.target.value)} placeholder="Trama Lunga" style={styles.input} />
+          
+          
           <button type="submit" disabled={isSubmitting} style={styles.submitBtn}>
             {isSubmitting ? 'Salvataggio...' : '🎬 Aggiungi Film'}
           </button>
@@ -280,6 +296,9 @@ export default function AddFilmScreen({
               </div>
               <input value={editCover} onChange={(e) => setEditCover(e.target.value)} placeholder="URL copertina" style={styles.input} />
               <input value={editTrailer} onChange={(e) => setEditTrailer(e.target.value)} placeholder="URL trailer" style={styles.input} />
+
+              <input value={editTramaCorta} onChange={(e) => setEditTramaCorta(e.target.value)} placeholder="Trama Corta" style={styles.input} />
+              <input value={editTramaLunga} onChange={(e) => setEditTramaLunga(e.target.value)} placeholder="Trama Lunga" style={styles.input} />
               <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
                 <button type="submit" disabled={isEditing} style={{ ...styles.submitBtn, flex: 1 }}>
                   {isEditing ? 'Salvataggio...' : '💾 Salva'}

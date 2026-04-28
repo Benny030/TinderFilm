@@ -52,6 +52,8 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
   const [genre, setGenre] = useState('');
   const [cover, setCover] = useState('');
   const [trailer, setTrailer] = useState('');
+  const [tramaCorta, setTramaCorta] = useState('');
+  const [tramaLunga, setTramaLunga] = useState('');
 
   // ───── REFS ─────
   const channelRef = useRef<any>(null);
@@ -191,12 +193,14 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
           genre: genre.trim(),
           cover: cover.trim() || null,
           trailer: trailer.trim() || null,
+          trama_c: tramaCorta.trim() || null,
+          trama_l: tramaLunga.trim() || null,
         }),
       });
       if (!response.ok) throw new Error('Errore durante il salvataggio!');
       const newMovie: Movie = await response.json();
       setMovies((prev) => [newMovie, ...prev]);
-      setTitle(''); setYear(''); setGenre(''); setCover(''); setTrailer('');
+      setTitle(''); setYear(''); setGenre(''); setCover(''); setTrailer(''); setTramaCorta(''); setTramaLunga('');
       setStatusMessage('Film aggiunto!');
     } catch (error) {
       console.error(error);
@@ -396,6 +400,8 @@ const handleEditMovie = async (movieId: string | number, data: Partial<Movie>) =
       genre={genre} setGenre={setGenre}
       cover={cover} setCover={setCover}
       trailer={trailer} setTrailer={setTrailer}
+      tramaCorta={tramaCorta} setTramaCorta={setTramaCorta}
+      tramaLunga={tramaLunga} setTramaLunga={setTramaLunga}
       isSubmitting={isSubmitting}
       statusMessage={statusMessage}
       movies={movies}
