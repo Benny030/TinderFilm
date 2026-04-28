@@ -18,22 +18,9 @@ import AdminGate from '@/components/screens/adminGate';
 // TYPES
 // ─────────────────────────────────────────────
 
-type Movie = {
-  id: string | number;
-  title: string;
-  year: number;
-  genre: string;
-  cover: string | null;
-  trailer: string | null;
-};
+import { JsonMovieRow, Movie , RoomUser , SwipeState , Props} from '@/types';
 
-type RoomUser = { id: string; name: string };
-type SwipeState = Record<string, Record<string, boolean>>;
 
-type Props = {
-  movies: Movie[];
-  roomId: string;
-};
 
 // ─────────────────────────────────────────────
 // COMPONENTE PRINCIPALE

@@ -2,25 +2,7 @@
 
 import { type FormEvent, useState, useRef } from 'react';
 import { styles } from '@/styles/appStyles';
-
-type Movie = {
-  id: string | number;
-  title: string;
-  year: number;
-  genre: string;
-  cover: string | null;
-  trailer: string | null;
-};
-
-type JsonMovieRow = {
-  title: string;
-  year: number;
-  genre: string;
-  cover?: string | null;
-  trailer?: string | null;
-  trama_c?: string | null;
-  trama_l?: string | null;
-};
+import type { Movie, JsonMovieRow } from '@/types';
 
 type Props = {
   title: string;
