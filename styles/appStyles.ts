@@ -300,8 +300,7 @@ const styles = {
     padding: '10px 10px ',
     fontSize: '12px',
     fontWeight: '700' as const,
-    cusor: 'pointer',
-    fontFamily: FONT,
+    cursor: 'pointer',
     borderBottom: `2px solid ${C.border}`,
   },
 
