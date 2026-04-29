@@ -8,6 +8,8 @@ type Movie = {
   genre: string;
   cover: string | null;
   trailer: string | null;
+  trama_c: string | null;
+  trama_l: string | null;
 };
 type Props = {
   currentMovie: Movie | null;
@@ -113,7 +115,7 @@ export default function SwipeScreen({
                 style={styles.cardBtnInfo}
                 onClick={(e) => { e.stopPropagation(); setIsFlipped(true); }}
               >
-                ℹ️
+                ⓘ
               </button>
 
               <img
@@ -169,7 +171,7 @@ export default function SwipeScreen({
                 <div style={styles.cardBackDivider} />
                 {/* Placeholder trama — da collegare all'API */}
                 <div style={styles.cardBackPlot}>
-                  Trama non ancora disponibile.
+                  {currentMovie.trama_c} 
                 </div>
               </div>
             </div>

@@ -15,6 +15,7 @@ export default function AdminGate({ onSuccess, onBack }: Props) {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [error, setError] = useState('');
+  const [showPass, setShowPass] = useState(false); // ← AGGIUNTO
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -59,14 +60,39 @@ export default function AdminGate({ onSuccess, onBack }: Props) {
             autoComplete="username"
             style={styles.input}
           />
-          <input
-            type="password"
-            value={pass}
-            onChange={(e) => setPass(e.target.value)}
-            placeholder="Password"
-            autoComplete="current-password"
-            style={styles.input}
-          />
+
+          {/* ── Campo password con toggle ─────────────────────────────────── */}
+          <div style={{ position: 'relative' as const }}>
+            <input
+              type={showPass ? 'text' : 'password'} // ← CAMBIA TIPO
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              placeholder="Password"
+              autoComplete="current-password"
+              style={{ ...styles.input, paddingRight: '44px' }} // spazio per il bottone
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass((v) => !v)}
+              aria-label={showPass ? 'Nascondi password' : 'Mostra password'}
+              style={{
+                position: 'absolute' as const,
+                right: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '18px',
+                lineHeight: 1,
+                padding: '2px',
+                opacity: showPass ? 1 : 0.45,
+              }}
+            >
+              👁️
+            </button>
+          </div>
+
           {error && (
             <div style={{ ...styles.message, background: '#F4B8C8', color: '#E8869E', borderColor: '#E8869E' }}>
               {error}

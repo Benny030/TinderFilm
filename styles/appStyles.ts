@@ -126,6 +126,7 @@ const styles = {
     color: C.ink,
     background: C.white,
     outline: 'none',
+    width: '100%'
   },
   submitBtn: {
     background: C.rose,
