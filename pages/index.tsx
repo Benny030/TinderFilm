@@ -104,23 +104,18 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
   });
 
   // ───── GLOBAL DRAG EVENTS ─────
-  useEffect(() => {
-    if (!isDragging) return;
-    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
-    const onMouseUp = () => handleEnd();
-    const onTouchMove = (e: TouchEvent) => { e.preventDefault(); handleMove(e.touches[0].clientX); };
-    const onTouchEnd = () => handleEnd();
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
-    document.addEventListener('touchmove', onTouchMove, { passive: false });
-    document.addEventListener('touchend', onTouchEnd);
-    return () => {
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
-      document.removeEventListener('touchmove', onTouchMove);
-      document.removeEventListener('touchend', onTouchEnd);
-    };
-  }, [isDragging]);
+useEffect(() => {
+  if (!isDragging) return;
+  const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
+  const onMouseUp = () => handleEnd();
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+  return () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  };
+  // ─── RIMOSSI i listener touch globali, ora sono sulla card ───
+}, [isDragging]);
 
   // ───── REALTIME CHANNEL ─────
   useEffect(() => {

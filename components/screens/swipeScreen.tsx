@@ -75,19 +75,42 @@ export default function SwipeScreen({
       {/* CARD ZONE */}
       <div style={styles.cardZone}>
         {/* Wrapper che trasla + ruota durante drag */}
-        <div
-          style={{
-            transform: `translateX(${isFlipped ? 0 : dragOffset}px) rotate(${isFlipped ? 0 : dragOffset * 0.15}deg)`,
-            transition: isDragging && !isFlipped ? 'none' : 'transform 0.3s ease',
-            // prospettiva per il flip 3D
-            perspective: '1000px',
-            width: 'min(300px, 88vw)',
-            height: 'min(420px, 68vh)',
-          }}
-          onMouseDown={(e) => { if (!isFlipped) handleStart(e.clientX); }}
-          onMouseMove={(e) => { if (!isFlipped) handleMove(e.clientX); }}
-          onMouseUp={() => { if (!isFlipped) handleEnd(); }}
-        >
+<div
+  style={{
+    transform: `translateX(${isFlipped ? 0 : dragOffset}px) rotate(${isFlipped ? 0 : dragOffset * 0.15}deg)`,
+    transition: isDragging && !isFlipped ? 'none' : 'transform 0.3s ease',
+    perspective: '1000px',
+    width: 'min(300px, 88vw)',
+    height: 'min(420px, 68vh)',
+    // ─── FIX 1: blocca scroll nativo del browser sul touch ───
+    touchAction: 'none',
+    userSelect: 'none',
+    WebkitUserSelect: 'none',
+  }}
+  // ─── FIX 2: mouse ─────────────────────────────────────────
+  onMouseDown={(e) => {
+    if (isFlipped) return;
+    e.preventDefault();
+    handleStart(e.clientX);
+  }}
+  // ─── FIX 3: touch — gestiti direttamente sulla card ───────
+  onTouchStart={(e) => {
+    if (isFlipped) return;
+    e.stopPropagation();
+    handleStart(e.touches[0].clientX);
+  }}
+  onTouchMove={(e) => {
+    if (isFlipped) return;
+    e.preventDefault();      // blocca scroll pagina
+    e.stopPropagation();
+    handleMove(e.touches[0].clientX);
+  }}
+  onTouchEnd={(e) => {
+    if (isFlipped) return;
+    e.stopPropagation();
+    handleEnd();
+  }}
+>
           {/* Inner: questo è l'elemento che ruota */}
           <div
             style={{
