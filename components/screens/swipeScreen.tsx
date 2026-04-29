@@ -1,16 +1,7 @@
 'use client';
 import { useState } from 'react';
+import { Movie } from '@/types';
 
-type Movie = {
-  id: string | number;
-  title: string;
-  year: number;
-  genre: string;
-  cover: string | null;
-  trailer: string | null;
-  trama_c: string | null;
-  trama_l: string | null;
-};
 type Props = {
   currentMovie: Movie | null;
   remainingCount: number;
