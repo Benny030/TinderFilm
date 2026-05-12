@@ -64,145 +64,112 @@ export default function SwipeScreen({
   }
 
   return (
-    <div style={styles.screen}>
-      {/* HEADER */}
-      <div style={styles.header}>
-        <button style={styles.headerBtn} onClick={() => goBack()}>←</button>
-        <span style={styles.headerTitle}>{currentUserName}</span>
-        <button style={styles.matchPill} onClick={onOpenMatches}>❤</button>
-      </div>
+ // ─── touchAction: none blocca scroll, ma NIENTE onTouchStart qui ──────────
+  // onTouchStart sul div radice bloccherebbe anche i tap sui bottoni
+  <div style={{ ...styles.screen, touchAction: 'none' }}>
 
-      {/* CARD ZONE */}
-      <div style={styles.cardZone}>
-        {/* Wrapper che trasla + ruota durante drag */}
-<div
-  style={{
-    transform: `translateX(${isFlipped ? 0 : dragOffset}px) rotate(${isFlipped ? 0 : dragOffset * 0.15}deg)`,
-    transition: isDragging && !isFlipped ? 'none' : 'transform 0.3s ease',
-    perspective: '1000px',
-    width: 'min(300px, 88vw)',
-    height: 'min(420px, 68vh)',
-    // ─── FIX 1: blocca scroll nativo del browser sul touch ───
-    touchAction: 'none',
-    userSelect: 'none',
-    WebkitUserSelect: 'none',
-  }}
-  // ─── FIX 2: mouse ─────────────────────────────────────────
-  onMouseDown={(e) => {
-    if (isFlipped) return;
-    e.preventDefault();
-    handleStart(e.clientX);
-  }}
-  // ─── FIX 3: touch — gestiti direttamente sulla card ───────
-  onTouchStart={(e) => {
-    if (isFlipped) return;
-    e.stopPropagation();
-    handleStart(e.touches[0].clientX);
-  }}
-  onTouchMove={(e) => {
-    if (isFlipped) return;
-    e.preventDefault();      // blocca scroll pagina
-    e.stopPropagation();
-    handleMove(e.touches[0].clientX);
-  }}
-  onTouchEnd={(e) => {
-    if (isFlipped) return;
-    e.stopPropagation();
-    handleEnd();
-  }}
->
-          {/* Inner: questo è l'elemento che ruota */}
-          <div
-            style={{
-              width: '100%',
-              height: '100%',
-              position: 'relative' as const,
-              transformStyle: 'preserve-3d' as const,
-              transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
-              transition: 'transform 0.5s cubic-bezier(0.4, 0.2, 0.2, 1)',
-            }}
-          >
-            {/* ── FRONTE ── */}
-            <div style={{ ...styles.card, ...styles.cardFace }}>
-              {/* Bottone info */}
-              <button
-                style={styles.cardBtnInfo}
-                onClick={(e) => { e.stopPropagation(); setIsFlipped(true); }}
-              >
-                ⓘ
-              </button>
+    {/* HEADER */}
+    <div style={styles.header}>
+      <button style={styles.headerBtn} onClick={() => goBack()}>←</button>
+      <span style={styles.headerTitle}>{currentUserName}</span>
+      <button style={styles.matchPill} onClick={onOpenMatches}>❤</button>
+    </div>
 
-              <img
-                src={
-                  currentMovie.cover?.startsWith('http')
-                    ? currentMovie.cover
-                    : 'https://placehold.in/300x420'
-                }
-                style={styles.cardImage}
-                draggable={false}
-              />
-
-              <div style={styles.cardInfo}>
-                <div style={styles.cardTitle}>{currentMovie.title}</div>
-                <div style={styles.cardMeta}>
-                  {currentMovie.year} • {currentMovie.genre}
-                </div>
-              </div>
-
-              {/* Swipe feedback */}
-              {Math.abs(dragOffset) > 30 && (
-                <div
-                  style={{
-                    ...styles.swipeOverlay,
-                    background: dragOffset > 0
-                      ? 'rgba(158, 230, 164, 0.45)'
-                      : 'rgba(244, 184, 200, 0.45)',
-                    opacity: Math.min(Math.abs(dragOffset) / 120, 1),
-                  }}
-                >
-                  <div style={styles.swipeText}>
-                    {dragOffset > 0 ? 'LIKE' : 'PASS'}
-                  </div>
-                </div>
-              )}
+    {/* CARD ZONE */}
+    <div style={styles.cardZone}>
+      <div
+        style={{
+          transform: `translateX(${isFlipped ? 0 : dragOffset}px) rotate(${isFlipped ? 0 : dragOffset * 0.15}deg)`,
+          transition: isDragging && !isFlipped ? 'none' : 'transform 0.3s ease',
+          perspective: '1000px',
+          width: 'min(300px, 88vw)',
+          height: 'min(420px, 68vh)',
+          touchAction: 'none',
+          userSelect: 'none',
+          WebkitUserSelect: 'none' as any,
+        }}
+        // ─── mouse ────────────────────────────────────────────────────────
+        onMouseDown={(e) => {
+          if (isFlipped) return;
+          e.preventDefault();
+          handleStart(e.clientX);
+        }}
+        // ─── touch: handleStart va chiamato qui, move/end sono globali ────
+        onTouchStart={(e) => {
+          if (isFlipped) return;
+          handleStart(e.touches[0].clientX);
+        }}
+      >
+        {/* Inner flip */}
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            position: 'relative' as const,
+            transformStyle: 'preserve-3d' as const,
+            transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+            transition: 'transform 0.5s cubic-bezier(0.4, 0.2, 0.2, 1)',
+          }}
+        >
+          {/* ── FRONTE ── */}
+          <div style={{ ...styles.card, ...styles.cardFace }}>
+            <button
+              style={styles.cardBtnInfo}
+              onClick={(e) => { e.stopPropagation(); setIsFlipped(true); }}
+            >
+             &nbsp; ⓘ <br/>  
+            </button>
+            <img
+              src={currentMovie.cover?.startsWith('http') ? currentMovie.cover : 'https://placehold.in/300x420'}
+              style={styles.cardImage}
+              draggable={false}
+            />
+            <div style={styles.cardInfo}>
+              <div style={styles.cardTitle}>{currentMovie.title}</div>
+              <div style={styles.cardMeta}>{currentMovie.year} • {currentMovie.genre}</div>
             </div>
-
-            {/* ── RETRO ── */}
-            <div style={{ ...styles.card, ...styles.cardFaceBack }}>
-              {/* Bottone chiudi */}
-              <button
-                style={styles.cardBtnInfo}
-                onClick={(e) => { e.stopPropagation(); setIsFlipped(false); }}
+            {Math.abs(dragOffset) > 30 && (
+              <div
+                style={{
+                  ...styles.swipeOverlay,
+                  background: dragOffset > 0 ? 'rgba(158,230,164,0.45)' : 'rgba(244,184,200,0.45)',
+                  opacity: Math.min(Math.abs(dragOffset) / 120, 1),
+                }}
               >
-                ✕
-              </button>
-
-              <div style={styles.cardBackContent}>
-                <div style={styles.cardBackTitle}>{currentMovie.title}</div>
-                <div style={styles.cardBackMeta}>
-                  {currentMovie.year} • {currentMovie.genre}
-                </div>
-                <div style={styles.cardBackDivider} />
-                {/* Placeholder trama — da collegare all'API */}
-                <div style={styles.cardBackPlot}>
-                  {currentMovie.trama_c} 
-                </div>
+                <div style={styles.swipeText}>{dragOffset > 0 ? 'LIKE' : 'PASS'}</div>
               </div>
+            )}
+          </div>
+
+          {/* ── RETRO ── */}
+          <div style={{ ...styles.card, ...styles.cardFaceBack }}>
+            <button
+              style={styles.cardBtnInfo}
+              onClick={(e) => { e.stopPropagation(); setIsFlipped(false); }}
+            >
+              ✕
+            </button>
+            <div style={styles.cardBackContent}>
+              <div style={styles.cardBackTitle}>{currentMovie.title}</div>
+              <div style={styles.cardBackMeta}>{currentMovie.year} • {currentMovie.genre}</div>
+              <div style={styles.cardBackDivider} />
+              <div style={styles.cardBackPlot}>{currentMovie.trama_c}</div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* ACTION BUTTONS — disabilitati quando è girata */}
-      <div style={{ ...styles.actionRow, opacity: isFlipped ? 0.35 : 1, pointerEvents: isFlipped ? 'none' : 'auto' }}>
-        <button style={{ ...styles.actionBtn, ...styles.passBtn }} onClick={() => onSwipe(currentMovie.id, false)}>✕</button>
-        <button style={{ ...styles.actionBtn, ...styles.likeBtn }} onClick={() => onSwipe(currentMovie.id, true)}>❤</button>
-      </div>
-
-      <div style={styles.resetRow}>
-        <button style={styles.resetBtn} onClick={onReset}>Reset</button>
-      </div>
-      <div style={styles.prog}>{remainingCount} film rimanenti</div>
     </div>
-  );
+
+    {/* ACTION BUTTONS */}
+    <div style={{ ...styles.actionRow, opacity: isFlipped ? 0.35 : 1, pointerEvents: isFlipped ? 'none' : 'auto' }}>
+      <button style={{ ...styles.actionBtn, ...styles.passBtn }} onClick={() => onSwipe(currentMovie.id, false)}>✕</button>
+      <button style={{ ...styles.actionBtn, ...styles.likeBtn }} onClick={() => onSwipe(currentMovie.id, true)}>❤</button>
+    </div>
+
+    <div style={styles.resetRow}>
+      <button style={styles.resetBtn} onClick={onReset}>Reset</button>
+    </div>
+    <div style={styles.prog}>{remainingCount} film rimanenti</div>
+  </div>
+);
 }

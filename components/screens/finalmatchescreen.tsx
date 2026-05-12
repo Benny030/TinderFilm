@@ -1,17 +1,8 @@
 'use client';
 
 import { SetStateAction } from "react";
+import { Movie } from '../../types';
 
-
-
-type Movie = {
-  id: string | number;
-  title: string;
-  year: number;
-  genre: string;
-  cover: string | null;
-  trailer: string | null;
-};
 
 type Props = {
   movie: Movie;

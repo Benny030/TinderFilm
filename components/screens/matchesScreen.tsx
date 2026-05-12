@@ -1,14 +1,7 @@
 'use client';
 
 
-type Movie = {
-  id: string | number;
-  title: string;
-  year: number;
-  genre: string;
-  cover: string | null;
-  trailer: string | null;
-};
+import { Movie } from '../../types';
 
 type Props = {
   matched: Movie[];

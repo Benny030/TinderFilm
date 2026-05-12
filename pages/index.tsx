@@ -13,6 +13,8 @@ import MatchesScreen from '@/components/screens/matchesScreen';
 import FinalMatchScreen from '@/components/screens/finalmatchescreen';
 import AddFilmScreen from '@/components/screens/addFilmscreen';
 import AdminGate from '@/components/screens/adminGate';
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/router';
 
 // ─────────────────────────────────────────────
 // TYPES
@@ -58,6 +60,12 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
   // ───── REFS ─────
   const channelRef = useRef<any>(null);
   const supabase = useRef(createBrowserClient()).current;
+
+  // ───── AUTH & USER INFO ───────────────────────────────────────────────────
+
+  const { currentUser, isLoading, isGuest } = useAuth();
+  const router = useRouter();
+
 
   // ───── USE ROOM (solo identità utente) ───────────────────────────────────────
   const {
@@ -108,15 +116,24 @@ useEffect(() => {
   if (!isDragging) return;
   const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
   const onMouseUp = () => handleEnd();
+  const onTouchMove = (e: TouchEvent) => {
+    e.preventDefault();                        // ← blocca scroll
+    handleMove(e.touches[0].clientX);
+  };
+  const onTouchEnd = () => handleEnd();
+
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('mouseup', onMouseUp);
+  document.addEventListener('touchmove', onTouchMove, { passive: false }); // ← passive: false obbligatorio
+  document.addEventListener('touchend', onTouchEnd);
+
   return () => {
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
+    document.removeEventListener('touchmove', onTouchMove);
+    document.removeEventListener('touchend', onTouchEnd);
   };
-  // ─── RIMOSSI i listener touch globali, ora sono sulla card ───
 }, [isDragging]);
-
   // ───── REALTIME CHANNEL ─────
   useEffect(() => {
     if (!currentUserId || !currentUserName) return;
@@ -166,6 +183,14 @@ useEffect(() => {
     channelRef.current = channel;
     return () => { channel.unsubscribe(); };
   }, [currentUserId, currentUserName, roomId, supabase, movies, screen]);
+
+// ───── REDIRECT SE NON AUTENTICATO ───────────────────────────────────────────
+useEffect(() => {
+    if (isLoading) return;
+    if (currentUser === null && !isGuest) {
+      router.replace('/auth');
+    }
+  }, [currentUser, isLoading, isGuest]);
 
   // ─────────────────────────────────────────────
   // HANDLERS FILM
@@ -416,6 +441,20 @@ const handleEditMovie = async (movieId: string | number, data: Partial<Movie>) =
         onBack={() => setScreen('swipe')}
         styles={styles}
       />
+    );
+  }
+  if (isLoading || (currentUser === null && !isGuest)) {
+    return (
+      <div style={{
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#FAF3E0',
+        fontSize: '32px',
+      }}>
+        🎬
+      </div>
     );
   }
 

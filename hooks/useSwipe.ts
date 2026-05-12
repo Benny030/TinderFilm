@@ -3,25 +3,28 @@
 import { useRef, useState } from 'react';
 
 export function useSwipe(onSwipe: (liked: boolean) => void) {
-  const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
+  // ─── Refs per evitare stale closure nei global listener ───────────────────
+  const isDraggingRef = useRef(false);
+  const isSnappingRef = useRef(false);
+  const startXRef = useRef(0);
   const dragOffsetRef = useRef(0);
-  const [startX, setStartX] = useState(0);
-  const [isSnapping, setIsSnapping] = useState(false);
-
-  // long press
-  const [longPressProgress, setLongPressProgress] = useState(0);
-  const [showTrailer, setShowTrailer] = useState(false);
 
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const longPressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [longPressProgress, setLongPressProgress] = useState(0);
+  const [showTrailer, setShowTrailer] = useState(false);
 
   const handleStart = (clientX: number) => {
-    setIsDragging(true);
-    setStartX(clientX);
-    setIsSnapping(false);
+    isDraggingRef.current = true;
+    isSnappingRef.current = false;
+    startXRef.current = clientX;
+    dragOffsetRef.current = 0;
 
+    setIsDragging(true);
+    setDragOffset(0);
     setLongPressProgress(0);
     setShowTrailer(false);
 
@@ -36,16 +39,14 @@ export function useSwipe(onSwipe: (liked: boolean) => void) {
   };
 
   const handleMove = (clientX: number) => {
-    if (!isDragging || isSnapping) return;
+    // ─── usa ref, non state (evita stale closure) ─────────────────────────
+    if (!isDraggingRef.current || isSnappingRef.current) return;
 
-    const offset = clientX - startX;
+    const offset = clientX - startXRef.current;
     const clamped = Math.max(-300, Math.min(300, offset));
     dragOffsetRef.current = clamped;
 
-    const threshold = 100;
-    const snapThreshold = 50;
-
-    // cancella long press se muovi
+    // cancella long press se si muove
     if (Math.abs(clamped) > 20) {
       if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
       if (longPressIntervalRef.current) clearInterval(longPressIntervalRef.current);
@@ -53,42 +54,41 @@ export function useSwipe(onSwipe: (liked: boolean) => void) {
       setShowTrailer(false);
     }
 
-    if (Math.abs(clamped) > snapThreshold) {
-      const target = Math.sign(clamped) * threshold;
+    // snap anticipato oltre soglia
+    if (Math.abs(clamped) > 80) {
+      isSnappingRef.current = true;
+      const target = Math.sign(clamped) * 120;
       setDragOffset(target);
-      setIsSnapping(true);
 
       setTimeout(() => {
         handleEnd();
-        setIsSnapping(false);
-      }, 200);
+      }, 150);
     } else {
       setDragOffset(clamped);
     }
   };
 
   const handleEnd = () => {
-    if (!isDragging) return;
+    if (!isDraggingRef.current) return;
 
-    const threshold = 60;
     const current = dragOffsetRef.current;
+    const threshold = 60;
 
-    if (current > threshold) {
-      onSwipe(true);
-    } else if (current < -threshold) {
-      onSwipe(false);
-    }
+    if (current > threshold) onSwipe(true);
+    else if (current < -threshold) onSwipe(false);
+
+    // reset tutto
+    isDraggingRef.current = false;
+    isSnappingRef.current = false;
+    dragOffsetRef.current = 0;
 
     setIsDragging(false);
     setDragOffset(0);
-    dragOffsetRef.current = 0;
-    setIsSnapping(false);
+    setLongPressProgress(0);
+    setShowTrailer(false);
 
     if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     if (longPressIntervalRef.current) clearInterval(longPressIntervalRef.current);
-
-    setLongPressProgress(0);
-    setShowTrailer(false);
   };
 
   return {
