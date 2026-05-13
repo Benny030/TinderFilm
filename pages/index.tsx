@@ -6,6 +6,8 @@ import type { GetServerSideProps } from 'next';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import { useSwipe } from '@/hooks/useSwipe';
 import { useRoom } from '@/hooks/useRoom';
+import { useAuth } from '@/hooks/useAuth';
+import { useRouter } from 'next/router';
 import { styles } from '@/styles/appStyles';
 import WelcomeScreen from '@/components/screens/welcomeScreen';
 import SwipeScreen from '@/components/screens/swipeScreen';
@@ -13,16 +15,8 @@ import MatchesScreen from '@/components/screens/matchesScreen';
 import FinalMatchScreen from '@/components/screens/finalmatchescreen';
 import AddFilmScreen from '@/components/screens/addFilmscreen';
 import AdminGate from '@/components/screens/adminGate';
-import { useAuth } from '@/hooks/useAuth';
-import { useRouter } from 'next/router';
-
-// ─────────────────────────────────────────────
-// TYPES
-// ─────────────────────────────────────────────
-
-import { JsonMovieRow, Movie , RoomUser , SwipeState , Props} from '@/types';
-
-
+import { generateRoomCode, normalizeRoomCode } from '@/utils/roomCode';
+import { JsonMovieRow, Movie, RoomUser, SwipeState, Props } from '@/types';
 
 // ─────────────────────────────────────────────
 // COMPONENTE PRINCIPALE
@@ -30,21 +24,27 @@ import { JsonMovieRow, Movie , RoomUser , SwipeState , Props} from '@/types';
 
 export default function Home({ movies: initialMovies, roomId }: Props) {
 
+  
+const { currentUser, isLoading, isGuest, guestId, guestName } = useAuth();
+
+
+  const router = useRouter();
+
   // ───── NAVIGAZIONE APP ─────
   const [screen, setScreen] = useState<'welcome' | 'swipe' | 'add' | 'matches'>('welcome');
 
   // ───── DATI FILM ─────
   const [movies, setMovies] = useState<Movie[]>(initialMovies);
 
-  // ───── STANZA ─────  (rimane nel page, è stato condiviso tra canale e UI)
+  // ───── STANZA ─────
   const [roomUsers, setRoomUsers] = useState<RoomUser[]>([]);
 
   // ───── SWIPE & MATCH ─────
   const [swipes, setSwipes] = useState<SwipeState>({});
   const [finalMatch, setFinalMatch] = useState<Movie | null>(null);
   const [matchPopup, setMatchPopup] = useState<Movie | null>(null);
- 
-  // ───── STATO ADMIN ──────────────────────────────────────────────────────────
+
+  // ───── STATO ADMIN ─────
   const [isAdminAuthed, setIsAdminAuthed] = useState(false);
 
   // ───── FORM AGGIUNTA FILM ─────
@@ -61,37 +61,43 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
   const channelRef = useRef<any>(null);
   const supabase = useRef(createBrowserClient()).current;
 
-  // ───── AUTH & USER INFO ───────────────────────────────────────────────────
+  // ───── MESSAGGI CONDIVISI ─────
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState('');
 
-  const { currentUser, isLoading, isGuest } = useAuth();
-  const router = useRouter();
 
+  // ───── ID UTENTE (da auth o localStorage per ospite) ─────────────────────
+const userId: string = currentUser?.id ?? guestId ?? '';
 
-  // ───── USE ROOM (solo identità utente) ───────────────────────────────────────
+    // ───── NOME UTENTE (da auth o ospite) ────────────────────────────────────
+const displayName: string = (currentUser && !currentUser.isGuest)
+  ? currentUser.username
+  : guestName ?? 'Ospite';
+  
+  // ───── REDIRECT SE NON AUTENTICATO ───────────────────────────────────────
+  useEffect(() => {
+  if (isLoading) return;
+  if (currentUser === null && !isGuest) {
+    // ─── pathname esplicito, nessun query param ───────────────────────
+    router.replace({ pathname: '/auth' });
+  }
+}, [currentUser, isLoading, isGuest]);
+
+  // ───── USE ROOM (solo condivisione link) ──────────────────────────────────
   const {
-    currentUserId,
-    currentUserName,
-    nameInput,
-    setNameInput,
-    isJoining,
     copyMessage,
     statusMessage,
     setStatusMessage,
-    handleJoinRoom,
-    handleCopyLink,
-  } = useRoom({
-    roomId,
-    onJoined: () => setScreen('swipe'),
-  });
+  } = useRoom({ roomId });
 
-  // ───── Valori derivati stanza (calcolati qui, dove vive roomUsers) ────────────
+  // ───── Valori derivati stanza ─────────────────────────────────────────────
   const roomUsersSorted = roomUsers
     .slice()
-    .sort((a) => (a.id === currentUserId ? -1 : 1));
+    .sort((a) => (a.id === userId ? -1 : 1));
   const isRoomFull =
-    roomUsers.length >= 2 && !roomUsers.find((u) => u.id === currentUserId);
+    roomUsers.length >= 2 && !roomUsers.find((u) => u.id === userId);
 
-  // ───── Helper: aggiungi utente alla stanza ───────────────────────────────────
+  // ───── Helper: aggiungi utente alla stanza ────────────────────────────────
   const addUserToRoom = (id: string, name: string) => {
     setRoomUsers((prev) => {
       if (prev.find((u) => u.id === id)) return prev;
@@ -99,11 +105,23 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
     });
   };
 
-  // ───── Quando l'utente fa join, aggiunge se stesso alla lista locale ─────────
+  const handleJoinByCode = (e: FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+  const code = normalizeRoomCode(codeInput);
+  if (code.length < 4) {
+    setCodeError('Codice non valido');
+    return;
+  }
+  setCodeError('');
+  // ─── naviga alla stanza con quel codice ───────────────────────────────
+  router.push(`/?room=${code}`);
+};
+
+  // ───── Aggiungi se stesso alla stanza appena displayName è pronto ─────────
   useEffect(() => {
-    if (!currentUserId || !currentUserName) return;
-    addUserToRoom(currentUserId, currentUserName);
-  }, [currentUserId, currentUserName]);
+    if (!displayName || !userId) return;
+    addUserToRoom(userId, displayName);
+  }, [displayName, userId]);
 
   // ───── GESTURE SWIPE ─────
   const { dragOffset, isDragging, handleStart, handleMove, handleEnd } = useSwipe((liked) => {
@@ -112,31 +130,32 @@ export default function Home({ movies: initialMovies, roomId }: Props) {
   });
 
   // ───── GLOBAL DRAG EVENTS ─────
-useEffect(() => {
-  if (!isDragging) return;
-  const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
-  const onMouseUp = () => handleEnd();
-  const onTouchMove = (e: TouchEvent) => {
-    e.preventDefault();                        // ← blocca scroll
-    handleMove(e.touches[0].clientX);
-  };
-  const onTouchEnd = () => handleEnd();
+  useEffect(() => {
+    if (!isDragging) return;
+    const onMouseMove = (e: MouseEvent) => handleMove(e.clientX);
+    const onMouseUp = () => handleEnd();
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      handleMove(e.touches[0].clientX);
+    };
+    const onTouchEnd = () => handleEnd();
 
-  document.addEventListener('mousemove', onMouseMove);
-  document.addEventListener('mouseup', onMouseUp);
-  document.addEventListener('touchmove', onTouchMove, { passive: false }); // ← passive: false obbligatorio
-  document.addEventListener('touchend', onTouchEnd);
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd);
 
-  return () => {
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
-    document.removeEventListener('touchmove', onTouchMove);
-    document.removeEventListener('touchend', onTouchEnd);
-  };
-}, [isDragging]);
+    return () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [isDragging]);
+
   // ───── REALTIME CHANNEL ─────
   useEffect(() => {
-    if (!currentUserId || !currentUserName) return;
+    if (!userId || !displayName) return;
 
     const channel = supabase.channel(`room-${roomId}`);
 
@@ -146,12 +165,12 @@ useEffect(() => {
     });
 
     channel.on('broadcast', { event: 'swipe' }, (event) => {
-      const { movieId, liked, userId, name } = (event as any).payload ?? {};
-      if (!movieId || !userId) return;
-      addUserToRoom(userId, name);
+      const { movieId, liked, userId: uid, name } = (event as any).payload ?? {};
+      if (!movieId || !uid) return;
+      addUserToRoom(uid, name);
       setSwipes((prev) => {
         const current = prev[movieId] ?? {};
-        return { ...prev, [movieId]: { ...current, [userId]: liked } };
+        return { ...prev, [movieId]: { ...current, [uid]: liked } };
       });
     });
 
@@ -175,22 +194,14 @@ useEffect(() => {
       (channel as any).send({
         type: 'broadcast',
         event: 'join',
-        payload: { id: currentUserId, name: currentUserName },
+        payload: { id: userId, name: displayName },
       });
     };
     subscribeChannel();
 
     channelRef.current = channel;
     return () => { channel.unsubscribe(); };
-  }, [currentUserId, currentUserName, roomId, supabase, movies, screen]);
-
-// ───── REDIRECT SE NON AUTENTICATO ───────────────────────────────────────────
-useEffect(() => {
-    if (isLoading) return;
-    if (currentUser === null && !isGuest) {
-      router.replace('/auth');
-    }
-  }, [currentUser, isLoading, isGuest]);
+  }, [userId, displayName, roomId, supabase, movies, screen]);
 
   // ─────────────────────────────────────────────
   // HANDLERS FILM
@@ -220,7 +231,8 @@ useEffect(() => {
       if (!response.ok) throw new Error('Errore durante il salvataggio!');
       const newMovie: Movie = await response.json();
       setMovies((prev) => [newMovie, ...prev]);
-      setTitle(''); setYear(''); setGenre(''); setCover(''); setTrailer(''); setTramaCorta(''); setTramaLunga('');
+      setTitle(''); setYear(''); setGenre(''); setCover('');
+      setTrailer(''); setTramaCorta(''); setTramaLunga('');
       setStatusMessage('Film aggiunto!');
     } catch (error) {
       console.error(error);
@@ -241,34 +253,48 @@ useEffect(() => {
     }
   };
 
+  const handleBulkImport = async (rows: JsonMovieRow[]) => {
+    let ok = 0;
+    let errors = 0;
+    for (const row of rows) {
+      try {
+        const response = await fetch('/api/movies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: row.title,
+            year: Number(row.year),
+            genre: row.genre,
+            cover: row.cover ?? null,
+            trailer: row.trailer ?? null,
+            trama_c: row.trama_c ?? null,
+            trama_l: row.trama_l ?? null,
+          }),
+        });
+        if (!response.ok) { errors++; continue; }
+        const newMovie: Movie = await response.json();
+        setMovies((prev) => [newMovie, ...prev]);
+        ok++;
+      } catch { errors++; }
+    }
+    return { ok, errors };
+  };
 
-// ─── handler bulk import ─────────────────────────────────────────────────────
-const handleBulkImport = async (rows: JsonMovieRow[]) => {
-  let ok = 0;
-  let errors = 0;
-  for (const row of rows) {
+  const handleEditMovie = async (movieId: string | number, data: Partial<Movie>) => {
     try {
-      const response = await fetch('/api/movies', {
-        method: 'POST',
+      const response = await fetch(`/api/movies/${movieId}`, {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: row.title,
-          year: Number(row.year),
-          genre: row.genre,
-          cover: row.cover ?? null,
-          trailer: row.trailer ?? null,
-          trama_c: row.trama_c ?? null,
-          trama_l: row.trama_l ?? null,
-        }),
+        body: JSON.stringify(data),
       });
-      if (!response.ok) { errors++; continue; }
-      const newMovie: Movie = await response.json();
-      setMovies((prev) => [newMovie, ...prev]);
-      ok++;
-    } catch { errors++; }
-  }
-  return { ok, errors };
-};
+      if (!response.ok) throw new Error('Errore durante la modifica');
+      const updated: Movie = await response.json();
+      setMovies((prev) => prev.map((m) => (m.id === movieId ? updated : m)));
+    } catch (error) {
+      console.error(error);
+      setStatusMessage('Errore durante la modifica del film!');
+    }
+  };
 
   // ─────────────────────────────────────────────
   // SWIPE LOGIC
@@ -276,8 +302,8 @@ const handleBulkImport = async (rows: JsonMovieRow[]) => {
 
   const getRemaining = () => {
     if (finalMatch) return [finalMatch];
-    if (!currentUserId) return movies;
-    return movies.filter((m) => swipes[m.id]?.[currentUserId] === undefined);
+    if (!userId) return movies;
+    return movies.filter((m) => swipes[m.id]?.[userId] === undefined);
   };
   const remaining = getRemaining();
   const currentMovie = remaining[0] || null;
@@ -289,16 +315,16 @@ const handleBulkImport = async (rows: JsonMovieRow[]) => {
     });
 
   const handleSwipe = (movieId: string | number, liked: boolean) => {
-    if (!currentUserId || !currentUserName || finalMatch) return;
+    if (!userId || !displayName || finalMatch) return;
     const movieKey = movieId.toString();
 
     setSwipes((prev) => {
       const current = prev[movieKey] ?? {};
-      return { ...prev, [movieKey]: { ...current, [currentUserId]: liked } };
+      return { ...prev, [movieKey]: { ...current, [userId]: liked } };
     });
 
     const roomHasOtherLike = Object.entries(swipes[movieKey] ?? {}).some(
-      ([userId, value]) => userId !== currentUserId && value === true
+      ([uid, value]) => uid !== userId && value === true
     );
 
     if (liked && roomHasOtherLike) {
@@ -313,7 +339,7 @@ const handleBulkImport = async (rows: JsonMovieRow[]) => {
     channelRef.current?.send({
       type: 'broadcast',
       event: 'swipe',
-      payload: { movieId: movieKey, liked, userId: currentUserId, name: currentUserName },
+      payload: { movieId: movieKey, liked, userId, name: displayName },
     });
   };
 
@@ -326,45 +352,43 @@ const handleBulkImport = async (rows: JsonMovieRow[]) => {
     setScreen('swipe');
   };
 
-  // ─── handler modifica film ────────────────────────────────────────────────────
-const handleEditMovie = async (movieId: string | number, data: Partial<Movie>) => {
-  try {
-    const response = await fetch(`/api/movies/${movieId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error('Errore durante la modifica');
-    const updated: Movie = await response.json();
-    setMovies((prev) => prev.map((m) => (m.id === movieId ? updated : m)));
-  } catch (error) {
-    console.error(error);
-    setStatusMessage('Errore durante la modifica del film!');
+  // ─────────────────────────────────────────────
+  // SCHERMATA DI CARICAMENTO
+  // ─────────────────────────────────────────────
+
+  if (isLoading || (currentUser === null && !isGuest)) {
+    return (
+      <div style={{
+        height: '100vh', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        background: '#FAF3E0', fontSize: '32px',
+      }}>
+        🎬
+      </div>
+    );
   }
-};
+
   // ─────────────────────────────────────────────
   // RENDER SCHERMATE
   // ─────────────────────────────────────────────
-
-  if (screen === 'welcome') {
-    return (
-      <WelcomeScreen
-        roomId={roomId}
-        nameInput={nameInput}
-        setNameInput={setNameInput}
-        onJoin={handleJoinRoom}
-        onShare={handleCopyLink}
-        onAddFilms={() => setScreen('add')}
-        roomUsers={roomUsersSorted}
-        currentUserId={currentUserId}
-        isJoining={isJoining}
-        isRoomFull={isRoomFull}
-        statusMessage={statusMessage}
-        copyMessage={copyMessage}
-        styles={styles}
-      />
-    );
-  }
+if (screen === 'welcome') {
+  return (
+    <WelcomeScreen
+      roomId={roomId}
+      onEnter={() => setScreen('swipe')}
+      onAddFilms={() => setScreen('add')}
+      roomUsers={roomUsersSorted}
+      currentUserId={userId}
+      currentUserName={displayName}
+      isRoomFull={isRoomFull}
+      codeInput={codeInput}
+      setCodeInput={setCodeInput}
+      codeError={codeError}
+      onJoinByCode={handleJoinByCode}
+      styles={styles}
+    />
+  );
+}
 
   if (finalMatch) {
     return (
@@ -375,7 +399,7 @@ const handleEditMovie = async (movieId: string | number, data: Partial<Movie>) =
         setMatchPopup={setMatchPopup}
         matchPopup={matchPopup}
         finalMatch={finalMatch}
-        onShare={handleCopyLink}
+        onShare={() => setScreen('welcome')}
         styles={styles}
       />
     );
@@ -397,42 +421,41 @@ const handleEditMovie = async (movieId: string | number, data: Partial<Movie>) =
         onOpenMatches={() => setScreen('matches')}
         goBack={() => setScreen('welcome')}
         onAddFilms={() => setScreen('add')}
-        currentUserName={currentUserName}
+        currentUserName={displayName}
         styles={styles}
       />
     );
   }
 
   if (screen === 'add') {
-    // Mostra il gate se non ancora autenticato come admin
-  if (!isAdminAuthed) {
+    if (!isAdminAuthed) {
+      return (
+        <AdminGate
+          onSuccess={() => setIsAdminAuthed(true)}
+          onBack={() => setScreen('welcome')}
+        />
+      );
+    }
     return (
-      <AdminGate
-        onSuccess={() => setIsAdminAuthed(true)}
-        onBack={() => setScreen('welcome')}
+      <AddFilmScreen
+        title={title} setTitle={setTitle}
+        year={year} setYear={setYear}
+        genre={genre} setGenre={setGenre}
+        cover={cover} setCover={setCover}
+        trailer={trailer} setTrailer={setTrailer}
+        tramaCorta={tramaCorta} setTramaCorta={setTramaCorta}
+        tramaLunga={tramaLunga} setTramaLunga={setTramaLunga}
+        isSubmitting={isSubmitting}
+        statusMessage={statusMessage}
+        movies={movies}
+        onSubmit={handleAddMovie}
+        onDelete={handleDeleteMovie}
+        onEdit={handleEditMovie}
+        onBulkImport={handleBulkImport}
+        onBack={() => { setIsAdminAuthed(false); setScreen('welcome'); }}
       />
     );
   }
-  return (
-    <AddFilmScreen
-      title={title} setTitle={setTitle}
-      year={year} setYear={setYear}
-      genre={genre} setGenre={setGenre}
-      cover={cover} setCover={setCover}
-      trailer={trailer} setTrailer={setTrailer}
-      tramaCorta={tramaCorta} setTramaCorta={setTramaCorta}
-      tramaLunga={tramaLunga} setTramaLunga={setTramaLunga}
-      isSubmitting={isSubmitting}
-      statusMessage={statusMessage}
-      movies={movies}
-      onSubmit={handleAddMovie}
-      onDelete={handleDeleteMovie}
-      onEdit={handleEditMovie}
-      onBulkImport={handleBulkImport}
-      onBack={() => { setIsAdminAuthed(false); setScreen('welcome'); }}
-    />
-  );
-}
 
   if (screen === 'matches') {
     return (
@@ -443,46 +466,34 @@ const handleEditMovie = async (movieId: string | number, data: Partial<Movie>) =
       />
     );
   }
-  if (isLoading || (currentUser === null && !isGuest)) {
-    return (
-      <div style={{
-        height: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#FAF3E0',
-        fontSize: '32px',
-      }}>
-        🎬
-      </div>
-    );
-  }
 
   return null;
 }
 
 // ─────────────────────────────────────────────
-// SERVER SIDE PROPS 
+// SERVER SIDE PROPS
 // ─────────────────────────────────────────────
 
 export const getServerSideProps: GetServerSideProps<Props> = async ({ query }) => {
   let roomId = query.room as string;
+
   if (!roomId) {
-    const { randomUUID } = await import('crypto');
-    roomId = randomUUID();
+    // ─── genera codice leggibile invece di UUID ───────────────────────────
+    const code = generateRoomCode();
     return {
       redirect: {
-        destination: `?room=${roomId}`,
+        destination: `?room=${code}`,
         permanent: false,
       },
     };
   }
+ roomId = roomId.trim().toUpperCase();
 
   let movies: Movie[] = [];
   try {
     const { createClient } = await import('@/utils/supabase/server');
     const supabase = createClient();
-    const { data: movieData, error } = await supabase.from('movies').select('*');
+    const { data: movieData } = await supabase.from('movies').select('*');
     movies = (movieData as Movie[]) || [];
     if (movies.length === 0) {
       const defaultMovies = [
@@ -494,12 +505,10 @@ export const getServerSideProps: GetServerSideProps<Props> = async ({ query }) =
       ];
       for (const movie of defaultMovies) {
         const newMovie = {
-          id: 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-            const r = (Math.random() * 16) | 0;
-            const v = c === 'x' ? r : (r & 0x3) | 0x8;
-            return v.toString(16);
-          }),
+          id: crypto.randomUUID(),
           ...movie,
+          trama_c: null,
+          trama_l: null,
         };
         await supabase.from('movies').insert(newMovie);
         movies.push(newMovie as Movie);
@@ -509,5 +518,6 @@ export const getServerSideProps: GetServerSideProps<Props> = async ({ query }) =
   } catch (error) {
     console.error('Error:', error);
   }
+
   return { props: { movies, roomId } };
 };

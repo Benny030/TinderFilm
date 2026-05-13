@@ -2,7 +2,11 @@ import { useAuth as useAuthContext } from '@/context/AuthContext';
 import { useRouter } from 'next/router';
 
 export function useAuth() {
-  const { currentUser, isLoading, isGuest, enterAsGuest, signOut } = useAuthContext();
+  const {
+    currentUser, isLoading, isGuest,
+    guestId, guestName,
+    enterAsGuest, signOut,
+  } = useAuthContext();
   const router = useRouter();
 
   const isLoggedIn = currentUser !== null && currentUser.isGuest === false;
@@ -25,6 +29,8 @@ export function useAuth() {
     isLoading,
     isGuest,
     isLoggedIn,
+    guestId,
+    guestName,
     enterAsGuest,
     requireAuth,
     signOut: handleSignOut,

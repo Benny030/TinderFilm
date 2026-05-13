@@ -136,8 +136,10 @@ export default function AuthPage() {
   };
 
   const handleGuest = () => {
-    enterAsGuest();
-    router.replace('/');
+  enterAsGuest();
+  // ─── window.location invece di router.replace ─────────────────────────
+  // router.replace può portarsi dietro i query param della pagina corrente
+  window.location.href = '/';
   };
 
   // ─── Schermata "controlla email" ──────────────────────────────────────────

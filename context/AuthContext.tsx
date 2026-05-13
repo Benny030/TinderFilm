@@ -1,13 +1,16 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, type ReactNode, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import type { CurrentUser } from '@/types';
+import { generateGuestName } from '@/utils/guestName';
 
 type AuthContextType = {
   currentUser: CurrentUser | null;
   isLoading: boolean;
   isGuest: boolean;
+  guestId: string | null;
+  guestName: string | null;
   enterAsGuest: () => void;
   signOut: () => Promise<void>;
 };
@@ -16,23 +19,35 @@ const AuthContext = createContext<AuthContextType>({
   currentUser: null,
   isLoading: true,
   isGuest: false,
+  guestId: null,
+  guestName: null,
   enterAsGuest: () => {},
   signOut: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [isGuest, setIsGuest] = useState(false);
+  const [guestId, setGuestId] = useState<string | null>(null);
+  const [guestName, setGuestName] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const supabase = useRef(createBrowserClient()).current;
 
   useEffect(() => {
-    // ─── Controlla se era ospite ──────────────────────────────────────────
-    const guestFlag = localStorage.getItem('cineDateGuest') === 'true';
-    if (guestFlag) setIsGuest(true);
+    // ─── sessionStorage: isolato per tab ─────────────────────────────────
+    const sessionGuest = sessionStorage.getItem('cineDateGuest') === 'true';
+    const sessionGuestId = sessionStorage.getItem('cineDateGuestId');
+    const sessionGuestName = sessionStorage.getItem('cineDateGuestName');
 
-    // ─── Controlla sessione Supabase attiva ───────────────────────────────
-    const initAuth = async () => {
+    if (sessionGuest && sessionGuestId && sessionGuestName) {
+      setIsGuest(true);
+      setGuestId(sessionGuestId);
+      setGuestName(sessionGuestName);
+      setIsLoading(false);
+      return;
+    }
+
+    const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session?.user) {
@@ -53,11 +68,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     };
 
-    initAuth();
+    init();
 
-    // ─── Ascolta cambiamenti auth ─────────────────────────────────────────
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (event === 'SIGNED_OUT') {
+          setCurrentUser(null);
+          setIsGuest(false);
+          setGuestId(null);
+          setGuestName(null);
+          return;
+        }
         if (session?.user) {
           const { data: userData } = await supabase
             .from('users')
@@ -71,11 +92,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             username: userData?.username ?? '',
             isGuest: false,
           });
-          // ─── se era ospite e ora si logga, rimuovi flag ───────────────
-          localStorage.removeItem('cineDateGuest');
+          // ─── loggato → pulisci sessione ospite ────────────────────────
+          sessionStorage.removeItem('cineDateGuest');
+          sessionStorage.removeItem('cineDateGuestId');
+          sessionStorage.removeItem('cineDateGuestName');
           setIsGuest(false);
-        } else {
-          setCurrentUser(null);
+          setGuestId(null);
+          setGuestName(null);
         }
       }
     );
@@ -84,19 +107,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const enterAsGuest = () => {
-    localStorage.setItem('cineDateGuest', 'true');
+    // ─── genera identità unica per questa tab ─────────────────────────────
+    const newId = crypto.randomUUID();
+    const newName = generateGuestName();
+
+    sessionStorage.setItem('cineDateGuest', 'true');
+    sessionStorage.setItem('cineDateGuestId', newId);
+    sessionStorage.setItem('cineDateGuestName', newName);
+
     setIsGuest(true);
+    setGuestId(newId);
+    setGuestName(newName);
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
-    localStorage.removeItem('cineDateGuest');
+    sessionStorage.removeItem('cineDateGuest');
+    sessionStorage.removeItem('cineDateGuestId');
+    sessionStorage.removeItem('cineDateGuestName');
     setCurrentUser(null);
     setIsGuest(false);
+    setGuestId(null);
+    setGuestName(null);
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, isLoading, isGuest, enterAsGuest, signOut }}>
+    <AuthContext.Provider value={{
+      currentUser, isLoading, isGuest,
+      guestId, guestName,
+      enterAsGuest, signOut,
+    }}>
       {children}
     </AuthContext.Provider>
   );
