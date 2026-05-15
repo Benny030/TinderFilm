@@ -105,7 +105,7 @@ export default function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         setSuccessMsg('Accesso effettuato!');
-        setTimeout(() => router.replace('/home'), 800);
+        setTimeout(() => router.replace('/'), 800);
       } else {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
