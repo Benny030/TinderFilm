@@ -9,6 +9,7 @@ export default function LandingPage() {
   const router = useRouter();
   const { currentUser, isGuest, isLoading } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const { enterAsGuest } = useAuth();
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -16,6 +17,12 @@ export default function LandingPage() {
     if (isLoading) return;
     if (currentUser || isGuest) router.replace('/');
   }, [currentUser, isGuest, isLoading]);
+
+  
+  const handleGuest = () => {
+    enterAsGuest();
+    window.location.href = '/home';
+  };
 
   if (isLoading) {
     return (
@@ -326,16 +333,16 @@ export default function LandingPage() {
               <button className="btn-hero-primary" onClick={() => router.push('/auth')}>
                 Provalo gratis →
               </button>
-              <button className="btn-hero-ghost" onClick={() => router.push('/auth')}>
+              <button className="btn-hero-ghost" onClick={handleGuest}>
                 Entra come ospite
               </button>
             </div>
 
             <div className="stats-row">
               {[
-                { num: '10K+', label: 'film disponibili' },
-                { num: '50K+', label: 'stanze create' },
-                { num: '4.8★', label: 'valutazione media' },
+                { num: '0', label: 'film disponibili' },
+                { num: '0', label: 'stanze create' },
+                { num: '0', label: 'valutazione media' },
               ].map((s) => (
                 <div key={s.label} className="stat-pill">
                   <span className="stat-pill-num">{s.num}</span>
@@ -350,6 +357,7 @@ export default function LandingPage() {
             className="auth-card"
             style={{
               animation: mounted ? 'fadeUp 0.5s ease 0.15s both' : 'none',
+              boxShadow: SHADOW.xxxl,
             }}
           >
             {/* Tab switcher */}
@@ -405,7 +413,7 @@ export default function LandingPage() {
               Continua con Google
             </button>
 
-            <button className="auth-social" onClick={() => router.push('/auth')}>
+            <button className="auth-social" onClick={handleGuest}>
               👤 Accedi come ospite
             </button>
 

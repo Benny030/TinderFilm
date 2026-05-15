@@ -81,6 +81,8 @@ export const SHADOW = {
   md:  '0 4px 16px rgba(0,0,0,0.08)',
   lg:  '0 8px 32px rgba(0,0,0,0.12)',
   xl:  '0 16px 48px rgba(0,0,0,0.16)',
+  xxl:  '0 16px 48px rgba(0,0,0,0.20)',
+  xxxl:  '0 16px 48px rgba(0,0,0,0.50)',
 } as const;
 
 // ─── Bottom nav height (usato per padding bottom nelle schermate) ─────────────
