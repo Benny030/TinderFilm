@@ -1,3 +1,4 @@
+// ─── Film ─────────────────────────────────────────────────────────────────────
 export type Movie = {
   id: string | number;
   title: string;
@@ -9,13 +10,6 @@ export type Movie = {
   trama_l: string | null;
 };
 
-export type RoomUser = {
-  id: string;
-  name: string;
-};
-
-export type SwipeState = Record<string, Record<string, boolean>>;
-
 export type JsonMovieRow = {
   title: string;
   year: number;
@@ -26,37 +20,38 @@ export type JsonMovieRow = {
   trama_l?: string | null;
 };
 
-export type Props = {
-  movies: Movie[];
-  roomId: string;
+// ─── Stanza ───────────────────────────────────────────────────────────────────
+export type RoomUser = {
+  id: string;
+  name: string;
 };
 
-// ─── Auth ─────────────────────────────────────────────────────────────────────
+export type SwipeState = Record<string, Record<string, boolean>>;
 
+// ─── Auth ─────────────────────────────────────────────────────────────────────
 export type AuthUser = {
   id: string;
   email: string;
-  username: string;        // salvato in tabella users
+  username: string;
   isGuest: false;
 };
 
 export type GuestUser = {
-  id: string;              // UUID generato localmente
-  name: string;            // nome libero inserito
+  id: string;
+  name: string;
   isGuest: true;
 };
 
-export type CurrentUser = AuthUser | GuestUser;  // unione — usato ovunque nell'app
+export type CurrentUser = AuthUser | GuestUser;
 
-// ─── Reviews ──────────────────────────────────────────────────────────────────
-
+// ─── Recensioni ───────────────────────────────────────────────────────────────
 export type Review = {
   id: string;
   movie_id: string;
   user_id: string;
-  username: string;        // denormalizzato per display
+  username: string;
   text: string;
-  rating: number;          // 1–5
+  rating: number;
   likes_count: number;
   created_at: string;
 };
@@ -67,12 +62,17 @@ export type ReviewLike = {
   user_id: string;
 };
 
-// ─── Matches ──────────────────────────────────────────────────────────────────
-
+// ─── Match ────────────────────────────────────────────────────────────────────
 export type Match = {
   id: string;
   user_id: string;
   movie_id: string;
   room_id: string | null;
   created_at: string;
+};
+
+// ─── Page props ───────────────────────────────────────────────────────────────
+export type Props = {
+  movies: Movie[];
+  roomId: string;
 };

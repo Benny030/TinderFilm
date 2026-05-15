@@ -4,27 +4,24 @@ import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useRouter } from 'next/router';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import { useAuth } from '@/hooks/useAuth';
-import { styles } from '@/styles/appStyles';
+import { C, R, FONT, TEXT, S, SHADOW, btn, input } from '@/styles/token';
 
 type Mode = 'login' | 'register';
 
-type PasswordCheck = {
-  label: string;
-  ok: boolean;
-};
+type PasswordCheck = { label: string; ok: boolean };
 
-function getPasswordChecks(password: string): PasswordCheck[] {
+function getPasswordChecks(p: string): PasswordCheck[] {
   return [
-    { label: 'Almeno 8 caratteri',          ok: password.length >= 8 },
-    { label: 'Una lettera maiuscola',        ok: /[A-Z]/.test(password) },
-    { label: 'Una lettera minuscola',        ok: /[a-z]/.test(password) },
-    { label: 'Un numero',                    ok: /[0-9]/.test(password) },
-    { label: 'Un carattere speciale (!@#$)', ok: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password) },
+    { label: 'Almeno 8 caratteri',           ok: p.length >= 8 },
+    { label: 'Una lettera maiuscola',         ok: /[A-Z]/.test(p) },
+    { label: 'Una lettera minuscola',         ok: /[a-z]/.test(p) },
+    { label: 'Un numero',                     ok: /[0-9]/.test(p) },
+    { label: 'Un carattere speciale (!@#$)',  ok: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(p) },
   ];
 }
 
-function isPasswordValid(password: string): boolean {
-  return getPasswordChecks(password).every((c) => c.ok);
+function isPasswordValid(p: string) {
+  return getPasswordChecks(p).every((c) => c.ok);
 }
 
 export default function AuthPage() {
@@ -37,19 +34,18 @@ export default function AuthPage() {
   const [emailSent, setEmailSent] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
 
-  // ─── Campi form ───────────────────────────────────────────────────────────
   const [email, setEmail] = useState('');
   const [emailConfirm, setEmailConfirm] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [showPassConfirm, setShowPassConfirm] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
 
-  // ─── UI state ─────────────────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
-  const [passwordFocused, setPasswordFocused] = useState(false);
   const [shake, setShake] = useState(false);
 
   useEffect(() => {
@@ -58,16 +54,13 @@ export default function AuthPage() {
   }, []);
 
   useEffect(() => {
-    setEmail('');
-    setEmailConfirm('');
-    setPassword('');
-    setPasswordConfirm('');
-    setError('');
-    setSuccessMsg('');
+    setEmail(''); setEmailConfirm('');
+    setPassword(''); setPasswordConfirm('');
+    setError(''); setSuccessMsg('');
     setPasswordFocused(false);
   }, [mode]);
 
-  const passwordChecks = getPasswordChecks(password);
+  const checks = getPasswordChecks(password);
   const passwordValid = isPasswordValid(password);
   const emailsMatch = email === emailConfirm;
   const passwordsMatch = password === passwordConfirm;
@@ -77,37 +70,42 @@ export default function AuthPage() {
     setTimeout(() => setShake(false), 500);
   };
 
+  // ─── Google login ─────────────────────────────────────────────────────────
+  const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    setError('');
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      setError(err.message ?? 'Errore con Google');
+      setIsGoogleLoading(false);
+    }
+  };
+
+  // ─── Email submit ─────────────────────────────────────────────────────────
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError('');
-    setSuccessMsg('');
+    setError(''); setSuccessMsg('');
 
     if (mode === 'register') {
-      if (!emailsMatch) {
-        setError('Le email non coincidono');
-        triggerShake();
-        return;
-      }
-      if (!passwordValid) {
-        setError('La password non soddisfa i requisiti');
-        triggerShake();
-        return;
-      }
-      if (!passwordsMatch) {
-        setError('Le password non coincidono');
-        triggerShake();
-        return;
-      }
+      if (!emailsMatch) { setError('Le email non coincidono'); triggerShake(); return; }
+      if (!passwordValid) { setError('La password non soddisfa i requisiti'); triggerShake(); return; }
+      if (!passwordsMatch) { setError('Le password non coincidono'); triggerShake(); return; }
     }
 
     setIsLoading(true);
-
     try {
       if (mode === 'login') {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        setSuccessMsg('Accesso effettuato! Reindirizzamento...');
-        setTimeout(() => router.replace('/'), 800);
+        setSuccessMsg('Accesso effettuato!');
+        setTimeout(() => router.replace('/home'), 800);
       } else {
         const { data, error } = await supabase.auth.signUp({ email, password });
         if (error) throw error;
@@ -118,17 +116,10 @@ export default function AuthPage() {
       }
     } catch (err: any) {
       const msg = err.message ?? '';
-      if (msg.includes('Invalid login credentials')) {
-        setError('Email o password errati — verifica anche di aver confermato l\'email');
-      } else if (msg.includes('Email not confirmed')) {
-        setError('Devi confermare l\'email prima di accedere — controlla la tua casella');
-      } else if (msg.includes('Email already registered') || msg.includes('already been registered')) {
-        setError('Email già registrata — prova ad accedere');
-      } else if (msg.includes('Password should be')) {
-        setError('Password troppo corta (minimo 6 caratteri)');
-      } else {
-        setError(msg || 'Errore sconosciuto');
-      }
+      if (msg.includes('Invalid login credentials')) setError('Email o password errati');
+      else if (msg.includes('Email not confirmed')) setError('Conferma prima la tua email');
+      else if (msg.includes('already registered')) setError('Email già registrata — accedi');
+      else setError(msg || 'Errore sconosciuto');
       triggerShake();
     } finally {
       setIsLoading(false);
@@ -136,107 +127,49 @@ export default function AuthPage() {
   };
 
   const handleGuest = () => {
-  enterAsGuest();
-  // ─── window.location invece di router.replace ─────────────────────────
-  // router.replace può portarsi dietro i query param della pagina corrente
-  window.location.href = '/';
+    enterAsGuest();
+    window.location.href = '/home';
   };
 
-  // ─── Schermata "controlla email" ──────────────────────────────────────────
+  // ─── Schermata email inviata ──────────────────────────────────────────────
   if (emailSent) {
     return (
       <>
         <style>{`
-          @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.08); }
-          }
-          @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(16px); }
-            to   { opacity: 1; transform: translateY(0); }
-          }
+          @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+          @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
         `}</style>
-        <div style={styles.screen}>
-          <div style={styles.header}>
-            <button style={styles.headerBtn} onClick={() => setEmailSent(false)}>←</button>
-            <span style={styles.headerTitle}>Conferma email</span>
-            <span />
-          </div>
-
-          <div style={{
-            flex: 1, display: 'flex', flexDirection: 'column' as const,
-            alignItems: 'center', justifyContent: 'center',
-            padding: '32px 24px', gap: '20px', textAlign: 'center' as const,
-          }}>
-            <div style={{ fontSize: '72px', animation: 'pulse 2s ease infinite' }}>📬</div>
-
-            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '8px', animation: 'fadeUp 0.4s ease' }}>
-              <div style={{ fontSize: '22px', fontWeight: '800', color: '#2E2A26' }}>
-                Controlla la tua email
-              </div>
-              <div style={{ fontSize: '14px', color: '#7A6F65', lineHeight: '1.6', maxWidth: '280px' }}>
-                Abbiamo inviato un link di conferma a
-              </div>
-              <div style={{
-                fontSize: '14px', fontWeight: '700', color: '#E8869E',
-                background: '#F9E0E6', padding: '8px 16px', borderRadius: '999px',
-              }}>
-                {registeredEmail}
-              </div>
+        <div style={{ minHeight: '100vh', background: C.bgSoft, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: S.lg }}>
+          <div style={{ background: C.bg, borderRadius: R.xl, padding: S.xl, maxWidth: '400px', width: '100%', textAlign: 'center', boxShadow: SHADOW.lg, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: S.md }}>
+            <div style={{ fontSize: '64px', animation: 'pulse 2s ease infinite' }}>📬</div>
+            <div style={{ fontSize: TEXT.xl, fontWeight: '800', color: C.ink }}>Controlla la tua email</div>
+            <div style={{ fontSize: TEXT.sm, color: C.muted, lineHeight: '1.6' }}>Abbiamo inviato un link di conferma a</div>
+            <div style={{ fontSize: TEXT.base, fontWeight: '700', color: C.primary, background: C.primaryLight, padding: '8px 20px', borderRadius: R.full }}>
+              {registeredEmail}
             </div>
-
-            <div style={{
-              background: '#EEE8D8', borderRadius: '16px', padding: '20px',
-              maxWidth: '300px', display: 'flex', flexDirection: 'column' as const,
-              gap: '12px', animation: 'fadeUp 0.4s ease 0.1s both',
-            }}>
-              <div style={{ fontSize: '13px', color: '#2E2A26', fontWeight: '700' }}>
-                Come procedere:
-              </div>
+            <div style={{ background: C.bgSoft, borderRadius: R.md, padding: S.md, width: '100%', display: 'flex', flexDirection: 'column', gap: S.sm }}>
               {[
                 { icon: '1️⃣', text: 'Apri la tua casella email' },
                 { icon: '2️⃣', text: 'Clicca il link di conferma' },
-                { icon: '3️⃣', text: 'Verrai reindirizzato a scegliere il tuo username' },
-              ].map((step) => (
-                <div key={step.icon} style={{
-                  display: 'flex', gap: '10px',
-                  alignItems: 'center', fontSize: '13px', color: '#7A6F65',
-                }}>
-                  <span>{step.icon}</span>
-                  <span>{step.text}</span>
+                { icon: '3️⃣', text: 'Scegli il tuo username' },
+              ].map((s) => (
+                <div key={s.icon} style={{ display: 'flex', gap: S.sm, alignItems: 'center', fontSize: TEXT.sm, color: C.muted }}>
+                  <span>{s.icon}</span><span>{s.text}</span>
                 </div>
               ))}
             </div>
-
-            <div style={{ fontSize: '12px', color: '#B0A899', animation: 'fadeUp 0.4s ease 0.2s both' }}>
-              Non hai ricevuto l'email?
-            </div>
-
             <button
               onClick={async () => {
-                const { error } = await supabase.auth.resend({
-                  type: 'signup',
-                  email: registeredEmail,
-                });
-                if (!error) {
-                  setSuccessMsg('Email inviata di nuovo!');
-                  setTimeout(() => setSuccessMsg(''), 3000);
-                }
+                await supabase.auth.resend({ type: 'signup', email: registeredEmail });
+                setSuccessMsg('Email inviata di nuovo!');
+                setTimeout(() => setSuccessMsg(''), 3000);
               }}
-              style={{
-                ...styles.submitBtn,
-                background: '#EEE8D8',
-                animation: 'fadeUp 0.4s ease 0.25s both',
-              }}
+              style={{ ...btn.ghost, width: 'auto', padding: '10px 24px' }}
             >
               🔄 Invia di nuovo
             </button>
-
-            {successMsg && (
-              <div style={{ ...styles.message, animation: 'fadeUp 0.2s ease' }}>
-                ✅ {successMsg}
-              </div>
-            )}
+            {successMsg && <div style={{ fontSize: TEXT.sm, color: C.success }}>{successMsg}</div>}
+            <button onClick={() => setEmailSent(false)} style={{ fontSize: TEXT.sm, color: C.faint, background: 'none', border: 'none', cursor: 'pointer' }}>← Torna al login</button>
           </div>
         </div>
       </>
@@ -244,153 +177,155 @@ export default function AuthPage() {
   }
 
   // ─── Form principale ──────────────────────────────────────────────────────
-  const cardStyle: React.CSSProperties = {
-    width: '100%',
-    maxWidth: '340px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '14px',
-    opacity: mounted ? 1 : 0,
-    transform: mounted ? 'translateY(0)' : 'translateY(24px)',
-    transition: 'opacity 0.4s ease, transform 0.4s ease',
-    animation: shake ? 'shake 0.5s ease' : 'none',
-  };
-
-  const checkRowStyle = (ok: boolean): React.CSSProperties => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    fontSize: '11px',
-    color: ok ? '#3CA648' : '#B0A899',
-    transition: 'color 0.2s ease',
-  });
-
-  const matchIndicator = (match: boolean, text: string) => (
-    <div style={{
-      fontSize: '11px',
-      color: match ? '#3CA648' : '#E8869E',
-      marginTop: '4px',
-      transition: 'color 0.2s',
-    }}>
-      {match ? '✓' : '✗'} {text}
-    </div>
-  );
-
   return (
     <>
-      <style>{`
+      <style jsx>{`
         @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          20% { transform: translateX(-8px); }
-          40% { transform: translateX(8px); }
-          60% { transform: translateX(-6px); }
-          80% { transform: translateX(6px); }
+          0%,100%{transform:translateX(0)}
+          20%{transform:translateX(-8px)}
+          40%{transform:translateX(8px)}
+          60%{transform:translateX(-6px)}
+          80%{transform:translateX(6px)}
         }
         @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(8px); }
-          to   { opacity: 1; transform: translateY(0); }
+          from{opacity:0;transform:translateY(8px)}
+          to{opacity:1;transform:translateY(0)}
         }
-        .auth-tab {
-          flex: 1;
-          padding: 10px;
-          border: none;
-          background: #EEE8D8;
-          cursor: pointer;
-          font-size: 14px;
-          font-weight: 600;
-          color: #7A6F65;
-          transition: background 0.2s, color 0.2s;
-          font-family: inherit;
+        @keyframes fadeUp {
+          from{opacity:0;transform:translateY(20px)}
+          to{opacity:1;transform:translateY(0)}
         }
-        .auth-tab:first-child { border-radius: 12px 0 0 12px; }
-        .auth-tab:last-child  { border-radius: 0 12px 12px 0; }
-        .auth-tab-active {
-          background: #F4B8C8 !important;
-          color: #2E2A26 !important;
-        }
+        .auth-input:focus { border-color: ${C.primary} !important; }
+        .auth-btn-primary:hover { opacity: 0.9; }
+        .auth-btn-social:hover { background: ${C.bgSoft} !important; }
+        .auth-tab { flex:1; padding:10px; border:none; background:${C.bgSoft}; cursor:pointer; font-size:${TEXT.base}; font-weight:600; color:${C.muted}; transition:all 0.2s; font-family:${FONT.sans}; }
+        .auth-tab:first-child { border-radius:${R.full} 0 0 ${R.full}; }
+        .auth-tab:last-child  { border-radius:0 ${R.full} ${R.full} 0; }
+        .auth-tab-active { background:${C.primary} !important; color:${C.white} !important; }
       `}</style>
 
-      <div style={styles.screen}>
+      <div style={{
+        minHeight: '100vh',
+        background: C.bgSoft,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: S.md,
+      }}>
         <div style={{
-          flex: 1, display: 'flex', flexDirection: 'column' as const,
-          alignItems: 'center', justifyContent: 'center',
-          padding: '32px 24px', gap: '20px', overflowY: 'auto' as const,
+          background: C.bg,
+          borderRadius: R.xl,
+          padding: `${S.xl} ${S.lg}`,
+          width: '100%',
+          maxWidth: '420px',
+          boxShadow: SHADOW.lg,
+          opacity: mounted ? 1 : 0,
+          transform: mounted ? 'translateY(0)' : 'translateY(20px)',
+          transition: 'opacity 0.4s ease, transform 0.4s ease',
         }}>
 
-          {/* Logo */}
-          <div style={{
-            display: 'flex', flexDirection: 'column' as const,
-            alignItems: 'center', gap: '6px',
-            opacity: mounted ? 1 : 0,
-            transform: mounted ? 'translateY(0)' : 'translateY(-16px)',
-            transition: 'opacity 0.4s ease 0.1s, transform 0.4s ease 0.1s',
-          }}>
-            <div style={{ fontSize: '48px' }}>🎬</div>
-            <div style={{ fontSize: '22px', fontWeight: '800', color: '#E8869E', letterSpacing: '3px' }}>
-              CINEDATE
+          {/* ─── Logo ─────────────────────────────────────────────────────── */}
+          <div style={{ textAlign: 'center', marginBottom: S.lg }}>
+            <div style={{ fontSize: TEXT.xl, fontWeight: '800', color: C.primary, letterSpacing: '1px' }}>
+              🎬 CINEDATE
+            </div>
+            <div style={{ fontSize: TEXT.sm, color: C.muted, marginTop: S.xs }}>
+              {mode === 'login' ? 'Bentornato!' : 'Crea il tuo account'}
             </div>
           </div>
 
-          {/* Tab switcher */}
-          <div style={{
-            display: 'flex', width: '100%', maxWidth: '340px',
-            borderRadius: '12px', overflow: 'hidden',
-            opacity: mounted ? 1 : 0,
-            transition: 'opacity 0.4s ease 0.15s',
-          }}>
-            <button
-              className={`auth-tab ${mode === 'login' ? 'auth-tab-active' : ''}`}
-              onClick={() => setMode('login')}
-            >
-              Accedi
-            </button>
-            <button
-              className={`auth-tab ${mode === 'register' ? 'auth-tab-active' : ''}`}
-              onClick={() => setMode('register')}
-            >
-              Registrati
-            </button>
+          {/* ─── Tab switcher ─────────────────────────────────────────────── */}
+          <div style={{ display: 'flex', borderRadius: R.full, overflow: 'hidden', marginBottom: S.lg, border: `1.5px solid ${C.border}` }}>
+            <button className={`auth-tab ${mode === 'login' ? 'auth-tab-active' : ''}`} onClick={() => setMode('login')}>Accedi</button>
+            <button className={`auth-tab ${mode === 'register' ? 'auth-tab-active' : ''}`} onClick={() => setMode('register')}>Registrati</button>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} style={cardStyle}>
+          {/* ─── Google ───────────────────────────────────────────────────── */}
+          <button
+            className="auth-btn-social"
+            onClick={handleGoogleLogin}
+            disabled={isGoogleLoading}
+            style={{ ...btn.social, marginBottom: S.sm, opacity: isGoogleLoading ? 0.7 : 1 }}
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18">
+              <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+              <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+              <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
+              <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z"/>
+            </svg>
+            {isGoogleLoading ? 'Reindirizzamento...' : 'Continua con Google'}
+          </button>
 
+          {/* ─── Apple placeholder ────────────────────────────────────────── */}
+          <button
+            style={{ ...btn.social, marginBottom: S.lg, opacity: 0.4, cursor: 'not-allowed' }}
+            disabled
+            title="Disponibile prossimamente"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
+              <path d="M13.173 9.438c-.02-2.137 1.748-3.17 1.826-3.22-1-1.458-2.548-1.658-3.094-1.677-1.315-.134-2.573.776-3.24.776-.666 0-1.692-.757-2.784-.737-1.43.021-2.754.835-3.49 2.118-1.492 2.589-.382 6.425 1.072 8.523.714 1.024 1.563 2.175 2.676 2.133 1.077-.042 1.483-.692 2.784-.692 1.302 0 1.666.692 2.805.67 1.16-.02 1.89-1.046 2.598-2.074.822-1.188 1.16-2.34 1.18-2.4-.026-.01-2.308-.885-2.333-3.42z"/>
+              <path d="M11.07 3.18c.594-.72.993-1.72.883-2.72-.854.035-1.888.57-2.5 1.287-.546.634-1.027 1.647-.898 2.617.952.073 1.92-.484 2.515-1.184z"/>
+            </svg>
+            Continua con Apple
+          </button>
+
+          {/* ─── Divider ──────────────────────────────────────────────────── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: S.sm, marginBottom: S.lg }}>
+            <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
+            <span style={{ fontSize: TEXT.xs, color: C.faint }}>oppure</span>
+            <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
+          </div>
+
+          {/* ─── Form ─────────────────────────────────────────────────────── */}
+          <form
+            onSubmit={handleSubmit}
+            style={{
+              display: 'flex', flexDirection: 'column', gap: S.sm,
+              animation: shake ? 'shake 0.5s ease' : 'none',
+            }}
+          >
             {/* Email */}
             <input
+              className="auth-input"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
               required
               autoComplete="email"
-              style={styles.input}
+              style={input.base}
             />
 
             {/* Email conferma — solo register */}
             {mode === 'register' && (
               <div style={{ animation: 'fadeIn 0.3s ease' }}>
                 <input
+                  className="auth-input"
                   type="email"
                   value={emailConfirm}
                   onChange={(e) => setEmailConfirm(e.target.value)}
                   placeholder="Conferma email"
                   required
-                  autoComplete="email"
                   style={{
-                    ...styles.input,
+                    ...input.base,
                     borderColor: emailConfirm.length > 0
-                      ? (emailsMatch ? '#9EE6A4' : '#F4B8C8')
-                      : '#E0D6C8',
+                      ? emailsMatch ? C.success : C.error
+                      : C.border,
                   }}
                 />
-                {emailConfirm.length > 0 && matchIndicator(emailsMatch, 'Le email coincidono')}
+                {emailConfirm.length > 0 && (
+                  <div style={{ fontSize: TEXT.xs, color: emailsMatch ? C.success : C.error, marginTop: '4px' }}>
+                    {emailsMatch ? '✓ Le email coincidono' : '✗ Le email non coincidono'}
+                  </div>
+                )}
               </div>
             )}
 
             {/* Password */}
             <div>
-              <div style={{ position: 'relative' as const }}>
+              <div style={{ position: 'relative' }}>
                 <input
+                  className="auth-input"
                   type={showPass ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -400,39 +335,26 @@ export default function AuthPage() {
                   required
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   style={{
-                    ...styles.input,
+                    ...input.base,
                     paddingRight: '44px',
                     borderColor: mode === 'register' && password.length > 0
-                      ? (passwordValid ? '#9EE6A4' : '#F4B8C8')
-                      : '#E0D6C8',
+                      ? passwordValid ? C.success : C.error
+                      : C.border,
                   }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass((v) => !v)}
-                  style={{
-                    position: 'absolute' as const,
-                    right: '10px', top: '50%',
-                    transform: 'translateY(-50%)',
-                    background: 'none', border: 'none',
-                    cursor: 'pointer', fontSize: '18px',
-                    opacity: showPass ? 1 : 0.45,
-                  }}
+                  style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', opacity: showPass ? 1 : 0.4 }}
                 >👁️</button>
               </div>
 
-              {/* Checklist password — solo register */}
+              {/* Checklist — solo register */}
               {mode === 'register' && (passwordFocused || password.length > 0) && (
-                <div style={{
-                  background: '#FAF3E0', border: '1px solid #E0D6C8',
-                  borderRadius: '8px', padding: '10px 12px', marginTop: '6px',
-                  display: 'flex', flexDirection: 'column' as const,
-                  gap: '4px', animation: 'fadeIn 0.2s ease',
-                }}>
-                  {passwordChecks.map((c) => (
-                    <div key={c.label} style={checkRowStyle(c.ok)}>
-                      <span style={{ fontSize: '13px' }}>{c.ok ? '✅' : '⬜'}</span>
-                      {c.label}
+                <div style={{ background: C.bgSoft, borderRadius: R.sm, padding: S.sm, marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px', animation: 'fadeIn 0.2s ease' }}>
+                  {checks.map((c) => (
+                    <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: TEXT.xs, color: c.ok ? C.success : C.faint, transition: 'color 0.2s' }}>
+                      <span>{c.ok ? '✅' : '⬜'}</span>{c.label}
                     </div>
                   ))}
                 </div>
@@ -442,8 +364,9 @@ export default function AuthPage() {
             {/* Password conferma — solo register */}
             {mode === 'register' && (
               <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                <div style={{ position: 'relative' as const }}>
+                <div style={{ position: 'relative' }}>
                   <input
+                    className="auth-input"
                     type={showPassConfirm ? 'text' : 'password'}
                     value={passwordConfirm}
                     onChange={(e) => setPasswordConfirm(e.target.value)}
@@ -451,44 +374,37 @@ export default function AuthPage() {
                     required
                     autoComplete="new-password"
                     style={{
-                      ...styles.input,
+                      ...input.base,
                       paddingRight: '44px',
                       borderColor: passwordConfirm.length > 0
-                        ? (passwordsMatch ? '#9EE6A4' : '#F4B8C8')
-                        : '#E0D6C8',
+                        ? passwordsMatch ? C.success : C.error
+                        : C.border,
                     }}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassConfirm((v) => !v)}
-                    style={{
-                      position: 'absolute' as const,
-                      right: '10px', top: '50%',
-                      transform: 'translateY(-50%)',
-                      background: 'none', border: 'none',
-                      cursor: 'pointer', fontSize: '18px',
-                      opacity: showPassConfirm ? 1 : 0.45,
-                    }}
+                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', opacity: showPassConfirm ? 1 : 0.4 }}
                   >👁️</button>
                 </div>
-                {passwordConfirm.length > 0 && matchIndicator(passwordsMatch, 'Le password coincidono')}
+                {passwordConfirm.length > 0 && (
+                  <div style={{ fontSize: TEXT.xs, color: passwordsMatch ? C.success : C.error, marginTop: '4px' }}>
+                    {passwordsMatch ? '✓ Le password coincidono' : '✗ Le password non coincidono'}
+                  </div>
+                )}
               </div>
             )}
 
             {/* Errore */}
             {error && (
-              <div style={{
-                ...styles.message,
-                background: '#F4B8C8', color: '#E8869E', borderColor: '#E8869E',
-                animation: 'fadeIn 0.2s ease',
-              }}>
+              <div style={{ background: C.errorLight, color: C.error, borderRadius: R.sm, padding: '10px 14px', fontSize: TEXT.sm, animation: 'fadeIn 0.2s ease' }}>
                 ⚠️ {error}
               </div>
             )}
 
             {/* Successo */}
             {successMsg && (
-              <div style={{ ...styles.message, animation: 'fadeIn 0.2s ease' }}>
+              <div style={{ background: C.successLight, color: C.success, borderRadius: R.sm, padding: '10px 14px', fontSize: TEXT.sm }}>
                 ✅ {successMsg}
               </div>
             )}
@@ -497,55 +413,42 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={isLoading}
-              style={{
-                ...styles.submitBtn,
-                opacity: isLoading ? 0.7 : 1,
-                transform: isLoading ? 'scale(0.98)' : 'scale(1)',
-                transition: 'opacity 0.2s, transform 0.2s',
-              }}
+              className="auth-btn-primary"
+              style={{ ...btn.primary, opacity: isLoading ? 0.7 : 1, marginTop: S.xs }}
             >
-              {isLoading
-                ? '⏳ Caricamento...'
-                : mode === 'login' ? '🔓 Accedi' : '✨ Registrati'}
+              {isLoading ? '⏳ Caricamento...' : mode === 'login' ? 'Accedi' : 'Registrati'}
             </button>
           </form>
 
-          {/* Divider */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '12px',
-            width: '100%', maxWidth: '340px',
-            opacity: mounted ? 1 : 0,
-            transition: 'opacity 0.4s ease 0.3s',
-          }}>
-            <div style={{ flex: 1, borderTop: '1px solid #E0D6C8' }} />
-            <span style={{ fontSize: '12px', color: '#B0A899' }}>oppure</span>
-            <div style={{ flex: 1, borderTop: '1px solid #E0D6C8' }} />
+          {/* ─── Switch mode ──────────────────────────────────────────────── */}
+          <div style={{ textAlign: 'center', marginTop: S.md }}>
+            <button
+              onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: TEXT.sm, color: C.muted }}
+            >
+              {mode === 'login'
+                ? <>Non hai un account? <span style={{ color: C.primary, fontWeight: '600' }}>Registrati</span></>
+                : <>Hai già un account? <span style={{ color: C.primary, fontWeight: '600' }}>Accedi</span></>
+              }
+            </button>
           </div>
 
-          {/* Ospite */}
-          <button
-            onClick={handleGuest}
-            style={{
-              ...styles.submitBtn,
-              background: '#EEE8D8',
-              width: '100%', maxWidth: '340px',
-              opacity: mounted ? 1 : 0,
-              transition: 'opacity 0.4s ease 0.35s',
-            }}
-          >
-            👤 Continua come ospite
+          {/* ─── Divider ospite ───────────────────────────────────────────── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: S.sm, margin: `${S.md} 0` }}>
+            <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
+            <span style={{ fontSize: TEXT.xs, color: C.faint }}>oppure</span>
+            <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
+          </div>
+
+          {/* ─── Ospite ───────────────────────────────────────────────────── */}
+          <button onClick={handleGuest} style={{ ...btn.ghost }}>
+            👤 Accedi come ospite
           </button>
 
-          <div style={{
-            fontSize: '11px', color: '#B0A899',
-            textAlign: 'center' as const, maxWidth: '280px', lineHeight: '1.5',
-            opacity: mounted ? 1 : 0,
-            transition: 'opacity 0.4s ease 0.4s',
-          }}>
+          <div style={{ fontSize: TEXT.xs, color: C.faint, textAlign: 'center', marginTop: S.sm, lineHeight: '1.5' }}>
             Come ospite puoi fare swipe e usare le stanze.<br />
-            Recensioni, like e match salvati richiedono un account.
+            Recensioni e match salvati richiedono un account.
           </div>
-
         </div>
       </div>
     </>

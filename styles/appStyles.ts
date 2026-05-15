@@ -18,6 +18,12 @@ const C = {
   shadow:    'rgba(46,42,38,0.08)',
   shadowMd:  'rgba(46,42,38,0.14)',
   shadowLg:  'rgba(46,42,38,0.22)',
+  primary:     '#E8386D',   // rosa principale
+  primaryLight:'#FFE8EF',   // rosa chiaro per sfondi
+  bg:          '#FFFFFF',   // sfondo bianco
+  bgSoft:      '#F8F8F8',   // sfondo grigio chiarissimo
+  success:     '#22C55E',   // verde conferma
+
 };
 
 const R = { sm: '8px', md: '12px', lg: '18px', xl: '24px', full: '999px', };
@@ -371,7 +377,7 @@ const styles = {
     lineHeight: '1.3',
   },
   cardBtnInfo: {
-    position: 'absolute',
+    position: 'absolute'  as const,
     right: 0,
     padding: '15px 15px',
     border: 'none',
