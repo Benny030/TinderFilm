@@ -1,29 +1,43 @@
-// ─── Colori ───────────────────────────────────────────────────────────────────
 export const C = {
-  primary:      '#E8386D',
+  // ─── BRAND ─────────────────────────────────────────────
+  primary: '#E8386D',
   primaryHover: '#D42E60',
   primaryLight: '#FFE8EF',
   primaryFaint: '#FFF4F7',
 
-  bg:           '#FFFFFF',
-  bgSoft:       '#F8F8F8',
-  bgCard:       '#FFFFFF',
+  secondary: '#5BBEC8',
+  secondaryLight: '#DDF6F8',
 
-  ink:          '#1A1A1A',
-  muted:        '#666666',
-  faint:        '#AAAAAA',
-  border:       '#EEEEEE',
-  borderSoft:   '#F4F4F4',
+  // ─── BACKGROUND ────────────────────────────────────────
+  bg: '#FFFFFF',
+  bgSoft: '#FAF7F3',   // più caldo del tuo attuale F8F8F8
+  bgWarm: '#FAF3E0',   // cream vera (tuo punto forte)
+  bgCard: '#FFFFFF',
 
-  success:      '#22C55E',
+  // ─── TEXT ───────────────────────────────────────────────
+  ink: '#1F1A17',      // più profondo e cinematico
+  muted: '#6E6258',
+  faint: '#A89F95',
+
+  // ─── BORDERS ────────────────────────────────────────────
+  border: '#E9DED2',
+  borderSoft: '#F4EEE6',
+
+  // ─── STATUS ─────────────────────────────────────────────
+  success: '#22C55E',
   successLight: '#DCFCE7',
-  error:        '#EF4444',
-  errorLight:   '#FEE2E2',
 
-  white:        '#FFFFFF',
-  black:        '#000000',
+  error: '#EF4444',
+  errorLight: '#FEE2E2',
+
+  // ─── SHADOWS (più soft e premium) ───────────────────────
+  shadowSm: 'rgba(31,26,23,0.05)',
+  shadowMd: 'rgba(31,26,23,0.10)',
+  shadowLg: 'rgba(31,26,23,0.16)',
+
+  white: '#FFFFFF',
+  black: '#000000',
 } as const;
-
 // ─── Border radius ────────────────────────────────────────────────────────────
 export const R = {
   xs:   '6px',

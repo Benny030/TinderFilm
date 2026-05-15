@@ -113,12 +113,15 @@ export default function LandingPage() {
         }
       `}</style>
 
-      <div style={{ minHeight: '100vh', background: C.bg, fontFamily: FONT.sans }}>
+      <div style={{ 
+        minHeight: '100vh', 
+        background: C.bg,
+        fontFamily: FONT.sans }}>
 
         {/* ─── NAVBAR ───────────────────────────────────────────────────────── */}
         <nav style={{
           position: 'sticky', top: 0, zIndex: 50,
-          background: 'rgba(255,255,255,0.92)',
+          background: C.bgSoft,
           backdropFilter: 'blur(12px)',
           borderBottom: `1px solid ${C.border}`,
           padding: `0 ${S.lg}`,
@@ -167,15 +170,14 @@ export default function LandingPage() {
 
         {/* ─── HERO ─────────────────────────────────────────────────────────── */}
         <section style={{
-          
-          maxWidth: '1200px', margin: '0 auto',
+          maxWidth: '1500px', margin: '0 auto',
           padding: `${S.xxl} ${S.lg}`,
        }}>
           <div
             className="land-hero-grid"
             style={{
               display: 'grid',
-              gridTemplateColumns: '1.5fr 1fr',
+              gridTemplateColumns: '2fr 1fr',
               gap: S.xxl,
               alignItems: 'center',
               opacity: mounted ? 1 : 0,
@@ -192,7 +194,7 @@ export default function LandingPage() {
                 fontSize: TEXT.xs, fontWeight: '600',
                 marginBottom: S.md,
               }}>
-                🎉 Nuovo modo di scegliere film
+                🎉 Nuovo modo di scegliere film!
               </div>
 
               <h1 style={{
@@ -423,7 +425,7 @@ export default function LandingPage() {
             </p>
             <div style={{ display: 'flex', gap: S.sm, justifyContent: 'center', flexWrap: 'wrap' }}>
               <button className="land-hero-btn-primary" onClick={() => router.push('/auth')}>
-                Inizia gratis — è subito
+                Inizia subito
               </button>
             </div>
           </div>
