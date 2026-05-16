@@ -325,8 +325,8 @@ export default function LandingPage() {
 
             <p className="hero-sub">
              Il modo più semplice per trovare qualcosa da guardare insieme.
-              Swipate film e serie che vi incuriosiscono, trovate i match
-              in comune e iniziate subito la serata.
+              <em> Swipate film e serie che vi incuriosiscono</em>, trovate i match
+              in comune e iniziate subito la serata
             </p>
 
             <div className="hero-btns">
