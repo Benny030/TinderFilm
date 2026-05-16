@@ -173,7 +173,7 @@ export default function HomePage() {
           gap: 14px;
           overflow-x: auto; 
           padding-bottom: 8px;
-          scrollbar-width: none;
+           scrollbar-width: thin;
         }
         .scroll-row::-webkit-scrollbar { display: none; }
         .rating-badge {

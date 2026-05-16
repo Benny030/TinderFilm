@@ -320,7 +320,7 @@ export default function LandingPage() {
             <h1 className="hero-h1">
               Trova il film<br />
               perfetto,{' '}
-              <em>insieme.</em>
+              <em>insieme. </em>
             </h1>
 
             <p className="hero-sub">
