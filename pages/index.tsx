@@ -315,7 +315,7 @@ export default function LandingPage() {
         >
           {/* Sinistra */}
           <div>
-            <span className="hero-eyebrow">Per chi ama il cinema insieme</span>
+            <span className="hero-eyebrow">Per chi ama il cinema in compagnia</span>
 
             <h1 className="hero-h1">
               Trova il film<br />
@@ -324,9 +324,9 @@ export default function LandingPage() {
             </h1>
 
             <p className="hero-sub">
-              Smetti di scrollare Netflix per un'ora senza decidere niente.
-              Swipa i film, trova il match con il tuo partner — stasera guardate
-              qualcosa che piace <em>a tutti e due</em>.
+             Il modo più semplice per trovare qualcosa da guardare insieme.
+              Swipate film e serie che vi incuriosiscono, trovate i match
+              in comune e iniziate subito la serata.
             </p>
 
             <div className="hero-btns">
@@ -428,9 +428,9 @@ export default function LandingPage() {
         <div className="proof">
           {[
             { icon: '🏠', text: 'Stanze private tra amici o in coppia' },
-            { icon: '❤️', text: 'Match sui film, non sulle persone' },
-            { icon: '▶️', text: 'Trailer e recensioni integrate' },
-            { icon: '📍', text: 'Cinema vicino a te' },
+            { icon: '❤️', text: 'Match su film e serie' },
+            { icon: '▶️', text: 'Trailer e streaming integrati' },
+            { icon: '📍', text: 'Cinema vicino a te con offerte dedicate' } 
           ].map((p) => (
             <div key={p.text} className="proof-item">
               <span>{p.icon}</span>
@@ -455,22 +455,22 @@ export default function LandingPage() {
                 num: '01',
                 icon: '🏠',
                 title: 'Crei una stanza',
-                desc: 'Un codice, lo mandi al tuo partner. Niente link, niente account obbligatorio — si può entrare anche come ospite.',
+                desc: 'Create una stanza e condividete il codice con chi volete. Niente link, niente account obbligatorio — si può entrare anche come ospite.',
                 tag: '30 secondi per iniziare',
               },
               {
                 num: '02',
                 icon: '🎬',
                 title: 'Swipate i film (separatamente)',
-                desc: 'Ognuno vede gli stessi film ma nessuno sa cosa ha scelto l\'altro. Niente influenze, niente "metti quello che vuoi tu".',
+                desc: 'Ognuno sceglie in autonomia i film che gli interessano. Quando i gusti si incrociano, nasce il match.',
                 tag: 'Completamente anonimo',
               },
               {
                 num: '03',
                 icon: '🎉',
                 title: 'Appare il match',
-                desc: 'Quando entrambi mettete like allo stesso film, compare il match. Stasera avete un film da guardare — e l\'avete scelto davvero insieme.',
-                tag: 'Niente più discussioni',
+                desc: 'Quando entrambi mettete like allo stesso film, compare il match. Quando arriva il match, avete trovato qualcosa che piace davvero a entrambi.',
+                tag: 'Trovare qualcosa da guardare non è mai stato così semplice',
               },
             ].map((step) => (
               <div key={step.num} className="how-step">
@@ -489,9 +489,7 @@ export default function LandingPage() {
         {/* ── QUOTE ─────────────────────────────────────────────────────── */}
         <section className="quote-section">
           <p className="quote-text">
-            "Abbiamo smesso di litigare su cosa guardare.
-            Ora <em>matchamo i film</em> come si matcha su Tinder —
-            ma stavolta funziona."
+           "Abbiamo scoperto film che non avremmo mai trovato da soli.  <em> E scegliere cosa guardare è diventato finalmente semplice</em>."
           </p>
           <div className="quote-author">— Giulia & Marco, Milano 🍿</div>
         </section>
@@ -500,8 +498,8 @@ export default function LandingPage() {
         <section className="final-cta">
           <h2>Stasera cosa guardate?</h2>
           <p>
-            Smetti di scrollare. Crea una stanza in 30 secondi
-            e trova il film che piace a entrambi.
+            Create una stanza, scoprite nuovi film
+            e trovate subito qualcosa da guardare insieme.
           </p>
           <button
             className="btn-hero-primary"
