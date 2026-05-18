@@ -381,15 +381,34 @@ function MatchScreen({ match, allMatches, onContinue, onReset, isLoggedIn }: Mat
   const [showMatches, setShowMatches] = useState(false);
 
   useEffect(() => {
-    const tmdbId = (match as any).tmdb_id;
-    if (!tmdbId) return;
-    setLoadingSources(true);
-    fetch(`/api/watchmode/${tmdbId}`)
-      .then((r) => r.json())
-      .then((d) => setSources(d.sources ?? []))
-      .catch(() => setSources([]))
-      .finally(() => setLoadingSources(false));
-  }, [match.id]);
+  const tmdbId = (match as any).tmdb_id;
+  
+  // ─── Debug: vedi cosa arriva ──────────────────────────────────────────
+  console.log('Match movie:', match.title, '| tmdb_id:', tmdbId);
+  
+  if (!tmdbId) {
+    console.warn('tmdb_id mancante nel film — WatchMode non può cercare');
+    setSources([]);
+    setLoadingSources(false);
+    return;
+  }
+
+  setLoadingSources(true);
+  fetch(`/api/watchmode/${tmdbId}`)
+    .then((r) => {
+      console.log('WatchMode status:', r.status);
+      return r.json();
+    })
+    .then((d) => {
+      console.log('WatchMode sources:', d.sources);
+      setSources(d.sources ?? []);
+    })
+    .catch((err) => {
+      console.error('WatchMode error:', err);
+      setSources([]);
+    })
+    .finally(() => setLoadingSources(false));
+}, [match.id]);
 
   const typeLabel = { sub: 'Abbonamento', rent: 'Noleggio', buy: 'Acquisto', free: 'Gratis' };
   const typeColor = { sub: C.success, rent: '#f59e0b', buy: C.muted, free: C.primary };
@@ -921,6 +940,8 @@ export default function StanzaPage({ movies: initialMovies, roomId }: Props) {
     : guestName ?? 'Ospite';
   const isLoggedIn = !!currentUser && !currentUser.isGuest;
 
+
+  
   // ── Redirect ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (isLoading) return;
@@ -933,20 +954,14 @@ export default function StanzaPage({ movies: initialMovies, roomId }: Props) {
     saveRecentRoom(roomId, roomUsers.length || 1);
   }, [roomId, roomUsers.length]);
 
-  // ── Aggiungi se stesso ────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!userId || !displayName) return;
-    setRoomUsers((prev) => {
-      if (prev.find((u) => u.id === userId)) return prev;
-      return [...prev, { id: userId, name: displayName }].slice(0, 2);
-    });
-  }, [userId, displayName]);
-
+ 
   // ── Swipe gesture ─────────────────────────────────────────────────────────
   const { dragOffset, isDragging, handleStart, handleMove, handleEnd } = useSwipe((liked) => {
     if (!currentMovie) return;
     handleSwipe(currentMovie.id, liked);
   });
+
+  
 
   // ── Global drag events ────────────────────────────────────────────────────
   useEffect(() => {
@@ -968,65 +983,88 @@ export default function StanzaPage({ movies: initialMovies, roomId }: Props) {
   }, [isDragging]);
 
   // ── Realtime channel ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!userId || !displayName) return;
+useEffect(() => {
+  if (!userId || !displayName) return;
 
-    const channel = supabase.channel(`room-${roomId}`);
+  const channel = supabase.channel(`room-${roomId}`, {
+    config: { presence: { key: userId } },
+  });
 
-    channel.on('broadcast', { event: 'join' }, (event) => {
-      const { id, name } = (event as any).payload ?? {};
-      if (!id || !name) return;
+  // ─── PRESENCE: traccia chi è online ──────────────────────────────────────
+  channel.on('presence', { event: 'sync' }, () => {
+    const state = channel.presenceState();
+    const users: RoomUser[] = Object.values(state)
+      .flat()
+      .map((p: any) => ({ id: p.userId, name: p.displayName }))
+      .filter((u, i, arr) => arr.findIndex((x) => x.id === u.id) === i) // deduplica
+      .slice(0, 2);
+    setRoomUsers(users);
+  });
+
+  channel.on('presence', { event: 'join' }, ({ newPresences }) => {
+    newPresences.forEach((p: any) => {
       setRoomUsers((prev) => {
-        if (prev.find((u) => u.id === id)) return prev;
-        return [...prev, { id, name }].slice(0, 2);
+        if (prev.find((u) => u.id === p.userId)) return prev;
+        return [...prev, { id: p.userId, name: p.displayName }].slice(0, 2);
       });
     });
+  });
 
-    channel.on('broadcast', { event: 'swipe' }, (event) => {
-      const { movieId, liked, userId: uid, name } = (event as any).payload ?? {};
-      if (!movieId || !uid) return;
-      setRoomUsers((prev) => {
-        if (prev.find((u) => u.id === uid)) return prev;
-        return [...prev, { id: uid, name }].slice(0, 2);
-      });
-      setSwipes((prev) => {
-        const current = prev[movieId] ?? {};
-        return { ...prev, [movieId]: { ...current, [uid]: liked } };
-      });
+  channel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
+    leftPresences.forEach((p: any) => {
+      setRoomUsers((prev) => prev.filter((u) => u.id !== p.userId));
     });
+  });
 
-    channel.on('broadcast', { event: 'match' }, (event) => {
-      const { movieId } = (event as any).payload ?? {};
-      const movie = movies.find((m) => m.id.toString() === movieId);
-      if (!movie) return;
-      setLastMatch(movie);
-      setMatches((prev) => {
-        if (prev.find((e) => e.movie.id === movie.id)) return prev;
-        return [...prev, { movie, timestamp: Date.now() }];
-      });
-      setScreen('match');
+  // ─── BROADCAST: swipe, match, reset ──────────────────────────────────────
+  channel.on('broadcast', { event: 'swipe' }, (event) => {
+    const { movieId, liked, userId: uid } = (event as any).payload ?? {};
+    if (!movieId || !uid) return;
+    setSwipes((prev) => {
+      const current = prev[movieId] ?? {};
+      return { ...prev, [movieId]: { ...current, [uid]: liked } };
     });
+  });
 
-    channel.on('broadcast', { event: 'reset' }, () => {
-      setSwipes({});
-      setMatches([]);
-      setLastMatch(null);
-      setScreen('swipe');
+  channel.on('broadcast', { event: 'match' }, (event) => {
+    const { movieId } = (event as any).payload ?? {};
+    const movie = movies.find((m) => m.id.toString() === movieId);
+    if (!movie) return;
+    setLastMatch(movie);
+    setMatches((prev) => {
+      if (prev.find((e) => e.movie.id === movie.id)) return prev;
+      return [...prev, { movie, timestamp: Date.now() }];
     });
+    setScreen('match');
+  });
 
-    const subscribe = async () => {
-      await channel.subscribe();
-      (channel as any).send({
-        type: 'broadcast', event: 'join',
-        payload: { id: userId, name: displayName },
-      });
-    };
-    subscribe();
+  channel.on('broadcast', { event: 'reset' }, () => {
+    setSwipes({});
+    setMatches([]);
+    setLastMatch(null);
+    setScreen('swipe');
+  });
 
-    channelRef.current = channel;
-    return () => { channel.unsubscribe(); };
-  }, [userId, displayName, roomId, movies]);
+  const subscribe = async () => {
+    await channel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        // ─── Track presence con i tuoi dati ────────────────────────────
+        await channel.track({
+          userId,
+          displayName,
+          joinedAt: Date.now(),
+        });
+      }
+    });
+  };
+  subscribe();
 
+  channelRef.current = channel;
+  return () => {
+    channel.untrack();
+    channel.unsubscribe();
+  };
+}, [userId, displayName, roomId, movies]);
   // ── Swipe logic ───────────────────────────────────────────────────────────
   const remaining = movies.filter((m) => swipes[m.id]?.[userId] === undefined);
   const currentMovie = remaining[0] ?? null;
@@ -1083,6 +1121,9 @@ export default function StanzaPage({ movies: initialMovies, roomId }: Props) {
     router.push(`/stanza?room=${code}`);
   };
 
+  useEffect(() => {
+  setIsFlipped(false);
+}, [currentMovie?.id]);
   // ── Caricamento ───────────────────────────────────────────────────────────
   if (isLoading || (!currentUser && !isGuest)) {
     return (
@@ -1112,7 +1153,7 @@ export default function StanzaPage({ movies: initialMovies, roomId }: Props) {
             codeError={codeError}
             onJoinByCode={handleJoinByCode}
             onEnter={() => setScreen('swipe')}
-            onAddFilms={() => router.push('/?add=true')}
+            onAddFilms={() => router.push('/home')}
           />
         )}
 
@@ -1169,42 +1210,163 @@ export default function StanzaPage({ movies: initialMovies, roomId }: Props) {
 }
 
 // ─── Server side props ────────────────────────────────────────────────────────
+// ─── Aggiorna getServerSideProps ─────────────────────────────────────────────
 export const getServerSideProps: GetServerSideProps<Props> = async ({ query }) => {
   let roomId = query.room as string;
 
   if (!roomId) {
     return {
-      redirect: { destination: `/stanza?room=${generateRoomCode()}`, permanent: false },
+      redirect: { destination: `/crea-stanza`, permanent: false },
     };
   }
 
   roomId = roomId.trim().toUpperCase();
 
+  // ─── Legge mode/filters dalla query O dal DB se non presenti ─────────────
+  let mode = (query.mode as string) ?? null;
+  let genres = (query.genres as string) ?? null;
+  let yearFrom = (query.year_from as string) ?? null;
+  let yearTo = (query.year_to as string) ?? null;
+
+  // ─── Se mode non è nella query, cerca la config salvata su Supabase ──────
+  if (!mode) {
+    try {
+      const { createClient } = await import('@/utils/supabase/server');
+      const supabase = createClient();
+      const { data: roomConfig } = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('id', roomId)
+        .single();
+
+      if (roomConfig) {
+        mode = roomConfig.mode;
+        genres = roomConfig.genres;
+        yearFrom = roomConfig.year_from?.toString() ?? null;
+        yearTo = roomConfig.year_to?.toString() ?? null;
+      }
+    } catch { /* ignora, usa default */ }
+  }
+
+  mode = mode ?? 'trending';
+
   let movies: Movie[] = [];
   try {
-    const { createClient } = await import('@/utils/supabase/server');
-    const supabase = createClient();
-    const { data } = await supabase.from('movies').select('*');
-    movies = (data as Movie[]) ?? [];
+    const apiKey = process.env.TMDB_API_KEY;
+    if (apiKey) {
+      const currentYear = new Date().getFullYear();
+      let tmdbUrl = '';
 
-    if (movies.length === 0) {
-      const defaults = [
-        { title: 'The Shawshank Redemption', year: 1994, genre: 'Drama', cover: 'https://m.media-amazon.com/images/M/MV5BNDE3ODcxYzMtY2YzZC00NmNlLWJiNDMtZDViZWM2MzIxZDYwXkEyXkFqcGdeQXVyNjAwNDUxODI@._V1_.jpg', trailer: 'https://www.youtube.com/watch?v=6hB3S9bIaco' },
-        { title: 'The Godfather', year: 1972, genre: 'Crime', cover: 'https://m.media-amazon.com/images/M/MV5BM2MyNjYxNmUtYTAwNi00MTYxLWJmNWYtYzZlODY3ZTk3OTFlXkEyXkFqcGdeQXVyNzkwMjQ5NzM@._V1_.jpg', trailer: 'https://www.youtube.com/watch?v=sY1S34973zI' },
-        { title: 'The Dark Knight', year: 2008, genre: 'Action', cover: 'https://m.media-amazon.com/images/M/MV5BMTMxNTMwODM0NF5BMl5BanBnXkFtZTcwODAyMTk2Mw@@._V1_.jpg', trailer: 'https://www.youtube.com/watch?v=EXeTwQWrcwY' },
-        { title: 'Pulp Fiction', year: 1994, genre: 'Crime', cover: 'https://m.media-amazon.com/images/M/MV5BNGNhMDIzZTUtNTBlZi00MTRlLWFjM2ItYzViMjE3YzI5MjljXkEyXkFqcGdeQXVyNzkwMjQ5NzM@._V1_.jpg', trailer: 'https://www.youtube.com/watch?v=s7EdQ4FqbhY' },
-        { title: 'Forrest Gump', year: 1994, genre: 'Drama', cover: 'https://m.media-amazon.com/images/M/MV5BNWIwODRlZTUtY2U3ZS00Yzg1LWJhNzYtMmZiYmEyNmU1NjMzXkEyXkFqcGdeQXVyMTQxNzMzNDI@._V1_.jpg', trailer: 'https://www.youtube.com/watch?v=bLvqoHBptjg' },
-      ];
-      for (const movie of defaults) {
-        const newMovie = { id: crypto.randomUUID(), ...movie, trama_c: null, trama_l: null };
-        await supabase.from('movies').insert(newMovie);
-        movies.push(newMovie as Movie);
+      if (mode === 'trending') {
+        tmdbUrl = `https://api.themoviedb.org/3/trending/movie/week?api_key=${apiKey}&language=it-IT`;
+      } else if (mode === 'cinema') {
+        tmdbUrl = `https://api.themoviedb.org/3/movie/now_playing?api_key=${apiKey}&language=it-IT&region=IT`;
+      } else if (mode === 'streaming') {
+        tmdbUrl = `https://api.themoviedb.org/3/discover/movie?api_key=${apiKey}&language=it-IT&sort_by=popularity.desc&vote_count.gte=200&with_watch_providers=8|9|337|350|119|109|531&watch_region=IT`;
+      } else if (mode === 'discover') {
+        const params = new URLSearchParams({
+          api_key: apiKey,
+          language: 'it-IT',
+          sort_by: 'popularity.desc',
+          'vote_count.gte': '100',
+        });
+        if (genres) params.set('with_genres', genres.replace(/,/g, '|'));
+        if (yearFrom) params.set('primary_release_date.gte', `${yearFrom}-01-01`);
+        if (yearTo) params.set('primary_release_date.lte', `${yearTo}-12-31`);
+        tmdbUrl = `https://api.themoviedb.org/3/discover/movie?${params.toString()}`;
+      }
+
+      const genreMapLocal: Record<number, string> = {
+        28: 'Azione', 12: 'Avventura', 16: 'Animazione',
+        35: 'Commedia', 80: 'Crime', 99: 'Documentario',
+        18: 'Dramma', 10751: 'Famiglia', 14: 'Fantasy',
+        36: 'Storia', 27: 'Horror', 10402: 'Musica',
+        9648: 'Mistero', 10749: 'Romantico', 878: 'Fantascienza',
+        10770: 'TV Movie', 53: 'Thriller', 10752: 'Guerra', 37: 'Western',
+      };
+
+      const trendingRes = await fetch(tmdbUrl);
+      if (trendingRes.ok) {
+        const trendingData = await trendingRes.json();
+
+        const tmdbMovies = await Promise.all(
+          (trendingData.results ?? []).slice(0, 20).map(async (m: any) => {
+            try {
+              let trailerUrl: string | null = null;
+              const videoRes = await fetch(
+                `https://api.themoviedb.org/3/movie/${m.id}/videos?api_key=${apiKey}&language=it-IT`
+              );
+              if (videoRes.ok) {
+                const videoData = await videoRes.json();
+                let trailer = videoData.results?.find(
+                  (v: any) => v.type === 'Trailer' && v.site === 'YouTube'
+                );
+                if (!trailer) {
+                  const videoResEn = await fetch(
+                    `https://api.themoviedb.org/3/movie/${m.id}/videos?api_key=${apiKey}&language=en-US`
+                  );
+                  if (videoResEn.ok) {
+                    const videoDataEn = await videoResEn.json();
+                    trailer = videoDataEn.results?.find(
+                      (v: any) => v.type === 'Trailer' && v.site === 'YouTube'
+                    );
+                  }
+                }
+                if (trailer) trailerUrl = `https://www.youtube.com/watch?v=${trailer.key}`;
+              }
+
+              const genre = m.genre_ids
+                ?.slice(0, 2)
+                .map((id: number) => genreMapLocal[id] ?? '')
+                .filter(Boolean)
+                .join(', ') ?? '';
+
+              return {
+                id: `tmdb_${m.id}`,
+                tmdb_id: m.id,
+                title: m.title,
+                year: m.release_date ? parseInt(m.release_date.split('-')[0]) : 0,
+                genre,
+                cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
+                backdrop: m.backdrop_path ? `https://image.tmdb.org/t/p/w1280${m.backdrop_path}` : null,
+                trailer: trailerUrl,
+                trama_c: m.overview ?? null,
+                trama_l: m.overview ?? null,
+                rating: m.vote_average ?? 0,
+              } as Movie;
+            } catch { return null; }
+          })
+        );
+
+        movies = tmdbMovies.filter(Boolean) as Movie[];
       }
     }
 
-    movies = movies.sort(() => Math.random() - 0.5);
+    if (movies.length === 0) {
+      const { createClient } = await import('@/utils/supabase/server');
+      const supabase = createClient();
+      const { data } = await supabase.from('movies').select('*');
+      movies = (data as Movie[]) ?? [];
+    }
+
+
+  // ─── Sostituisci il sort attuale con questo ───────────────────────────────────
+  // Seeded random: stesso roomId → stesso ordine casuale per tutti
+  function seededRandom(seed: number) {
+    let s = seed;
+    return () => {
+      s = (s * 1664525 + 1013904223) & 0xffffffff;
+      return (s >>> 0) / 0xffffffff;
+    };
+  }
+
+  const seed = roomId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  const rng = seededRandom(seed);
+  movies = movies.sort(() => rng() - 0.5);
+
+
   } catch (err) {
-    console.error(err);
+    console.error('Error:', err);
   }
 
   return { props: { movies, roomId } };

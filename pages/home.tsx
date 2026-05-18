@@ -70,8 +70,7 @@ export default function HomePage() {
   }, []);
 
   const handleCreateRoom = () => {
-    const code = generateRoomCode();
-    router.push(`/stanza?room=${code}`);
+    router.push('/crea-stanza');
   };
 
   const handleEnterRoom = (roomId: string) => {
