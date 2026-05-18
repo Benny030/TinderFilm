@@ -460,6 +460,23 @@ export default function HomePage() {
                   <FilmSlate size={18} color="#fff" weight="fill" />
                   Crea una stanza
                 </button>
+              </div><div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <button
+                  onClick={handleCreateRoom}
+                  style={{
+                    width: '100%', padding: '14px',
+                    background: C.primary, color: '#fff',
+                    border: 'none', borderRadius: R.full,
+                    fontSize: TEXT.sm, fontWeight: '700',
+                    cursor: 'pointer', fontFamily: FONT.sans,
+                    boxShadow: `0 4px 16px rgba(232,56,109,.25)`,
+                    display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', gap: '8px',
+                  }}
+                >
+                  <Door size={18} color="#fff" weight="fill" />
+                  Hai un codice stanza? Entra
+                </button>
               </div>
 
               {/* Stanze recenti desktop */}

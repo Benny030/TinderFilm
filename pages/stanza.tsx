@@ -31,12 +31,15 @@ type ExtendedMovie = Movie & {
   tagline?: string | null;
 };
 
+// ─── Aggiorna il tipo StreamingSource per includere logoUrl e color ───────────
 type StreamingSource = {
   name: string;
   type: 'sub' | 'rent' | 'buy' | 'free';
   price?: number;
   url?: string;
   logo: string;
+  logoUrl?: string;
+  color?: string;
 };
 
 type MatchEntry = {
@@ -116,7 +119,7 @@ function SwipeCard({
           display: 'flex', alignItems: 'center', gap: '4px',
         }}>
           <FilmSlate size={12} color={C.muted} />
-          {remainingCount} rimasti
+          {remainingCount} {remainingCount === 1 ? 'rimasto' : 'rimasti'}
         </div>
 
         {/* Card wrapper */}
@@ -506,63 +509,180 @@ function MatchScreen({ match, allMatches, onContinue, onReset, isLoggedIn }: Mat
         </div>
 
         {/* ── Dove guardarlo ── */}
-        <div style={{ marginBottom: S.md }}>
-          <div style={{
-            fontSize: TEXT.base, fontWeight: '700', color: C.ink,
-            marginBottom: S.sm, display: 'flex', alignItems: 'center', gap: '8px',
-          }}>
-            <TelevisionSimple size={18} color={C.primary} weight="fill" />
+      <div style={{ marginBottom: S.md }}>
+        <div style={{
+          fontSize: TEXT.base, fontWeight: '700', color: C.ink,
+          marginBottom: S.sm, display: 'flex', alignItems: 'center', gap: '8px',
+        }}>
+           <TelevisionSimple size={18} color={C.primary} weight="fill" />
             Dove guardarlo
           </div>
 
           {loadingSources ? (
-            <div style={{ fontSize: TEXT.sm, color: C.muted, textAlign: 'center', padding: S.md }}>
-              Cercando disponibilità...
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: '8px',
+    }}>
+      {[1, 2, 3].map((i) => (
+        <div key={i} style={{
+          height: '60px', borderRadius: R.md,
+          background: 'linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%)',
+          backgroundSize: '400px 100%',
+          animation: 'shimmer 1.4s ease infinite',
+        }} />
+      ))}
+    </div> ) : sources.length === 0 ? (
+    <div style={{
+      padding: S.md, background: C.bgSoft,
+      borderRadius: R.md, textAlign: 'center',
+      fontSize: TEXT.sm, color: C.muted,
+      border: `1.5px dashed ${C.border}`,
+    }}>
+              <TelevisionSimple size={28} color={C.faint} weight="duotone" style={{ marginBottom: '8px' }} />
+      <div>Nessuna disponibilità streaming trovata</div>
+    </div>
+           ) : (() => {
+    // ─── Dividi per categoria ─────────────────────────────────────────────
+    const subSources  = sources.filter((s) => s.type === 'sub' || s.type === 'free');
+    const rentSources = sources.filter((s) => s.type === 'rent' || s.type === 'buy');
+
+    const PlatformRow = ({ s }: { s: StreamingSource }) => (
+      <div
+        key={s.name}
+        onClick={() => s.url && window.open(s.url, '_blank')}
+        style={{
+          display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 14px',
+          background: C.bg,
+          border: `1.5px solid ${C.border}`,
+          borderRadius: R.md,
+          cursor: s.url ? 'pointer' : 'default',
+          transition: 'border-color .15s, box-shadow .15s',
+        }}
+        onMouseEnter={(e) => {
+          if (s.url) {
+            (e.currentTarget as HTMLElement).style.borderColor = s.color ?? C.primary;
+            (e.currentTarget as HTMLElement).style.boxShadow = SHADOW.sm;
+          }
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.borderColor = C.border;
+          (e.currentTarget as HTMLElement).style.boxShadow = 'none';
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Logo piattaforma */}
+          <div style={{
+            width: '44px', height: '30px',
+            borderRadius: R.xs,
+            background: s.color ?? '#f0f0f0',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            overflow: 'hidden', flexShrink: 0,
+          }}>
+            {s.logoUrl ? (
+              <img
+                src={s.logoUrl}
+                alt={s.name}
+                style={{
+                  width: '36px', height: '24px',
+                  objectFit: 'contain',
+                  filter: 'brightness(0) invert(1)', // bianco su sfondo colorato
+                }}
+                onError={(e) => {
+                  // fallback emoji se immagine non carica
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  (e.currentTarget.parentElement as HTMLElement).innerHTML = `<span style="font-size:16px">${s.logo}</span>`;
+                }}
+              />
+            ) : (
+              <span style={{ fontSize: '16px' }}>{s.logo}</span>
+            )}
+          </div>
+
+          <div>
+            <div style={{ fontSize: TEXT.sm, fontWeight: '600', color: C.ink }}>
+              {s.name}
             </div>
-          ) : sources.length === 0 ? (
             <div style={{
-              padding: S.md, background: C.bgSoft,
-              borderRadius: R.md, textAlign: 'center',
-              fontSize: TEXT.sm, color: C.muted,
+              fontSize: TEXT.xs, fontWeight: '500',
+              color: s.type === 'sub' || s.type === 'free'
+                ? C.success
+                : '#f59e0b',
             }}>
-              Nessuna disponibilità streaming trovata per l'Italia
+              {s.type === 'sub'  && 'Incluso nell\'abbonamento'}
+              {s.type === 'free' && 'Gratuito'}
+              {s.type === 'rent' && `Noleggio${s.price ? ` · €${s.price.toFixed(2)}` : ''}`}
+              {s.type === 'buy'  && `Acquisto${s.price ? ` · €${s.price.toFixed(2)}` : ''}`}
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {sources.map((s) => (
-                <div
-                  key={s.name}
-                  onClick={() => s.url && window.open(s.url, '_blank')}
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '12px 16px',
-                    background: C.bg, border: `1.5px solid ${C.border}`,
-                    borderRadius: R.md, cursor: s.url ? 'pointer' : 'default',
-                    transition: 'border-color .15s',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: S.sm }}>
-                    <span style={{ fontSize: '20px' }}>{s.logo}</span>
-                    <div>
-                      <div style={{ fontSize: TEXT.sm, fontWeight: '600', color: C.ink }}>
-                        {s.name}
-                      </div>
-                      <div style={{ fontSize: TEXT.xs, color: typeColor[s.type] as string, fontWeight: '500' }}>
-                        {typeLabel[s.type]}
-                        {s.price && ` · €${s.price}`}
-                      </div>
-                    </div>
-                  </div>
-                  {s.url && (
-                    <span style={{ fontSize: TEXT.sm, color: C.primary, fontWeight: '600' }}>
-                      Guarda →
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          </div>
         </div>
+
+        {s.url && (
+          <div style={{
+            fontSize: TEXT.xs, fontWeight: '700',
+            color: s.color ?? C.primary,
+            display: 'flex', alignItems: 'center', gap: '4px',
+            flexShrink: 0,
+          }}>
+            Guarda
+            <ArrowRight size={12} color={s.color ?? C.primary} weight="bold" />
+          </div>
+        )}
+      </div>
+    );
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: S.sm }}>
+
+        {/* ── Abbonamento / Gratuito ── */}
+        {subSources.length > 0 && (
+          <div>
+            <div style={{
+              fontSize: TEXT.xs, fontWeight: '700',
+              color: C.success, letterSpacing: '0.8px',
+              textTransform: 'uppercase', marginBottom: '8px',
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}>
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: C.success }} />
+              Incluso nel tuo abbonamento
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {subSources.map((s) => <PlatformRow key={s.name} s={s} />)}
+            </div>
+          </div>
+        )}
+
+        {/* ── Divider ── */}
+        {subSources.length > 0 && rentSources.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: S.sm, margin: '4px 0' }}>
+            <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
+            <span style={{ fontSize: TEXT.xs, color: C.faint }}>oppure</span>
+            <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
+          </div>
+        )}
+
+        {/* ── Noleggio / Acquisto ── */}
+        {rentSources.length > 0 && (
+          <div>
+            <div style={{
+              fontSize: TEXT.xs, fontWeight: '700',
+              color: '#f59e0b', letterSpacing: '0.8px',
+              textTransform: 'uppercase', marginBottom: '8px',
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}>
+              <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#f59e0b' }} />
+              Noleggio o acquisto
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {rentSources.map((s) => <PlatformRow key={s.name} s={s} />)}
+            </div>
+          </div>
+        )}
+
+      </div>
+    );
+  })()}
+</div>
 
         {/* ── Lista match sessione (solo utenti registrati) ── */}
         {isLoggedIn && allMatches.length > 1 && (
