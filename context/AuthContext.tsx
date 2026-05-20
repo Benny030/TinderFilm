@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/router';
+import type { Session } from '@supabase/supabase-js';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import type { CurrentUser } from '@/types';
 import { generateGuestName } from '@/utils/guestName';
@@ -26,7 +27,10 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
-async function getUserProfile(supabase: ReturnType<typeof createBrowserClient>, user: { id: string; email?: string }) {
+async function getUserProfile(
+  supabase: ReturnType<typeof createBrowserClient>,
+  user: { id: string; email?: string }
+) {
   const { data: byId } = await supabase
     .from('users')
     .select('username')
@@ -53,13 +57,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const supabase = useRef(createBrowserClient()).current;
 
+  const applySessionUser = async (session: Session) => {
+    const userData = await getUserProfile(supabase, {
+      id: session.user.id,
+      email: session.user.email,
+    });
+
+    setCurrentUser((prev) => ({
+      id: session.user.id,
+      email: session.user.email ?? '',
+      username: userData?.username ?? (prev?.isGuest === false && prev.id === session.user.id ? prev.username : ''),
+      isGuest: false,
+    }));
+
+    sessionStorage.removeItem('cineDateGuest');
+    sessionStorage.removeItem('cineDateGuestId');
+    sessionStorage.removeItem('cineDateGuestName');
+    setIsGuest(false);
+    setGuestId(null);
+    setGuestName(null);
+  };
+
   useEffect(() => {
     if (router.pathname === '/auth/callback') {
       setIsLoading(false);
       return;
     }
 
-    // ─── sessionStorage: isolato per tab ─────────────────────────────────
     const sessionGuest = sessionStorage.getItem('cineDateGuest') === 'true';
     const sessionGuestId = sessionStorage.getItem('cineDateGuestId');
     const sessionGuestName = sessionStorage.getItem('cineDateGuestName');
@@ -75,20 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const init = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-
-        if (session?.user) {
-          const userData = await getUserProfile(supabase, {
-            id: session.user.id,
-            email: session.user.email,
-          });
-
-          setCurrentUser({
-            id: session.user.id,
-            email: session.user.email ?? '',
-            username: userData?.username ?? '',
-            isGuest: false,
-          });
-        }
+        if (session?.user) await applySessionUser(session);
       } catch (error) {
         console.error('Auth init error:', error);
       } finally {
@@ -107,25 +118,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setGuestName(null);
           return;
         }
-        if (session?.user) {
-          const userData = await getUserProfile(supabase, {
-            id: session.user.id,
-            email: session.user.email,
-          });
 
-          setCurrentUser({
-            id: session.user.id,
-            email: session.user.email ?? '',
-            username: userData?.username ?? '',
-            isGuest: false,
-          });
-          // ─── loggato → pulisci sessione ospite ────────────────────────
-          sessionStorage.removeItem('cineDateGuest');
-          sessionStorage.removeItem('cineDateGuestId');
-          sessionStorage.removeItem('cineDateGuestName');
-          setIsGuest(false);
-          setGuestId(null);
-          setGuestName(null);
+        if (
+          session?.user &&
+          ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED', 'INITIAL_SESSION'].includes(event)
+        ) {
+          await applySessionUser(session);
         }
       }
     );
@@ -134,7 +132,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router.pathname, supabase]);
 
   const enterAsGuest = () => {
-    // ─── genera identità unica per questa tab ─────────────────────────────
     const newId = crypto.randomUUID();
     const newName = generateGuestName();
 

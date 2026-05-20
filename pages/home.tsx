@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/hooks/useAuth';
+import { createBrowserClient } from '@/utils/supabase/browser';
 import { generateRoomCode } from '@/utils/roomCode';
 import { getRecentRooms, type RecentRoom } from '@/utils/recentRoom';
 import AppShell from '@/components/layout/AppShell';
@@ -29,14 +30,17 @@ type TmdbMovie = {
 export default function HomePage() {
   const router = useRouter();
   const { currentUser, isGuest, isLoading, guestName } = useAuth();
+  const supabase = useRef(createBrowserClient()).current;
 
   const [trending, setTrending] = useState<TmdbMovie[]>([]);
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([]);
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [fallbackUsername, setFallbackUsername] = useState('');
+  const [usernameReady, setUsernameReady] = useState(false);
 
   const displayName = currentUser && !currentUser.isGuest
-    ? currentUser.username
+    ? currentUser.username || fallbackUsername || '...'
     : guestName ?? 'Ospite';
 
   const firstName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
@@ -45,6 +49,52 @@ export default function HomePage() {
     if (isLoading) return;
     if (!currentUser && !isGuest) router.replace('/auth');
   }, [currentUser, isGuest, isLoading]);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.isGuest) return;
+    if (currentUser.username) {
+      setFallbackUsername('');
+      setUsernameReady(true);
+      return;
+    }
+
+    const retry = async () => {
+      const { data: byId } = await supabase
+        .from('users')
+        .select('username')
+        .eq('id', currentUser.id)
+        .maybeSingle();
+
+      if (byId?.username) {
+        setFallbackUsername(byId.username);
+        setUsernameReady(true);
+        return;
+      }
+
+      const { data: byEmail } = await supabase
+        .from('users')
+        .select('username')
+        .eq('email', currentUser.email)
+        .maybeSingle();
+
+      if (byEmail?.username) {
+        setFallbackUsername(byEmail.username);
+        setUsernameReady(true);
+        return;
+      }
+
+      router.replace('/username');
+    };
+
+    const timer = setTimeout(() => {
+      retry().catch((err) => {
+        console.error('Username retry error:', err);
+        router.replace('/username');
+      });
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [currentUser, router, supabase]);
 
   useEffect(() => {
     setMounted(true);

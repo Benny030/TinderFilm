@@ -115,7 +115,6 @@ Client e helper:
 
 - `utils/supabase/browser.ts`: client browser singleton con `@supabase/supabase-js`.
 - `utils/supabase/server.ts`: client server/API routes, usa service role se disponibile.
-- `utils/supabase/client.ts`: client browser con `@supabase/ssr`.
 - `utils/supabase/middleware.ts`: attualmente restituisce solo `NextResponse.next()`.
 
 Tabelle usate dal codice:
@@ -185,7 +184,6 @@ Il codice fa riferimento a queste variabili:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 TMDB_API_KEY=
 WATCHMODE_API_KEY=
@@ -194,10 +192,9 @@ WATCHMODE_API_KEY=
 Note importanti:
 
 - `utils/supabase/browser.ts` usa `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-- `utils/supabase/client.ts` usa `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 - `utils/supabase/server.ts` usa `SUPABASE_SERVICE_ROLE_KEY`, con fallback a `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
-Questa differenza tra `ANON_KEY` e `PUBLISHABLE_KEY` va tenuta presente: oggi entrambe compaiono nel codice. Se si vuole semplificare, conviene standardizzare un solo helper Supabase browser e un solo nome variabile.
+Il progetto usa un solo client Supabase browser: `utils/supabase/browser.ts`.
 
 ## Design system
 
@@ -257,9 +254,8 @@ I tipi principali sono in `types/index.ts`:
 ## Note tecniche e punti da ripulire
 
 - Alcuni file mostrano caratteri non decodificati correttamente nei testi/commenti. Probabile problema di encoding storico.
-- `utils/supabase/client.ts` e `utils/supabase/browser.ts` sembrano sovrapporsi.
 - `middleware.ts` esiste ma il middleware Supabase attuale non aggiorna sessioni/cookie: restituisce solo `NextResponse.next()`.
 - `app_disabled/` sembra una vecchia versione App Router non attiva.
 - `tmp_script.js` e `cinedate_movie_matcher.html` sembrano file temporanei o prototipi: da valutare se conservarli.
 - `pages/stanza.tsx` contiene molta logica in un solo file: in futuro si potrebbe dividere tra componenti UI, hook realtime e funzioni dati.
-
+ 

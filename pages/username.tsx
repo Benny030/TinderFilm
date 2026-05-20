@@ -80,6 +80,19 @@ export default function UsernamePage() {
         throw error;
       }
 
+      const { data } = await supabase
+        .from('users')
+        .select('username')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!data?.username) {
+        throw new Error('Username salvato ma non ancora leggibile. Riprova tra un momento.');
+      }
+
+      await supabase.auth.refreshSession();
+      await new Promise((r) => setTimeout(r, 300));
+
       router.replace('/home');
     } catch (err: any) {
       setError(err.message ?? 'Errore sconosciuto');
