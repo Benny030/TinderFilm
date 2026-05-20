@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import { useAuth } from '@/hooks/useAuth';
 import { C, R, FONT, TEXT, S, SHADOW, btn, input } from '@/styles/token';
+import { SignOut} from '@phosphor-icons/react';
 
 type Mode = 'login' | 'register';
 
@@ -22,6 +23,24 @@ function getPasswordChecks(p: string): PasswordCheck[] {
 
 function isPasswordValid(p: string) {
   return getPasswordChecks(p).every((c) => c.ok);
+}
+
+async function getUserProfile(supabase: ReturnType<typeof createBrowserClient>, user: { id: string; email?: string }) {
+  const { data: byId } = await supabase
+    .from('users')
+    .select('username')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (byId?.username || !user.email) return byId;
+
+  const { data: byEmail } = await supabase
+    .from('users')
+    .select('username')
+    .eq('email', user.email)
+    .maybeSingle();
+
+  return byEmail;
 }
 
 export default function AuthPage() {
@@ -52,6 +71,24 @@ export default function AuthPage() {
     const t = setTimeout(() => setMounted(true), 50);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    const redirectIfAlreadyLoggedIn = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      const profile = await getUserProfile(supabase, {
+        id: session.user.id,
+        email: session.user.email,
+      });
+
+      router.replace(profile?.username ? '/home' : '/username');
+    };
+
+    redirectIfAlreadyLoggedIn().catch((err) => {
+      console.error('Auth redirect check error:', err);
+    });
+  }, [router, supabase]);
 
   useEffect(() => {
     setEmail(''); setEmailConfirm('');
@@ -223,7 +260,18 @@ export default function AuthPage() {
           transform: mounted ? 'translateY(0)' : 'translateY(20px)',
           transition: 'opacity 0.4s ease, transform 0.4s ease',
         }}>
-
+          <button
+          onClick={() => router.push('/')}
+          title="Esci"
+          style={{
+             background: 'none',
+             border: 'none',
+             cursor: 'pointer',
+             opacity: 0.6,
+             padding: '4px', 
+            }}>
+              <SignOut size={14} />
+            </button>
           {/* ─── Logo ─────────────────────────────────────────────────────── */}
           <div style={{ textAlign: 'center', marginBottom: S.lg }}>
             <div style={{ fontSize: TEXT.xl, fontWeight: '800', color: C.primary, letterSpacing: '1px' }}>

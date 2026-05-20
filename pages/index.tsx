@@ -9,13 +9,24 @@ export default function LandingPage() {
   const router = useRouter();
   const { currentUser, isGuest, isLoading } = useAuth();
   const [mounted, setMounted] = useState(false);
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
   const { enterAsGuest } = useAuth();
 
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
+    if (!isLoading) return;
+    const timeout = setTimeout(() => setLoadingTimedOut(true), 5000);
+    return () => clearTimeout(timeout);
+  }, [isLoading]);
+
+  useEffect(() => {
+    console .log({ currentUser, isGuest, isLoading });
     if (isLoading) return;
-    if (currentUser || isGuest) router.replace('/');
+    if (currentUser || isGuest) {
+      console.log('User is authenticated, redirecting to home...');
+      router.replace('/home');
+    }
   }, [currentUser, isGuest, isLoading]);
 
   
@@ -24,7 +35,7 @@ export default function LandingPage() {
     window.location.href = '/home';
   };
 
-  if (isLoading) {
+  if (isLoading && !loadingTimedOut) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ fontSize: '32px' }}>🎬</span>

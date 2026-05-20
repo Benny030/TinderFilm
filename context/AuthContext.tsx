@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/router';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import type { CurrentUser } from '@/types';
 import { generateGuestName } from '@/utils/guestName';
@@ -25,7 +26,26 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+async function getUserProfile(supabase: ReturnType<typeof createBrowserClient>, user: { id: string; email?: string }) {
+  const { data: byId } = await supabase
+    .from('users')
+    .select('username')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (byId?.username || !user.email) return byId;
+
+  const { data: byEmail } = await supabase
+    .from('users')
+    .select('username')
+    .eq('email', user.email)
+    .maybeSingle();
+
+  return byEmail;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [isGuest, setIsGuest] = useState(false);
   const [guestId, setGuestId] = useState<string | null>(null);
@@ -34,6 +54,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = useRef(createBrowserClient()).current;
 
   useEffect(() => {
+    if (router.pathname === '/auth/callback') {
+      setIsLoading(false);
+      return;
+    }
+
     // ─── sessionStorage: isolato per tab ─────────────────────────────────
     const sessionGuest = sessionStorage.getItem('cineDateGuest') === 'true';
     const sessionGuestId = sessionStorage.getItem('cineDateGuestId');
@@ -48,24 +73,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
 
-      if (session?.user) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('username')
-          .eq('id', session.user.id)
-          .single();
+        if (session?.user) {
+          const userData = await getUserProfile(supabase, {
+            id: session.user.id,
+            email: session.user.email,
+          });
 
-        setCurrentUser({
-          id: session.user.id,
-          email: session.user.email ?? '',
-          username: userData?.username ?? '',
-          isGuest: false,
-        });
+          setCurrentUser({
+            id: session.user.id,
+            email: session.user.email ?? '',
+            username: userData?.username ?? '',
+            isGuest: false,
+          });
+        }
+      } catch (error) {
+        console.error('Auth init error:', error);
+      } finally {
+        setIsLoading(false);
       }
-
-      setIsLoading(false);
     };
 
     init();
@@ -80,11 +108,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (session?.user) {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('username')
-            .eq('id', session.user.id)
-            .single();
+          const userData = await getUserProfile(supabase, {
+            id: session.user.id,
+            email: session.user.email,
+          });
 
           setCurrentUser({
             id: session.user.id,
@@ -104,7 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     );
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [router.pathname, supabase]);
 
   const enterAsGuest = () => {
     // ─── genera identità unica per questa tab ─────────────────────────────

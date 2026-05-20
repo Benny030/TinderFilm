@@ -1241,7 +1241,8 @@ useEffect(() => {
     router.push(`/stanza?room=${code}`);
   };
 
-  useEffect(() => {
+// ─── Resetta il flip quando cambia film ──────────────────────────────────────
+useEffect(() => {
   setIsFlipped(false);
 }, [currentMovie?.id]);
   // ── Caricamento ───────────────────────────────────────────────────────────
@@ -1255,7 +1256,6 @@ useEffect(() => {
 
   const roomUsersSorted = roomUsers.slice().sort((a) => (a.id === userId ? -1 : 1));
   const isRoomFull = roomUsers.length >= 2 && !roomUsers.find((u) => u.id === userId);
-
   return (
     <AppShell activeNav="stanze" hideNav={screen === 'swipe'}>
       <div style={{ height: screen === 'swipe' ? '100vh' : 'auto', display: 'flex', flexDirection: 'column' }}>
