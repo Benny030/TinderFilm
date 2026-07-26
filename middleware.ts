@@ -5,4 +5,8 @@ export async function middleware(request: NextRequest) {
   return proxy(request);
 }
 
-export const config = proxyConfig;
+export const config = {
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
+};
