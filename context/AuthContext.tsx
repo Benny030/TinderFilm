@@ -27,25 +27,51 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+const GUEST_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+
+function setGuestCookie(enabled: boolean) {
+  if (typeof document === 'undefined') return;
+
+  if (enabled) {
+    document.cookie = `cineDateGuest=true; path=/; max-age=${GUEST_COOKIE_MAX_AGE}; samesite=lax`;
+    return;
+  }
+
+  document.cookie = 'cineDateGuest=; path=/; max-age=0; samesite=lax';
+}
+
 async function getUserProfile(
   supabase: ReturnType<typeof createBrowserClient>,
   user: { id: string; email?: string }
 ) {
-  const { data: byId } = await supabase
-    .from('users')
-    .select('username')
-    .eq('id', user.id)
-    .maybeSingle();
+  try {
+    const { data: byId, error: byIdError } = await supabase
+      .from('users')
+      .select('username')
+      .eq('id', user.id)
+      .maybeSingle();
 
-  if (byId?.username || !user.email) return byId;
+    if (byIdError) {
+      console.warn('Unable to load user profile by id:', byIdError.message);
+    }
 
-  const { data: byEmail } = await supabase
-    .from('users')
-    .select('username')
-    .eq('email', user.email)
-    .maybeSingle();
+    if (byId?.username || !user.email) return byId;
 
-  return byEmail;
+    const { data: byEmail, error: byEmailError } = await supabase
+      .from('users')
+      .select('username')
+      .eq('email', user.email)
+      .maybeSingle();
+
+    if (byEmailError) {
+      console.warn('Unable to load user profile by email:', byEmailError.message);
+    }
+
+    return byEmail;
+  } catch (error) {
+    console.error('Unexpected error while loading user profile:', error);
+    return null;
+  }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -73,6 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem('cineDateGuest');
     sessionStorage.removeItem('cineDateGuestId');
     sessionStorage.removeItem('cineDateGuestName');
+    setGuestCookie(false);
+
     setIsGuest(false);
     setGuestId(null);
     setGuestName(null);
@@ -98,10 +126,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const init = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) await applySessionUser(session);
+        const { data, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.warn('Unable to read Supabase session:', error.message);
+        }
+
+        if (data.session?.user) {
+          await applySessionUser(data.session);
+        } else {
+          setCurrentUser(null);
+        }
       } catch (error) {
-        console.error('Auth init error:', error);
+        console.error('Authentication initialization failed:', error);
       } finally {
         setIsLoading(false);
       }
@@ -111,19 +148,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (event === 'SIGNED_OUT') {
-          setCurrentUser(null);
-          setIsGuest(false);
-          setGuestId(null);
-          setGuestName(null);
-          return;
-        }
+        try {
+          if (event === 'SIGNED_OUT') {
+            setCurrentUser(null);
+            setIsGuest(false);
+            setGuestId(null);
+            setGuestName(null);
+            setIsLoading(false);
+            return;
+          }
 
-        if (
-          session?.user &&
-          ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED', 'INITIAL_SESSION'].includes(event)
-        ) {
-          await applySessionUser(session);
+          if (session?.user) {
+            await applySessionUser(session);
+          } else {
+            setCurrentUser(null);
+          }
+        } catch (error) {
+          console.error('Authentication state update failed:', error);
+        } finally {
+          setIsLoading(false);
         }
       }
     );
@@ -138,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.setItem('cineDateGuest', 'true');
     sessionStorage.setItem('cineDateGuestId', newId);
     sessionStorage.setItem('cineDateGuestName', newName);
+    setGuestCookie(true);
 
     setIsGuest(true);
     setGuestId(newId);
@@ -149,6 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     sessionStorage.removeItem('cineDateGuest');
     sessionStorage.removeItem('cineDateGuestId');
     sessionStorage.removeItem('cineDateGuestName');
+    setGuestCookie(false);
     setCurrentUser(null);
     setIsGuest(false);
     setGuestId(null);

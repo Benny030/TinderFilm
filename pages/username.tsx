@@ -1,10 +1,27 @@
 'use client';
 
-import { useState, useEffect, useRef, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/router';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import { C, R, FONT, TEXT, S, SHADOW } from '@/styles/token';
 import { User, Check, Warning } from '@phosphor-icons/react';
+
+const withTimeout = async <T,>(
+  promise: PromiseLike<T>,
+  ms = 8000,
+  label = 'Operazione'
+): Promise<T> => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(`${label} scaduta. Riprova.`)), ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+};
 
 export default function UsernamePage() {
   const router = useRouter();
@@ -14,24 +31,38 @@ export default function UsernamePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
-  
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setMounted(true), 50);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setMounted(true), 50);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
-    const check = async () => {
+    const checkSession = async () => {
       try {
-        await new Promise((r) => setTimeout(r, 500));
-        const { data: { session } } = await supabase.auth.getSession();
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        const { data: { session } } = await withTimeout(
+          supabase.auth.getSession(),
+          5000,
+          'Controllo sessione'
+        );
         const user = session?.user ?? null;
 
         if (!user) {
+          const pendingUserId = sessionStorage.getItem('cineDatePendingUserId');
+          const pendingUserEmail = sessionStorage.getItem('cineDatePendingUserEmail');
+
+          if (pendingUserId) {
+            setUserId(pendingUserId);
+            setUserEmail(pendingUserEmail);
+            setIsChecking(false);
+            return;
+          }
+
           router.replace('/auth');
           return;
         }
@@ -52,49 +83,89 @@ export default function UsernamePage() {
 
         setIsChecking(false);
       } catch (err: any) {
-        setError(err.message ?? 'Errore durante il controllo della sessione');
+        console.error('Username session check failed:', err);
+        setError(err.message ?? 'Errore sessione');
         setIsChecking(false);
       }
     };
-    check();
-  }, []);
+
+    checkSession();
+  }, [router, supabase]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!username.trim() || !userId) return;
+
+    const cleanUsername = username.trim();
+    if (!cleanUsername || !userId) return;
+
     setIsLoading(true);
     setError('');
 
     try {
-      const { error } = await supabase.from('users').upsert({
-        id: userId,
-        email: userEmail,
-        username: username.trim(),
-      });
+      const { error: upsertError } = await withTimeout(
+        supabase
+          .from('users')
+          .upsert({
+            id: userId,
+            email: userEmail,
+            username: cleanUsername,
+          }),
+        8000,
+        'Salvataggio username'
+      );
 
-      if (error) {
-        if (error.code === '23505') {
-          setError('Username già in uso, scegline un altro');
+      if (upsertError) {
+        if (upsertError.code === '23505') {
+          setError('Username gia in uso, scegline un altro');
           return;
         }
-        throw error;
+        throw upsertError;
       }
 
-      const { data } = await supabase
-        .from('users')
-        .select('username')
-        .eq('id', userId)
-        .maybeSingle();
+      const { data: verifyById } = await withTimeout(
+        supabase
+          .from('users')
+          .select('username')
+          .eq('id', userId)
+          .maybeSingle(),
+        8000,
+        'Verifica username'
+      );
 
-      if (!data?.username) {
-        throw new Error('Username salvato ma non ancora leggibile. Riprova tra un momento.');
+      let verifiedUsername = verifyById?.username;
+
+      if (!verifiedUsername && userEmail) {
+        const { data: verifyByEmail } = await withTimeout(
+          supabase
+            .from('users')
+            .select('username')
+            .eq('email', userEmail)
+            .maybeSingle(),
+          8000,
+          'Verifica username'
+        );
+        verifiedUsername = verifyByEmail?.username;
       }
 
-      await supabase.auth.refreshSession();
-      await new Promise((r) => setTimeout(r, 300));
+      if (!verifiedUsername) {
+        throw new Error('Username non salvato');
+      }
 
-      router.replace('/home');
+      await withTimeout(
+        supabase.auth.refreshSession(),
+        5000,
+        'Aggiornamento sessione'
+      ).catch((err) => {
+        console.warn('Session refresh after username save failed:', err);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 300));
+
+      sessionStorage.removeItem('cineDatePendingUserId');
+      sessionStorage.removeItem('cineDatePendingUserEmail');
+
+      window.location.assign('/home');
     } catch (err: any) {
+      console.error('Username save failed:', err);
       setError(err.message ?? 'Errore sconosciuto');
     } finally {
       setIsLoading(false);
@@ -104,8 +175,10 @@ export default function UsernamePage() {
   if (isChecking) {
     return (
       <div style={{
-        minHeight: '100vh', display: 'flex',
-        alignItems: 'center', justifyContent: 'center',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         background: C.bgSoft,
       }}>
         <div style={{ fontSize: '32px' }}>🎬</div>
@@ -114,18 +187,18 @@ export default function UsernamePage() {
   }
 
   const isValid = username.trim().length >= 3;
-  const preview = username.trim().length >= 3;
+  const preview = isValid;
 
   return (
     <>
       <style>{`
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(20px); }
-          to   { opacity: 1; transform: translateY(0); }
+          to { opacity: 1; transform: translateY(0); }
         }
         @keyframes pop {
-          0%   { transform: scale(0.8); opacity: 0; }
-          100% { transform: scale(1);   opacity: 1; }
+          0% { transform: scale(0.8); opacity: 0; }
+          100% { transform: scale(1); opacity: 1; }
         }
         .username-input {
           padding: 14px 16px;
@@ -143,18 +216,25 @@ export default function UsernamePage() {
           transition: border-color .2s;
         }
         .username-input:focus { border-color: ${C.primary}; }
-        .username-input.valid  { border-color: ${C.success}; }
-        .username-input.error  { border-color: ${C.error}; }
+        .username-input.valid { border-color: ${C.success}; }
+        .username-input.error { border-color: ${C.error}; }
         .btn-submit {
-          width: 100%; padding: 16px;
-          background: ${C.primary}; color: #fff;
-          border: none; border-radius: ${R.full};
-          font-size: ${TEXT.base}; font-weight: 700;
-          cursor: pointer; font-family: ${FONT.sans};
+          width: 100%;
+          padding: 16px;
+          background: ${C.primary};
+          color: #fff;
+          border: none;
+          border-radius: ${R.full};
+          font-size: ${TEXT.base};
+          font-weight: 700;
+          cursor: pointer;
+          font-family: ${FONT.sans};
           box-shadow: 0 4px 16px rgba(232,56,109,.3);
           transition: opacity .15s, transform .15s;
-          display: flex; align-items: center;
-          justify-content: center; gap: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
         }
         .btn-submit:disabled {
           background: ${C.border};
@@ -162,7 +242,8 @@ export default function UsernamePage() {
           cursor: not-allowed;
         }
         .btn-submit:not(:disabled):hover {
-          opacity: .9; transform: translateY(-1px);
+          opacity: .9;
+          transform: translateY(-1px);
         }
       `}</style>
 
@@ -186,13 +267,14 @@ export default function UsernamePage() {
           transform: mounted ? 'translateY(0)' : 'translateY(20px)',
           transition: 'opacity 0.4s ease, transform 0.4s ease',
         }}>
-
-          {/* ── Icona ── */}
           <div style={{
-            width: '72px', height: '72px',
+            width: '72px',
+            height: '72px',
             borderRadius: '50%',
             background: C.primaryLight,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             margin: '0 auto',
             marginBottom: S.lg,
             animation: mounted ? 'pop 0.4s ease 0.2s both' : 'none',
@@ -200,26 +282,25 @@ export default function UsernamePage() {
             <User size={36} color={C.primary} weight="duotone" />
           </div>
 
-          {/* ── Testo ── */}
           <div style={{ textAlign: 'center', marginBottom: S.lg }}>
             <div style={{ fontSize: TEXT.xl, fontWeight: '800', color: C.ink, marginBottom: S.xs }}>
               Scegli il tuo username
             </div>
             <div style={{ fontSize: TEXT.sm, color: C.muted, lineHeight: 1.6 }}>
-              Sarà visibile nelle stanze e nelle recensioni.
-              Puoi cambiarlo in qualsiasi momento.
+              Sara visibile nelle stanze e nelle recensioni. Puoi cambiarlo in qualsiasi momento.
             </div>
           </div>
 
-          {/* ── Form ── */}
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: S.sm }}>
-
-            {/* Campo username */}
             <div style={{ position: 'relative' }}>
               <span style={{
-                position: 'absolute', left: '14px', top: '50%',
+                position: 'absolute',
+                left: '14px',
+                top: '50%',
                 transform: 'translateY(-50%)',
-                fontSize: TEXT.base, color: C.muted, fontWeight: '700',
+                fontSize: TEXT.base,
+                color: C.muted,
+                fontWeight: '700',
               }}>
                 @
               </span>
@@ -240,14 +321,19 @@ export default function UsernamePage() {
                 spellCheck={false}
                 style={{ paddingLeft: '30px' }}
               />
-              {/* Check verde */}
               {isValid && !error && (
                 <div style={{
-                  position: 'absolute', right: '12px', top: '50%',
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
                   transform: 'translateY(-50%)',
-                  width: '24px', height: '24px', borderRadius: '50%',
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '50%',
                   background: C.success,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   animation: 'pop 0.2s ease',
                 }}>
                   <Check size={14} color="#fff" weight="bold" />
@@ -255,28 +341,36 @@ export default function UsernamePage() {
               )}
             </div>
 
-            {/* Regole */}
             <div style={{ fontSize: TEXT.xs, color: C.faint, textAlign: 'center' }}>
               Solo lettere minuscole, numeri e _ · min 3 caratteri
             </div>
 
-            {/* Preview */}
             {preview && !error && (
               <div style={{
                 background: C.primaryLight,
-                borderRadius: R.md, padding: S.sm,
+                borderRadius: R.md,
+                padding: S.sm,
                 textAlign: 'center',
-                fontSize: TEXT.sm, color: C.primary,
+                fontSize: TEXT.sm,
+                color: C.primary,
                 fontWeight: '600',
                 animation: 'fadeUp 0.2s ease',
-                display: 'flex', alignItems: 'center',
-                justifyContent: 'center', gap: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
               }}>
                 <div style={{
-                  width: '28px', height: '28px', borderRadius: '50%',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
                   background: C.primary,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: TEXT.sm, fontWeight: '800', color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: TEXT.sm,
+                  fontWeight: '800',
+                  color: '#fff',
                 }}>
                   {username.charAt(0).toUpperCase()}
                 </div>
@@ -284,12 +378,15 @@ export default function UsernamePage() {
               </div>
             )}
 
-            {/* Errore */}
             {error && (
               <div style={{
-                display: 'flex', alignItems: 'center', gap: '8px',
-                background: C.errorLight, color: C.error,
-                borderRadius: R.sm, padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: C.errorLight,
+                color: C.error,
+                borderRadius: R.sm,
+                padding: '10px 14px',
                 fontSize: TEXT.sm,
                 animation: 'fadeUp 0.2s ease',
               }}>
@@ -298,19 +395,17 @@ export default function UsernamePage() {
               </div>
             )}
 
-            {/* Submit */}
             <button
               type="submit"
               className="btn-submit"
               disabled={!isValid || isLoading}
               style={{ marginTop: S.xs }}
             >
-              {isLoading ? '⏳ Salvataggio...' : (
+              {isLoading ? 'Salvataggio...' : (
                 <><Check size={18} color="#fff" weight="bold" /> Conferma username</>
               )}
             </button>
           </form>
-
         </div>
       </div>
     </>

@@ -52,7 +52,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const { data, error } = await supabase.from('movies').insert(newMovie).select().single();
 
     if (error) {
-      console.error('SUPABASE ERROR:', error);
+      console.error('Supabase movie insert failed:', error);
       return res.status(500).json({ error: error.message });
     }
 

@@ -24,8 +24,7 @@ export default function LandingPage() {
     console .log({ currentUser, isGuest, isLoading });
     if (isLoading) return;
     if (currentUser || isGuest) {
-      console.log('User is authenticated, redirecting to home...');
-      router.replace('/home');
+      router.replace('/');
     }
   }, [currentUser, isGuest, isLoading]);
 
@@ -465,22 +464,22 @@ export default function LandingPage() {
               {
                 num: '01',
                 icon: '🏠',
-                title: 'Crei una stanza',
-                desc: 'Create una stanza e condividete il codice con chi volete. Niente link, niente account obbligatorio — si può entrare anche come ospite.',
-                tag: '30 secondi per iniziare',
+                title: 'Crea una stanza',
+                desc: 'Crea una stanza e condividi il codice con chi vuoi. Nessun link complicato, nessun account obbligatorio — puoi entrare anche come ospite.',
+                tag: 'Inizi in 30 secondi.',
               },
               {
                 num: '02',
                 icon: '🎬',
-                title: 'Swipate i film (separatamente)',
-                desc: 'Ognuno sceglie in autonomia i film che gli interessano. Quando i gusti si incrociano, nasce il match.',
-                tag: 'Completamente anonimo',
+                title: 'Scorri i film',
+                desc: 'Scegli i film che ti interessano in totale libertà. Quando i gusti coincidono, nasce il match.',
+                tag: 'Tutto in modo anonimo.',
               },
               {
                 num: '03',
                 icon: '🎉',
-                title: 'Appare il match',
-                desc: 'Quando entrambi mettete like allo stesso film, compare il match. Quando arriva il match, avete trovato qualcosa che piace davvero a entrambi.',
+                title: 'Trova il match',
+                desc: 'Quando metti like allo stesso film, appare il match. Così trovi subito qualcosa che piace davvero a entrambi.',
                 tag: 'Trovare qualcosa da guardare non è mai stato così semplice',
               },
             ].map((step) => (

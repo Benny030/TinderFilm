@@ -1,0 +1,36 @@
+
+> tinderfilm-next-supabase@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.18
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.1.61:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1773ms
+ ○ Compiling /home ...
+ ✓ Compiled /home in 6.4s (4947 modules)
+ GET /home 200 in 4793ms
+ ✓ Compiled /api/tmdb/trending in 344ms (184 modules)
+ GET /api/tmdb/trending 304 in 577ms
+ GET /api/tmdb/trending 304 in 64ms
+ ○ Compiling / ...
+ ✓ Compiled / in 617ms (4967 modules)
+ GET / 200 in 919ms
+ ○ Compiling /auth ...
+ ✓ Compiled /auth in 524ms (4976 modules)
+ ✓ Compiled /auth/callback in 480ms (4980 modules)
+ GET /auth/callback?code=cf20af20-f2e7-4001-b3f6-efb1e91bab5e 200 in 775ms
+ ✓ Compiled /home in 392ms (4986 modules)
+ GET /home 200 in 672ms
+ GET /api/tmdb/trending 304 in 212ms
+ GET /api/tmdb/trending 304 in 61ms
+ GET / 200 in 225ms
+ GET / 200 in 230ms
+ GET /auth/callback?code=523969aa-b37e-4fa3-beca-95ad2ad9abc1 200 in 226ms
+ GET /home 200 in 227ms
+ GET /api/tmdb/trending 304 in 210ms
+ GET /api/tmdb/trending 304 in 67ms
+ ✓ Compiled in 538ms (4957 modules)
+[?25h

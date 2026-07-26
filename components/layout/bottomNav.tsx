@@ -51,7 +51,6 @@ const navItems: NavItem[] = [
     id: 'cinema',
     label: 'Cinema',
     path: '/cinema',
-    comingSoon: true,
     icon: (active) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? C.primary : C.faint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
@@ -69,7 +68,6 @@ const navItems: NavItem[] = [
     id: 'profilo',
     label: 'Profilo',
     path: '/profilo',
-    comingSoon: true,
     icon: (active) => (
       <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? C.primary : 'none'} stroke={active ? C.primary : C.faint} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>

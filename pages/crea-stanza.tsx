@@ -107,7 +107,7 @@ export default function CreaStanzaPage() {
         }),
       });
     } catch (err) {
-      console.error('Errore salvataggio config:', err);
+      console.error('Room configuration save failed:', err);
     }
 
     // ─── Passa i params nella URL così il primo caricamento è corretto ──────

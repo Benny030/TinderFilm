@@ -1,16 +1,13 @@
-import { createClient as createSupabaseClient, SupabaseClient } from '@supabase/supabase-js';
+import { createBrowserClient as createSupabaseBrowserClient } from '@supabase/ssr';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase client environment variables.');
-}
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 let instance: SupabaseClient | null = null;
 
 export const createBrowserClient = (): SupabaseClient => {
   if (instance) return instance;
-  instance = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+  instance = createSupabaseBrowserClient(supabaseUrl, supabaseAnonKey);
   return instance;
 };

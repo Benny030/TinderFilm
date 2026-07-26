@@ -48,7 +48,7 @@ export default function HomePage() {
   useEffect(() => {
     if (isLoading) return;
     if (!currentUser && !isGuest) router.replace('/auth');
-  }, [currentUser, isGuest, isLoading]);
+  }, [currentUser, isGuest, isLoading, router]);
 
   useEffect(() => {
     if (!currentUser || currentUser.isGuest) return;
@@ -88,7 +88,7 @@ export default function HomePage() {
 
     const timer = setTimeout(() => {
       retry().catch((err) => {
-        console.error('Username retry error:', err);
+        console.error('Username retry failed:', err);
         router.replace('/username');
       });
     }, 500);
@@ -101,7 +101,6 @@ export default function HomePage() {
     setRecentRooms(getRecentRooms());
   }, []);
 
-  // ─── Carica trending TMDB ─────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       setLoadingTrending(true);
@@ -111,7 +110,7 @@ export default function HomePage() {
         const data = await res.json();
         setTrending(data.movies ?? []);
       } catch {
-        console.error('Errore caricamento trending');
+        console.error('Trending movies load failed');
       } finally {
         setLoadingTrending(false);
       }
@@ -120,13 +119,12 @@ export default function HomePage() {
   }, []);
 
   const handleCreateRoom = () => {
-    router.push('/crea-stanza');
+    router.push('/crea-stanza'); 
   };
 
   const handleEnterRoom = (roomId: string) => {
     router.push(`/stanza?room=${roomId}`);
   };
-  // ─── Drag to scroll su desktop ────────────────────────────────────────────────
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDown = useRef(false);
   const startX = useRef(0);
@@ -266,7 +264,6 @@ export default function HomePage() {
       <AppShell activeNav="home">
         <div style={{ opacity: mounted ? 1 : 0, transition: 'opacity 0.3s ease' }}>
 
-          {/* ── HEADER ──────────────────────────────────────────────────── */}
           <div style={{
             padding: `${S.lg} ${S.md} ${S.sm}`,
             display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
@@ -309,7 +306,6 @@ export default function HomePage() {
 
           <div className="home-layout">
 
-            {/* ── COLONNA PRINCIPALE ────────────────────────────────────── */}
             <div className="home-main">
 
               {/* CTA stanza */}
@@ -489,7 +485,6 @@ export default function HomePage() {
 
             </div>
 
-            {/* ── SIDEBAR DESKTOP ───────────────────────────────────────── */}
             <div className="home-sidebar desktop-only">
 
               {/* CTA stanza */}
@@ -512,7 +507,7 @@ export default function HomePage() {
                 </button>
               </div><div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <button
-                  onClick={handleCreateRoom}
+                  onClick={handleCreateRoom }
                   style={{
                     width: '100%', padding: '14px',
                     background: C.primary, color: '#fff',

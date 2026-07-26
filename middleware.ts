@@ -1,10 +1,8 @@
-import { createClient } from '@/utils/supabase/middleware';
 import { type NextRequest } from 'next/server';
+import { proxy, config as proxyConfig } from '@/utils/supabase/middleware';
 
-export function middleware(request: NextRequest) {
-  return createClient(request);
+export async function middleware(request: NextRequest) {
+  return proxy(request);
 }
 
-export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
-};
+export const config = proxyConfig;

@@ -112,8 +112,8 @@ const navItems: NavItem[] = [
   { id: 'home',       label: 'Home',       icon: House,      path: '/home' },
   { id: 'stanze',     label: 'Stanze',     icon: FilmSlate,  path: '/home' },
   { id: 'recensioni', label: 'Recensioni', icon: ChatCircle, path: '/recensioni', comingSoon: true },
-  { id: 'cinema',     label: 'Cinema',     icon: MapPin,     path: '/cinema', comingSoon: true },
-  { id: 'profilo',    label: 'Profilo',    icon: User,       path: '/profilo', comingSoon: true },
+  { id: 'cinema',     label: 'Cinema',     icon: MapPin,     path: '/cinema' },
+  { id: 'profilo',    label: 'Profilo',    icon: User,       path: '/profilo' },
 ];
 
 function SidebarDesktop({ activeNav }: { activeNav: string }) {

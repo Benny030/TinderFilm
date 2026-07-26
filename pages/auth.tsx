@@ -43,6 +43,36 @@ async function getUserProfile(supabase: ReturnType<typeof createBrowserClient>, 
   return byEmail;
 }
 
+function getAuthReturnParams() {
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+
+  return {
+    code: searchParams.get('code'),
+    tokenHash: searchParams.get('token_hash'),
+    type: searchParams.get('type') as any,
+    accessToken: hashParams.get('access_token'),
+    refreshToken: hashParams.get('refresh_token'),
+    authError: searchParams.get('error') ?? hashParams.get('error'),
+    errorDescription: searchParams.get('error_description') ?? hashParams.get('error_description'),
+  };
+}
+
+function getOAuthCallbackUrl() {
+  return `${window.location.origin}/auth/callback`;
+}
+
+async function waitForSession(supabase: ReturnType<typeof createBrowserClient>) {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (session?.user) return session;
+    if (error) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+
+  return null;
+}
+
 export default function AuthPage() {
   const router = useRouter();
   const supabase = useRef(createBrowserClient()).current;
@@ -72,24 +102,23 @@ export default function AuthPage() {
     return () => clearTimeout(t);
   }, []);
 
-  useEffect(() => {
-    const redirectIfAlreadyLoggedIn = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.user) return;
+useEffect(() => {
+  if (!router.isReady) return;
 
-      const profile = await getUserProfile(supabase, {
-        id: session.user.id,
-        email: session.user.email,
-      });
+  const check = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) return;
 
-      router.replace(profile?.username ? '/home' : '/username');
-    };
-
-    redirectIfAlreadyLoggedIn().catch((err) => {
-      console.error('Auth redirect check error:', err);
+    const profile = await getUserProfile(supabase, {
+      id: session.user.id,
+      email: session.user.email,
     });
-  }, [router, supabase]);
 
+    router.replace(profile?.username ? '/home' : '/username');
+  };
+
+  check().catch(console.error);
+}, [router.isReady]); // ← solo router.isReady
   useEffect(() => {
     setEmail(''); setEmailConfirm('');
     setPassword(''); setPasswordConfirm('');
@@ -107,15 +136,15 @@ export default function AuthPage() {
     setTimeout(() => setShake(false), 500);
   };
 
-  // ─── Google login ─────────────────────────────────────────────────────────
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
     setError('');
     try {
+      sessionStorage.setItem('cineDateOAuthStarted', 'true');
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: getOAuthCallbackUrl(),
         },
       });
       if (error) throw error;
@@ -125,7 +154,6 @@ export default function AuthPage() {
     }
   };
 
-  // ─── Email submit ─────────────────────────────────────────────────────────
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(''); setSuccessMsg('');
@@ -168,7 +196,6 @@ export default function AuthPage() {
     window.location.href = '/home';
   };
 
-  // ─── Schermata email inviata ──────────────────────────────────────────────
   if (emailSent) {
     return (
       <>
@@ -213,7 +240,6 @@ export default function AuthPage() {
     );
   }
 
-  // ─── Form principale ──────────────────────────────────────────────────────
   return (
     <>
       <style jsx>{`
@@ -272,7 +298,6 @@ export default function AuthPage() {
             }}>
               <SignOut size={14} />
             </button>
-          {/* ─── Logo ─────────────────────────────────────────────────────── */}
           <div style={{ textAlign: 'center', marginBottom: S.lg }}>
             <div style={{ fontSize: TEXT.xl, fontWeight: '800', color: C.primary, letterSpacing: '1px' }}>
               🎬 CINEDATE
@@ -282,13 +307,11 @@ export default function AuthPage() {
             </div>
           </div>
 
-          {/* ─── Tab switcher ─────────────────────────────────────────────── */}
           <div style={{ display: 'flex', borderRadius: R.full, overflow: 'hidden', marginBottom: S.lg, border: `1.5px solid ${C.border}` }}>
             <button className={`auth-tab ${mode === 'login' ? 'auth-tab-active' : ''}`} onClick={() => setMode('login')}>Accedi</button>
             <button className={`auth-tab ${mode === 'register' ? 'auth-tab-active' : ''}`} onClick={() => setMode('register')}>Registrati</button>
           </div>
 
-          {/* ─── Google ───────────────────────────────────────────────────── */}
           <button
             className="auth-btn-social"
             onClick={handleGoogleLogin}
@@ -304,7 +327,6 @@ export default function AuthPage() {
             {isGoogleLoading ? 'Reindirizzamento...' : 'Continua con Google'}
           </button>
 
-          {/* ─── Apple placeholder ────────────────────────────────────────── */}
           <button
             style={{ ...btn.social, marginBottom: S.lg, opacity: 0.4, cursor: 'not-allowed' }}
             disabled
@@ -317,14 +339,12 @@ export default function AuthPage() {
             Continua con Apple
           </button>
 
-          {/* ─── Divider ──────────────────────────────────────────────────── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: S.sm, marginBottom: S.lg }}>
             <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
             <span style={{ fontSize: TEXT.xs, color: C.faint }}>oppure</span>
             <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
           </div>
 
-          {/* ─── Form ─────────────────────────────────────────────────────── */}
           <form
             onSubmit={handleSubmit}
             style={{
@@ -468,7 +488,6 @@ export default function AuthPage() {
             </button>
           </form>
 
-          {/* ─── Switch mode ──────────────────────────────────────────────── */}
           <div style={{ textAlign: 'center', marginTop: S.md }}>
             <button
               onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
@@ -481,14 +500,12 @@ export default function AuthPage() {
             </button>
           </div>
 
-          {/* ─── Divider ospite ───────────────────────────────────────────── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: S.sm, margin: `${S.md} 0` }}>
             <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
             <span style={{ fontSize: TEXT.xs, color: C.faint }}>oppure</span>
             <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
           </div>
 
-          {/* ─── Ospite ───────────────────────────────────────────────────── */}
           <button onClick={handleGuest} style={{ ...btn.ghost }}>
             👤 Accedi come ospite
           </button>
