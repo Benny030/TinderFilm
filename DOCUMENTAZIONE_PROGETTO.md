@@ -1,12 +1,12 @@
 # Documentazione progetto CineDate
 
-Ultimo aggiornamento: 2026-06-28
+Ultimo aggiornamento: 2026-07-28
 
 Questo documento descrive lo stato attuale del progetto: architettura, routing, flussi principali, API, file rilevanti e punti da migliorare.
 
 ## Panoramica
 
-CineDate e' una web app per scegliere film insieme. Gli utenti possono registrarsi, accedere con Google/email o entrare come ospiti, creare o raggiungere una stanza tramite codice, fare swipe sui film e vedere i match quando due partecipanti mettono like allo stesso titolo.
+CineDate e' una web app per scegliere film insieme. Gli utenti possono registrarsi, accedere con Google/email o entrare come ospiti, creare o raggiungere una stanza tramite codice, fare swipe sui film e vedere i match quando due partecipanti mettono like allo stesso titolo. Include inoltre una sezione Cinema per trovare i The Space Cinema vicini, consultarne la programmazione e acquistare i biglietti.
 
 Il progetto usa Next.js Pages Router, React, TypeScript e Supabase. Il catalogo film arriva principalmente da TMDB; WatchMode viene usato per mostrare dove guardare un film quando e' configurata la chiave API.
 
@@ -18,6 +18,8 @@ Il progetto usa Next.js Pages Router, React, TypeScript e Supabase. Il catalogo 
 - Supabase: autenticazione, database, realtime broadcast e presence.
 - TMDB API: trending, now playing, discover, dettaglio film e trailer.
 - WatchMode API: fonti streaming, noleggio e acquisto.
+- Leaflet e OpenStreetMap: mappa della sezione Cinema.
+- Playwright: recupero della programmazione dal sito The Space Cinema.
 - Phosphor Icons: icone React.
 - CSS globale, CSS inline e token locali in `styles/token.ts`.
 
@@ -28,7 +30,9 @@ Dipendenze principali:
   "@phosphor-icons/react": "^2.1.10",
   "@supabase/ssr": "^0.5.2",
   "@supabase/supabase-js": "^2.46.0",
+  "leaflet": "^1.9.4",
   "next": "^16.2.4",
+  "playwright": "^1.62.0",
   "react": "18.3.1",
   "react-dom": "18.3.1",
   "typescript": "^5.6.0"
@@ -91,6 +95,7 @@ public/       Asset statici.
 - `/home`: home autenticata/ospite, trending TMDB e stanze recenti, implementata in `pages/home.tsx`.
 - `/crea-stanza`: creazione stanza o ingresso tramite codice, implementata in `pages/crea-stanza.tsx`.
 - `/stanza`: stanza realtime con welcome, swipe, match e stato vuoto, implementata in `pages/stanza.tsx`.
+- `/cinema`: ricerca dei The Space Cinema vicini, mappa, programmazione e link ai biglietti, implementata in `pages/cinema.tsx`.
 - `/profilo`: profilo utente e preferenze, implementata in `pages/profilo.tsx`.
 
 ## Autenticazione
@@ -175,6 +180,18 @@ Realtime stanza:
 
 La funzione centrale per questo caricamento e' `fetchMoviesForRoom` in `utils/tmdb.ts`.
 
+## Cinema
+
+La sezione `/cinema` e' disponibile a utenti autenticati e ospiti. Richiede la geolocalizzazione del browser; se non e' disponibile, l'utente puo' cercare manualmente una citta' tramite Nominatim/OpenStreetMap.
+
+- Mostra i cinema dell'elenco statico `THE_SPACE_CINEMAS` entro 10, 25 o 50 km.
+- Offre una vista mappa Leaflet/OpenStreetMap e una vista elenco.
+- Per il cinema selezionato, carica la programmazione dei sette giorni successivi dal sito The Space Cinema.
+- Gli orari rimandano al sito The Space Cinema per l'acquisto dei biglietti.
+- `CinemaInSala`, integrato in `MatchScreen`, controlla se il film del match e' in programmazione nei cinque cinema piu' vicini entro 50 km.
+
+Il recupero della programmazione usa Playwright per ottenere i cookie necessari al sito The Space Cinema e conserva i risultati in una cache in memoria per 30 minuti. Di conseguenza la funzionalita' richiede che il runtime di deploy supporti un browser Chromium; inoltre i risultati dipendono dalla disponibilita' e dalla struttura dell'API non pubblica di The Space Cinema.
+
 ## API interne
 
 - `GET/POST /api/rooms`: legge o salva configurazione stanza.
@@ -186,6 +203,9 @@ La funzione centrale per questo caricamento e' `fetchMoviesForRoom` in `utils/tm
 - `GET /api/tmdb/movie/[id]`: dettaglio film TMDB con trailer, runtime e tagline.
 - `GET /api/tmdb/movie/movies`: ricerca/discover TMDB per modalita' `trending`, `cinema`, `streaming`, `discover`.
 - `GET /api/watchmode/[id]`: fonti WatchMode partendo da TMDB id, con regione IT e fallback globale.
+- `GET /api/cinema/nearby`: restituisce i The Space Cinema entro il raggio indicato da `lat`, `lng` e `radius`.
+- `GET /api/cinema/showtimes`: restituisce la programmazione dei successivi sette giorni per `cinemaId`.
+- `GET /api/cinema/check-film`: cerca un titolo nei cinque cinema The Space piu' vicini, usando `title`, `lat`, `lng` e `radius`.
 
 ## Mappa dei file
 
@@ -202,7 +222,6 @@ La funzione centrale per questo caricamento e' `fetchMoviesForRoom` in `utils/tm
 - `.gitignore`: file ignorati da Git.
 - `.gitattributes`: attributi Git.
 - `dev-server.log`, `dev-server.err.log`, `dev-server.out.log`: log locali del server di sviluppo.
-- `proxy_OLD.ts`, `proxy___.ts`: vecchie versioni/prototipi middleware.
 - `tsconfig.tsbuildinfo`: cache TypeScript generata.
 
 ### Pages
@@ -216,6 +235,7 @@ La funzione centrale per questo caricamento e' `fetchMoviesForRoom` in `utils/tm
 - `pages/home.tsx`: home con greeting, trending TMDB, stanze recenti e banner ospite.
 - `pages/crea-stanza.tsx`: UI creazione/ingresso stanza, modalita' catalogo e filtri discover.
 - `pages/stanza.tsx`: orchestrazione stanza realtime, SSR film, swipe, match e reset.
+- `pages/cinema.tsx`: ricerca dei cinema, geolocalizzazione, mappa e programmazione.
 - `pages/profilo.tsx`: profilo utente, avatar e preferenze.
 
 ### API Routes
@@ -229,6 +249,9 @@ La funzione centrale per questo caricamento e' `fetchMoviesForRoom` in `utils/tm
 - `pages/api/tmdb/movie/[id].ts`: dettaglio TMDB per id.
 - `pages/api/tmdb/movie/movies.ts`: discover/search TMDB per le modalita' stanza.
 - `pages/api/watchmode/[id].ts`: lookup WatchMode e normalizzazione fonti.
+- `pages/api/cinema/nearby.ts`: filtro dei cinema vicini e calcolo della distanza.
+- `pages/api/cinema/showtimes.ts`: recupero e normalizzazione della programmazione The Space Cinema.
+- `pages/api/cinema/check-film.ts`: verifica della presenza di un film nei cinema vicini.
 
 ### Components
 
@@ -243,9 +266,12 @@ La funzione centrale per questo caricamento e' `fetchMoviesForRoom` in `utils/tm
 - `components/screens/SwipeCard.tsx`: card corrente con drag, overlay like/pass, flip dettagli e azioni.
 - `components/screens/swipeScreen.tsx`: vecchia schermata swipe legacy basata su `styles/appStyles`.
 - `components/screens/WelcomeRoom.tsx`: welcome stanza corrente con codice, utenti e ingresso.
+- `components/cinema/CineMap.tsx`: mappa Leaflet client-side con posizione utente e marker dei cinema.
+- `components/cinema/CinemaInSala.tsx`: disponibilita' del film del match nei cinema vicini.
 - `components/screens/welcomeScreen.tsx`: vecchia welcome screen legacy.
 - `components/screens/HomeScreen.tsx`: file vuoto, non usato.
 - `components/screens/LandingScreen.tsx`: file vuoto, non usato.
+- `components/cinema/CinemaCard.tsx`, `RadiusFilter.tsx`, `ShowtimesList.tsx`: file vuoti, non usati.
 - `components/screens/notes.txt`: note tecniche/prototipali.
 
 ### Context, Hook e Utility
@@ -257,6 +283,8 @@ La funzione centrale per questo caricamento e' `fetchMoviesForRoom` in `utils/tm
 - `utils/recentRoom.ts`: salvataggio/lettura stanze recenti in localStorage.
 - `utils/roomCode.ts`: generazione e normalizzazione codici stanza.
 - `utils/tmdb.ts`: fetch film per stanza, mapping generi, trailer e shuffle deterministico.
+- `utils/cinema/theSpaceCinemas.ts`: elenco e coordinate dei The Space Cinema supportati.
+- `utils/cinema/theSpaceFetcher.ts`: client Playwright con cache in memoria per le API The Space Cinema.
 - `utils/supabase/browser.ts`: client Supabase browser.
 - `utils/supabase/server.ts`: client Supabase server.
 - `utils/supabase/middleware.ts`: middleware Supabase/route protection.
@@ -275,7 +303,7 @@ La funzione centrale per questo caricamento e' `fetchMoviesForRoom` in `utils/tm
 
 ### Priorita' alta
 
-- Diversi file hanno testi/commenti con mojibake, per esempio `hooks/useSwipe.ts`, `pages/stanza.tsx`, `components/screens/SwipeCard.tsx`, `components/screens/MatchScreen.tsx`, `pages/crea-stanza.tsx`, `types/index.ts` e alcune API. Va ripulito l'encoding per evitare stringhe rotte in UI e commenti.
+- Diversi file hanno testi/commenti con mojibake, incluso il nuovo flusso Cinema (`pages/cinema.tsx`, `components/cinema/*`, `utils/cinema/theSpaceFetcher.ts`), oltre a `hooks/useSwipe.ts`, `pages/stanza.tsx`, `components/screens/SwipeCard.tsx`, `components/screens/MatchScreen.tsx`, `pages/crea-stanza.tsx`, `types/index.ts` e alcune API. Va ripulito l'encoding per evitare stringhe rotte in UI e commenti.
 - `pages/stanza.tsx` e' migliorata rispetto alla versione monolitica, ma contiene ancora realtime, stato swipe, match, routing e SSR nello stesso file. Prossimo passo consigliato: estrarre `useRoomRealtime` e `useRoomSwipeState`.
 - La logica TMDB e' duplicata tra `utils/tmdb.ts`, `/api/tmdb/trending` e `/api/tmdb/movie/movies`. Conviene condividere mapping generi, trailer e formatter.
 - `components/screens/adminGate.tsx` contiene credenziali admin hardcoded. Spostare il controllo lato server o in variabili ambiente.
@@ -289,13 +317,52 @@ La funzione centrale per questo caricamento e' `fetchMoviesForRoom` in `utils/tm
 - `MatchScreen` apre link esterni con `window.open` e usa loghi remoti da Wikimedia; valutare allowlist immagini/asset locali se si irrigidisce la policy.
 - Il limite stanza a 2 partecipanti e' applicato lato UI/presence, non come vincolo forte lato server.
 - `home.tsx` ha alcune parti ripetute per CTA desktop e potrebbe essere diviso in componenti.
+- La ricerca manuale della citta' interroga Nominatim direttamente dal browser. Per affidabilita', privacy e rispetto delle policy del servizio, valutare un endpoint proxy con cache e identificazione dell'app.
+- `check-film.ts` confronta i titoli con euristiche testuali e interroga fino a cinque cinema in parallelo: possono verificarsi falsi positivi/negativi e tempi di risposta elevati.
 
 ### Priorita' bassa / pulizia
 
-- `proxy_OLD.ts` e `proxy___.ts` sono versioni storiche: archiviare fuori dal progetto runtime o rimuovere se non servono.
 - `components/screens/HomeScreen.tsx` e `components/screens/LandingScreen.tsx` sono vuoti.
+- `components/cinema/CinemaCard.tsx`, `RadiusFilter.tsx` e `ShowtimesList.tsx` sono vuoti: rimuoverli oppure spostarvi la UI ora contenuta in `pages/cinema.tsx`.
 - `styles/appStyles.ts` convive con `styles/token.ts` per componenti legacy: scegliere una direzione unica.
 - `components/screens/notes.txt` puo' essere trasformato in issue/task o integrato solo dove ancora utile.
+
+## Requisiti per la pubblicazione online
+
+Questa sezione descrive cio' che manca per rendere CineDate adatta a un pubblico reale. Non sostituisce una verifica legale, di sicurezza o di infrastruttura svolta da professionisti qualificati.
+
+### Bloccanti prima del lancio
+
+- **Correggere la build TypeScript.** Attualmente gli import di `utils/cinema/theSpaceCinemas.ts` usano sia `theSpaceCinemas` sia `thespaceCinemas`. Su filesystem case-sensitive questo impedisce la build. Va scelto un unico nome e tutti gli import vanno uniformati; la pipeline deve eseguire `npm run lint` e `npm run build` prima di ogni deploy.
+- **Rimuovere le credenziali hardcoded.** `components/screens/adminGate.tsx` non deve contenere segreti o controlli di autorizzazione lato client. Gli eventuali ruoli amministrativi devono essere verificati lato server/Supabase, con RLS e variabili ambiente.
+- **Proteggere dati e API Supabase.** Verificare e testare le policy RLS per ogni tabella: ogni utente deve poter leggere e modificare solo i dati necessari. La `SUPABASE_SERVICE_ROLE_KEY` deve restare solo sul server, mai in file o bundle pubblici. Attivare backup, rotazione delle chiavi e revisione degli accessi del progetto Supabase.
+- **Gestire abusi.** Aggiungere rate limit e limiti di payload alle API, soprattutto auth, stanze, swipe e Cinema; validare e normalizzare tutti i parametri lato server; usare codici stanza non prevedibili; predisporre una pagina/contatto per segnalazioni e un flusso di blocco utente se l'app viene resa sociale.
+- **Rendere l'infrastruttura ripetibile.** Configurare dominio, HTTPS, variabili ambiente di produzione, URL di redirect Supabase OAuth/email, ambiente di staging separato, backup del database e deploy automatico da CI. Il provider deve supportare Next.js con API routes e Playwright/Chromium: una configurazione serverless standard potrebbe non essere sufficiente per `fetchTheSpace`.
+- **Aggiungere osservabilita'.** Servono logging strutturato senza dati sensibili, tracciamento degli errori client/server, health check, monitoraggio uptime e alert. Definire una procedura per incidenti, rollback e indisponibilita' delle API esterne.
+
+### Privacy, contenuti e condizioni d'uso
+
+- Pubblicare Privacy Policy, Termini d'uso e contatti del titolare prima di raccogliere account, email, username, preferenze e posizione. L'informativa deve chiarire finalita', base giuridica, tempi di conservazione, fornitori/trasferimenti e modalita' di esercizio dei diritti; la Commissione europea riepiloga le informazioni minime richieste dagli articoli 12-14 GDPR: <https://commission.europa.eu/law/law-topic/data-protection/rules-business-and-organisations/principles-gdpr/what-information-must-be-given-individuals-whose-data-collected_en>.
+- Mostrare un testo chiaro prima della richiesta di geolocalizzazione, usare la posizione solo per la ricerca locale e non salvarla sul server senza una necessita' esplicita e documentata. La geolocalizzazione e' un dato personale e richiede un'informativa specifica; si veda il Garante: <https://www.garanteprivacy.it/home/docweb/-/docweb-display/docweb/6697925>.
+- Se vengono introdotti analytics, advertising o altri tracciatori non tecnici, predisporre consenso granulare, banner e registro delle preferenze prima di abilitarli. Verificare il caso concreto con consulenza privacy.
+- Esporre le attribuzioni e rispettare licenze/termini di TMDB, WatchMode, OpenStreetMap, Wikimedia e The Space Cinema. La programmazione The Space proviene da endpoint non documentati: ottenere un'autorizzazione o un'integrazione ufficiale prima di farne una dipendenza commerciale.
+- Per Nominatim, evitare chiamate dirette dal browser in produzione: usare un provider contrattualizzato oppure un proxy con cache, rate limit, User-Agent/Referer identificativo e possibilita' di sostituzione. Il servizio pubblico richiede massimo una richiesta al secondo per applicazione, attribuzione e caching: <https://operations.osmfoundation.org/policies/nominatim/>.
+
+### Affidabilita' e qualita' del prodotto
+
+- Correggere tutto il mojibake in testi, emoji e commenti prima di pubblicare: oggi alcune stringhe possono apparire corrotte agli utenti.
+- Aggiungere test automatici per autenticazione, creazione/accesso stanza, sincronizzazione realtime, match, reset, API TMDB e casi di errore delle API esterne. Creare almeno un test end-to-end per il percorso ospite e uno per l'utente registrato.
+- Gestire stati di caricamento, assenza dati e errore per tutte le richieste esterne, con retry controllati e messaggi comprensibili. La sezione Cinema deve degradare bene se Chromium, The Space, Nominatim o OpenStreetMap non rispondono.
+- Rendere accessibili le schermate: navigazione completa da tastiera, focus visibile, contrasto adeguato, label per i controlli, testo alternativo per immagini e rispetto di `prefers-reduced-motion`. Verificare almeno desktop, mobile e screen reader.
+- Aggiungere pagine 404/500 curate, metadata SEO/social, favicon/manifest, sitemap e robots.txt; definire anche un canale di assistenza e una pagina di stato.
+
+### Ordine di lavoro consigliato
+
+1. Risolvere gli errori di build e i segreti/controlli admin lato client.
+2. Verificare RLS, autorizzazioni e validazione/rate limit delle API.
+3. Preparare hosting, dominio, staging, CI/CD, backup e monitoraggio.
+4. Pubblicare policy privacy/termini, attribuzioni e flussi di geolocalizzazione conformi.
+5. Completare test, accessibilita', stati di errore e prova di carico prima dell'apertura al pubblico.
 
 ## Flusso utente principale
 
@@ -309,6 +376,14 @@ La funzione centrale per questo caricamento e' `fetchMoviesForRoom` in `utils/tm
 8. Ogni swipe viene salvato nello stato locale e broadcastato.
 9. Se due utenti mettono like allo stesso film, viene mostrato il match.
 10. Sul match si tenta di mostrare trailer e disponibilita' WatchMode.
+
+### Consultazione cinema
+
+1. L'utente apre `/cinema` dalla navigazione.
+2. L'app richiede la geolocalizzazione; in alternativa l'utente inserisce una citta'.
+3. `/api/cinema/nearby` restituisce i The Space Cinema entro il raggio selezionato.
+4. L'utente seleziona un cinema da mappa o elenco.
+5. `/api/cinema/showtimes` carica la programmazione dei sette giorni successivi e gli orari rimandano alla pagina di acquisto.
 
 ## Note operative
 

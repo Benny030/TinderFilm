@@ -3,8 +3,8 @@ import { FilmSlate, Heart, X, ArrowLeft, Info, Star } from '@phosphor-icons/reac
 import type { ExtendedMovie } from '@/types/stanza';
 import type { CardState } from '@/hooks/useSwipe';
 
-const THROW_DURATION = 420;
-const SNAP_DURATION  = 380;
+const THROW_DURATION = 650;
+const SNAP_DURATION  = 520;
 
 type Props = {
   movie: ExtendedMovie;
@@ -31,7 +31,7 @@ export default function SwipeCard({
   // ── Transition dinamica in base allo stato ────────────────────────────────
   const cardTransition = (() => {
     if (isDragging)       return 'none';
-    if (card.isFlying)    return `transform ${THROW_DURATION}ms cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity ${THROW_DURATION}ms ease`;
+    if (card.isFlying)    return `transform ${THROW_DURATION}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${THROW_DURATION}ms cubic-bezier(0.22, 1, 0.36, 1), filter ${THROW_DURATION}ms cubic-bezier(0.22, 1, 0.36, 1)`;
     if (card.isSnapping)  return `transform ${SNAP_DURATION}ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity ${SNAP_DURATION}ms ease`;
     return 'none';
   })();
@@ -40,9 +40,59 @@ export default function SwipeCard({
   const overlayOpacity = Math.min(Math.abs(card.x) / 80, 1);
   const showOverlay    = !isFlipped && Math.abs(card.x) > 20;
   const likingRight    = card.x > 0;
+  const dragProgress   = Math.min(Math.abs(card.x) / 120, 1);
+  const cardScale      = card.isFlying ? 1.12 : isDragging ? 1 + dragProgress * 0.06 : 1;
+  const dynamicRotate  = card.rotate * (1 + dragProgress * 0.45);
+  const swipeGlow      = Math.abs(card.x) > 90
+    ? likingRight
+      ? 'drop-shadow(0 0 25px rgba(34,197,94,.7))'
+      : 'drop-shadow(0 0 25px rgba(239,68,68,.7))'
+    : 'none';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <style>{`
+        @keyframes heartBeat {
+          from { transform: scale(1); }
+          to { transform: scale(1.25); }
+        }
+
+        @keyframes floatHeart {
+          0% {
+            transform: translateY(10px) scale(.5);
+            opacity: 0;
+          }
+
+          50% {
+            opacity: 1;
+          }
+
+          100% {
+            transform: translateY(-50px) scale(1.2);
+            opacity: 0;
+          }
+        }
+
+        @keyframes shake {
+          from {
+            transform: translateX(-3px);
+          }
+
+          to {
+            transform: translateX(3px);
+          }
+        }
+
+        @keyframes cardPulse {
+          from {
+            filter: brightness(1);
+          }
+
+          to {
+            filter: brightness(1.08);
+          }
+        }
+      `}</style>
 
       {/* ── Header ── */}
       <div style={{
@@ -104,10 +154,11 @@ export default function SwipeCard({
             // ── Fisica ──────────────────────────────────────────────────────
             transform: isFlipped
               ? 'translateX(0) rotate(0deg)'
-              : `translateX(${card.x}px) rotate(${card.rotate}deg)`,
+              : `translateX(${card.x}px) rotate(${dynamicRotate}deg) scale(${cardScale})`,
             opacity: card.opacity,
             transition: isFlipped ? 'none' : cardTransition,
-            willChange: 'transform, opacity',
+            willChange: 'transform, opacity, filter',
+            filter: swipeGlow,
           }}
           onMouseDown={(e) => { if (isFlipped) return; e.preventDefault(); handleStart(e.clientX); }}
           onTouchStart={(e) => { if (isFlipped) return; handleStart(e.touches[0].clientX); }}
@@ -186,16 +237,26 @@ export default function SwipeCard({
                     borderRadius: R.full, padding: '10px 28px',
                     display: 'flex', alignItems: 'center', gap: '10px',
                     boxShadow: SHADOW.lg,
-                    transform: `scale(${0.8 + overlayOpacity * 0.2})`,
+                    transform: `scale(${0.8 + overlayOpacity * 0.35}) rotate(${likingRight ? -8 : 8}deg)`,
                     transition: isDragging ? 'none' : 'transform 0.1s',
                   }}>
                     {likingRight
-                      ? <Heart size={26} color="#fff" weight="fill" />
-                      : <X size={26} color="#fff" weight="bold" />
+                      ? <Heart size={26} color="#fff" weight="fill" style={{ animation: 'heartBeat .55s ease-in-out infinite alternate' }} />
+                      : <X size={26} color="#fff" weight="bold" style={{ animation: 'shake .16s ease-in-out infinite alternate' }} />
                     }
                     <span style={{ color: '#fff', fontWeight: '800', fontSize: TEXT.md, letterSpacing: '1.5px' }}>
                       {likingRight ? 'MI PIACE' : 'PASSO'}
                     </span>
+                    {likingRight && overlayOpacity > 0.85 && (
+                      <span style={{
+                        position: 'absolute',
+                        animation: 'floatHeart .8s ease-out forwards',
+                        fontSize: '32px',
+                        pointerEvents: 'none',
+                      }}>
+                        💖
+                      </span>
+                    )}
                   </div>
                 </div>
               )}
