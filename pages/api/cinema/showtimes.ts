@@ -1,10 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { fetchTheSpace } from '@/utils/cinema/theSpaceFetcher';
 
+
 export type ShowtimeDay = {
   date: string;
   films: ShowtimeFilm[];
 };
+
 
 export type ShowtimeFilm = {
   id: string;
@@ -13,6 +15,7 @@ export type ShowtimeFilm = {
   duration: string | null;
   sessions: ShowtimeSession[];
 };
+
 
 export type ShowtimeSession = {
   id: string;
@@ -23,21 +26,29 @@ export type ShowtimeSession = {
 };
 
 
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
 
+
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({
+      error: 'Method not allowed'
+    });
   }
 
 
-  const { cinemaId } = req.query;
+  const cinemaId = String(req.query.cinemaId ?? '');
+
 
   if (!cinemaId) {
-    return res.status(400).json({ error: 'cinemaId obbligatorio' });
+    return res.status(400).json({
+      error:'cinemaId obbligatorio'
+    });
   }
+
 
 
   try {
@@ -45,134 +56,247 @@ export default async function handler(
     const days: ShowtimeDay[] = [];
 
 
-    for (let i = 0; i < 7; i++) {
+    for(let i = 0; i < 7; i++){
+
 
       const dateObj = new Date();
-      dateObj.setDate(dateObj.getDate() + i);
+
+      dateObj.setDate(
+        dateObj.getDate() + i
+      );
 
 
-      const date =
-        `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}T00:00:00`;
+      const yyyy =
+        dateObj.getFullYear();
+
+      const mm =
+        String(dateObj.getMonth()+1)
+        .padStart(2,'0');
+
+      const dd =
+        String(dateObj.getDate())
+        .padStart(2,'0');
 
 
       const dateKey =
-        `${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,'0')}-${String(dateObj.getDate()).padStart(2,'0')}`;
+        `${yyyy}-${mm}-${dd}`;
+
+
+      const showingDate =
+        `${dateKey}T00:00:00`;
+
 
 
       const url =
-        `https://www.thespacecinema.it/api/microservice/showings/cinemas/${cinemaId}/films?showingDate=${date}&minEmbargoLevel=3&includesSession=true`;
+        `https://www.thespacecinema.it/api/microservice/showings/cinemas/${cinemaId}/films?showingDate=${showingDate}&minEmbargoLevel=3&includesSession=true&includeSessionAttributes=true`;
+
 
 
       try {
 
-        const response: any = await fetchTheSpace(url);
 
-        const data = response?.result ?? [];
-
-
- console.log('🎬 THE SPACE RESPONSE', JSON.stringify(response).slice(0,2000));
-
-console.log('FILM TROVATI:', data.map((f:any)=>({
-  id: f.id,
-  title: f.filmTitle,
-  sessions: f.showingGroups?.length
-})));
-
-        const films: ShowtimeFilm[] = data.map((film:any) => {
+        const response:any =
+          await fetchTheSpace(url);
 
 
-          const sessions: ShowtimeSession[] =
-            (film.showingGroups ?? [])
-              .flatMap((group:any) => group.sessions ?? [])
-              .map((s:any) => {
+
+        console.log(
+          '🎬 THE SPACE',
+          cinemaId,
+          dateKey
+        );
 
 
-                const raw =
-                  s.startTime ?? '';
+        console.log(
+          JSON.stringify(response)
+          .slice(0,1500)
+        );
+
+
+
+        const data:any[] =
+          Array.isArray(response)
+            ? response
+            : (
+              response?.result ??
+              response?.films ??
+              []
+            );
+
+
+
+        const films: ShowtimeFilm[] =
+          data.map((film:any)=>{
+
+
+            const groups =
+              film.showingGroups ??
+              film.sessions ??
+              film.showings ??
+              [];
+
+
+
+            const sessions: ShowtimeSession[] =
+              groups
+              .flatMap((group:any)=>
+                group.sessions ??
+                group.showings ??
+                []
+              )
+              .map((s:any)=>{
+
+
+                const rawTime =
+                  s.startTime ??
+                  s.showingTime ??
+                  s.time ??
+                  '';
+
+
+
+                let time = rawTime;
+
+
+                if(
+                  typeof rawTime === 'string'
+                  &&
+                  rawTime.length >= 16
+                ){
+                  time =
+                    rawTime.slice(11,16);
+                }
+
 
 
                 return {
-                  id: s.sessionId ?? '',
-                  
-                  time:
-                    raw.length > 5
-                      ? raw.slice(11,16)
-                      : raw,
+
+                  id:String(
+                    s.sessionId ??
+                    s.id ??
+                    ''
+                  ),
+
+
+                  time,
 
 
                   hall:
-                    s.screenName ?? null,
+                    s.screenName ??
+                    s.hall?.name ??
+                    null,
 
 
                   format:
-                    (s.attributes ?? [])
-                      .map((a:any)=>a.name)
-                      .filter(Boolean)
-                      .join(', ') || null,
+                    Array.isArray(s.attributes)
+                    ?
+                    s.attributes
+                    .map((a:any)=>a.name)
+                    .filter(Boolean)
+                    .join(', ')
+                    :
+                    null,
 
 
                   bookingUrl:
                     s.bookingUrl?.startsWith('http')
-                      ? s.bookingUrl
-                      : `https://www.thespacecinema.it${s.bookingUrl ?? ''}`
+                    ?
+                    s.bookingUrl
+                    :
+                    `https://www.thespacecinema.it${s.bookingUrl ?? ''}`
+
                 };
 
               });
 
 
 
-          return {
-
-            id:
-              film.filmId ?? '',
+            return {
 
 
-            title:
-              film.filmTitle ?? 'Titolo sconosciuto',
+              id:String(
+                film.filmId ??
+                film.id ??
+                ''
+              ),
 
 
-            posterUrl:
-              film.posterImageSrc ?? null,
+              title:
+                film.filmTitle ??
+                film.title ??
+                film.name ??
+                'Titolo sconosciuto',
 
 
-            duration:
-              film.runningTime
-                ? `${film.runningTime} min`
-                : null,
+              posterUrl:
+                film.posterImageSrc ??
+                film.posterUrl ??
+                film.imageUrl ??
+                null,
 
 
-            sessions
+              duration:
+                film.runningTime
+                ?
+                `${film.runningTime} min`
+                :
+                null,
 
-          };
 
-        });
+              sessions
+
+            };
+
+
+          });
+
+
+
+        console.log(
+          '🎞 FILM TROVATI:',
+          films.map(f=>({
+            title:f.title,
+            sessioni:f.sessions.length
+          }))
+        );
 
 
 
         days.push({
-          date: dateKey,
+
+          date:dateKey,
+
           films
+
         });
 
 
-      } catch(err) {
+
+      }catch(err:any){
+
 
         console.error(
-          'Errore The Space',
+          '❌ Errore The Space',
           cinemaId,
-          date,
-          err
+          showingDate,
+          err?.message ?? err
         );
 
 
         days.push({
-          date: dateKey,
-          films: []
+
+          date:dateKey,
+
+          films:[]
+
         });
+
 
       }
 
+
     }
+
 
 
     res.setHeader(
@@ -181,18 +305,34 @@ console.log('FILM TROVATI:', data.map((f:any)=>({
     );
 
 
+
     return res.status(200).json({
+
       cinemaId,
+
       days
+
     });
 
 
 
-  } catch(err:any) {
+  }catch(err:any){
+
+
+    console.error(
+      'API SHOWTIMES ERROR',
+      err
+    );
+
 
     return res.status(500).json({
-      error: err.message
+
+      error:
+        err.message ??
+        'Errore interno'
+
     });
+
 
   }
 
