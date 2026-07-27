@@ -70,12 +70,13 @@ export default async function handler(
         const data = response?.result ?? [];
 
 
-        console.log('🎬 Film trovati', {
-          cinemaId,
-          date,
-          count: data.length
-        });
+ console.log('🎬 THE SPACE RESPONSE', JSON.stringify(response).slice(0,2000));
 
+console.log('FILM TROVATI:', data.map((f:any)=>({
+  id: f.id,
+  title: f.filmTitle,
+  sessions: f.showingGroups?.length
+})));
 
         const films: ShowtimeFilm[] = data.map((film:any) => {
 
