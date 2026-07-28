@@ -1,0 +1,33 @@
+{"timestamp":"00:00:03.325","source":"Server","level":"WARN","message":"⚠ The \"middleware\" file convention is deprecated. Please use \"proxy\" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy"}
+{"timestamp":"00:00:03.702","source":"Server","level":"LOG","message":"- Experiments (use with caution):"}
+{"timestamp":"00:00:03.702","source":"Server","level":"LOG","message":"  ? serverComponentsExternalPackages (invalid experimental key)"}
+{"timestamp":"00:00:03.702","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:05.898","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":true}"}
+{"timestamp":"00:00:05.898","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":true}"}
+{"timestamp":"00:00:05.968","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":false}"}
+{"timestamp":"00:00:06.950","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":true,\"isLoading\":false}"}
+{"timestamp":"00:00:09.979","source":"Server","level":"LOG","message":"○ Compiling /home ..."}
+{"timestamp":"00:00:25.310","source":"Server","level":"LOG","message":"🚀 SHOWTIMES API START"}
+{"timestamp":"00:00:25.310","source":"Server","level":"LOG","message":"🌐 CHIAMATA THE SPACE \"https://www.thespacecinema.it/api/microservice/showings/cinemas/1031/films?showingDate=2026-07-28T00:00:00&minEmbargoLevel=3&includesSession=true&includeSessionAttributes=true\""}
+{"timestamp":"00:00:34.753","source":"Server","level":"LOG","message":"📦 RESPONSE OK \"1031\" \"2026-07-28\""}
+{"timestamp":"00:00:34.758","source":"Server","level":"LOG","message":"🎞 FILM: [{...},{...},{...},{...},{...}]"}
+{"timestamp":"00:00:34.758","source":"Server","level":"LOG","message":"🌐 CHIAMATA THE SPACE \"https://www.thespacecinema.it/api/microservice/showings/cinemas/1031/films?showingDate=2026-07-29T00:00:00&minEmbargoLevel=3&includesSession=true&includeSessionAttributes=true\""}
+{"timestamp":"00:00:39.336","source":"Server","level":"LOG","message":"📦 RESPONSE OK \"1031\" \"2026-07-29\""}
+{"timestamp":"00:00:39.336","source":"Server","level":"LOG","message":"🎞 FILM: [{...},{...},{...},{...},{...},{...}]"}
+{"timestamp":"00:00:39.337","source":"Server","level":"LOG","message":"🌐 CHIAMATA THE SPACE \"https://www.thespacecinema.it/api/microservice/showings/cinemas/1031/films?showingDate=2026-07-30T00:00:00&minEmbargoLevel=3&includesSession=true&includeSessionAttributes=true\""}
+{"timestamp":"00:00:43.981","source":"Server","level":"LOG","message":"📦 RESPONSE OK \"1031\" \"2026-07-30\""}
+{"timestamp":"00:00:43.982","source":"Server","level":"LOG","message":"🎞 FILM: [{...},{...}]"}
+{"timestamp":"00:00:43.982","source":"Server","level":"LOG","message":"🌐 CHIAMATA THE SPACE \"https://www.thespacecinema.it/api/microservice/showings/cinemas/1031/films?showingDate=2026-07-31T00:00:00&minEmbargoLevel=3&includesSession=true&includeSessionAttributes=true\""}
+{"timestamp":"00:00:48.670","source":"Server","level":"LOG","message":"📦 RESPONSE OK \"1031\" \"2026-07-31\""}
+{"timestamp":"00:00:48.670","source":"Server","level":"LOG","message":"🎞 FILM: [{...},{...}]"}
+{"timestamp":"00:00:48.670","source":"Server","level":"LOG","message":"🌐 CHIAMATA THE SPACE \"https://www.thespacecinema.it/api/microservice/showings/cinemas/1031/films?showingDate=2026-08-01T00:00:00&minEmbargoLevel=3&includesSession=true&includeSessionAttributes=true\""}
+{"timestamp":"00:00:53.327","source":"Server","level":"LOG","message":"📦 RESPONSE OK \"1031\" \"2026-08-01\""}
+{"timestamp":"00:00:53.328","source":"Server","level":"LOG","message":"🎞 FILM: [{...},{...}]"}
+{"timestamp":"00:00:53.328","source":"Server","level":"LOG","message":"🌐 CHIAMATA THE SPACE \"https://www.thespacecinema.it/api/microservice/showings/cinemas/1031/films?showingDate=2026-08-02T00:00:00&minEmbargoLevel=3&includesSession=true&includeSessionAttributes=true\""}
+{"timestamp":"00:00:58.131","source":"Server","level":"LOG","message":"📦 RESPONSE OK \"1031\" \"2026-08-02\""}
+{"timestamp":"00:00:58.132","source":"Server","level":"LOG","message":"🎞 FILM: [{...},{...},{...},{...}]"}
+{"timestamp":"00:00:58.132","source":"Server","level":"LOG","message":"🌐 CHIAMATA THE SPACE \"https://www.thespacecinema.it/api/microservice/showings/cinemas/1031/films?showingDate=2026-08-03T00:00:00&minEmbargoLevel=3&includesSession=true&includeSessionAttributes=true\""}
+{"timestamp":"00:01:02.497","source":"Server","level":"LOG","message":"📦 RESPONSE OK \"1031\" \"2026-08-03\""}
+{"timestamp":"00:01:02.497","source":"Server","level":"LOG","message":"🎞 FILM: [{...},{...}]"}
+{"timestamp":"00:02:04.668","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":false}"}
+{"timestamp":"00:02:04.668","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":false}"}
