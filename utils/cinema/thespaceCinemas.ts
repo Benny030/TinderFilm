@@ -29,7 +29,7 @@ export const THE_SPACE_CINEMAS: TheSpaceCinema[] = [
     slug: 'parma-centro',
   },
   {
-    id: 1001,
+    id: 1003,
     name: 'The Space Bologna',
     city: 'Bologna',
     address: 'Viale Europa 5',
@@ -40,7 +40,7 @@ export const THE_SPACE_CINEMAS: TheSpaceCinema[] = [
 
   // Roma
   {
-    id: 1002,
+    id: 1025,
     name: "The Space Roma Parco de' Medici",
     city: 'Roma',
     address: 'Viale Parco de Medici 135',
@@ -49,7 +49,7 @@ export const THE_SPACE_CINEMAS: TheSpaceCinema[] = [
     slug: 'roma-parco-de-medici', 
   },
   {
-    id: 1003,
+    id: 1021,
     name: 'The Space Roma Moderno',
     city: 'Roma',
     address: 'Piazza della Repubblica 44',
@@ -80,7 +80,7 @@ export const THE_SPACE_CINEMAS: TheSpaceCinema[] = [
 
   // Piemonte
   {
-    id: 1006,
+    id: 1028,
     name: 'The Space Torino',
     city: 'Torino',
     address: 'Corso Grosseto 54, Beinasco',
@@ -133,7 +133,7 @@ export const THE_SPACE_CINEMAS: TheSpaceCinema[] = [
 
   // Campania
   {
-    id: 1009,
+    id: 1019,
     name: 'The Space Napoli',
     city: 'Napoli',
     address: 'Via Gianturco 50',
@@ -187,7 +187,7 @@ export const THE_SPACE_CINEMAS: TheSpaceCinema[] = [
 
   // Sicilia
   {
-    id: 1018,
+    id: 1032,
     name: 'The Space Catania Belpasso',
     city: 'Catania',
     address: 'C.da Pantano, Belpasso',
