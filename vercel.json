@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "pages/api/cinema/showtimes.ts": {
+      "maxDuration": 60
+    },
+    "pages/api/cinema/check-film.ts": {
+      "maxDuration": 60
+    }
+  }
+}

@@ -32,6 +32,8 @@ export default async function handler(
   res: NextApiResponse
 ) {
 
+  console.log('🚀 SHOWTIMES API START');
+
 
   if (req.method !== 'GET') {
     return res.status(405).json({
@@ -40,7 +42,9 @@ export default async function handler(
   }
 
 
-  const cinemaId = String(req.query.cinemaId ?? '');
+  const cinemaId = String(
+    req.query.cinemaId ?? ''
+  );
 
 
   if (!cinemaId) {
@@ -53,7 +57,9 @@ export default async function handler(
 
   try {
 
+
     const days: ShowtimeDay[] = [];
+
 
 
     for(let i = 0; i < 7; i++){
@@ -66,20 +72,14 @@ export default async function handler(
       );
 
 
-      const yyyy =
-        dateObj.getFullYear();
-
-      const mm =
-        String(dateObj.getMonth()+1)
-        .padStart(2,'0');
-
-      const dd =
-        String(dateObj.getDate())
-        .padStart(2,'0');
-
 
       const dateKey =
-        `${yyyy}-${mm}-${dd}`;
+        [
+          dateObj.getFullYear(),
+          String(dateObj.getMonth()+1).padStart(2,'0'),
+          String(dateObj.getDate()).padStart(2,'0')
+        ].join('-');
+
 
 
       const showingDate =
@@ -95,33 +95,36 @@ export default async function handler(
       try {
 
 
+        console.log(
+          '🌐 CHIAMATA THE SPACE',
+          url
+        );
+
+
+
         const response:any =
           await fetchTheSpace(url);
 
 
 
         console.log(
-          '🎬 THE SPACE',
+          '📦 RESPONSE OK',
           cinemaId,
           dateKey
-        );
-
-
-        console.log(
-          JSON.stringify(response)
-          .slice(0,1500)
         );
 
 
 
         const data:any[] =
           Array.isArray(response)
-            ? response
-            : (
-              response?.result ??
-              response?.films ??
-              []
-            );
+          ?
+          response
+          :
+          (
+            response?.result ??
+            response?.films ??
+            []
+          );
 
 
 
@@ -129,7 +132,7 @@ export default async function handler(
           data.map((film:any)=>{
 
 
-            const groups =
+            const rawGroups =
               film.showingGroups ??
               film.sessions ??
               film.showings ??
@@ -137,60 +140,74 @@ export default async function handler(
 
 
 
+            const groups = Array.isArray(rawGroups)
+              ?
+              rawGroups
+              :
+              [];
+
+
+
+
             const sessions: ShowtimeSession[] =
               groups
               .flatMap((group:any)=>
-                group.sessions ??
-                group.showings ??
-                []
+
+                Array.isArray(group.sessions)
+                ?
+                group.sessions
+                :
+                (
+                  Array.isArray(group.showings)
+                  ?
+                  group.showings
+                  :
+                  []
+                )
+
               )
-              .map((s:any)=>{
+              .map((session:any)=>{
 
 
                 const rawTime =
-                  s.startTime ??
-                  s.showingTime ??
-                  s.time ??
+                  session.startTime ??
+                  session.showingTime ??
+                  session.time ??
                   '';
-
-
-
-                let time = rawTime;
-
-
-                if(
-                  typeof rawTime === 'string'
-                  &&
-                  rawTime.length >= 16
-                ){
-                  time =
-                    rawTime.slice(11,16);
-                }
 
 
 
                 return {
 
                   id:String(
-                    s.sessionId ??
-                    s.id ??
+                    session.sessionId ??
+                    session.id ??
                     ''
                   ),
 
 
-                  time,
+                  time:
+                    typeof rawTime === 'string' &&
+                    rawTime.length >= 16
+                    ?
+                    rawTime.substring(11,16)
+                    :
+                    rawTime,
+
 
 
                   hall:
-                    s.screenName ??
-                    s.hall?.name ??
+                    session.screenName ??
+                    session.screen?.name ??
+                    session.hall?.name ??
                     null,
 
 
+
                   format:
-                    Array.isArray(s.attributes)
+                    Array.isArray(session.attributes)
                     ?
-                    s.attributes
+                    session.attributes
                     .map((a:any)=>a.name)
                     .filter(Boolean)
                     .join(', ')
@@ -198,21 +215,22 @@ export default async function handler(
                     null,
 
 
+
                   bookingUrl:
-                    s.bookingUrl?.startsWith('http')
+                    session.bookingUrl?.startsWith('http')
                     ?
-                    s.bookingUrl
+                    session.bookingUrl
                     :
-                    `https://www.thespacecinema.it${s.bookingUrl ?? ''}`
+                    `https://www.thespacecinema.it${session.bookingUrl ?? ''}`
 
                 };
+
 
               });
 
 
 
             return {
-
 
               id:String(
                 film.filmId ??
@@ -228,11 +246,13 @@ export default async function handler(
                 'Titolo sconosciuto',
 
 
+
               posterUrl:
                 film.posterImageSrc ??
                 film.posterUrl ??
                 film.imageUrl ??
                 null,
+
 
 
               duration:
@@ -243,19 +263,19 @@ export default async function handler(
                 null,
 
 
+
               sessions
 
             };
-
 
           });
 
 
 
         console.log(
-          '🎞 FILM TROVATI:',
+          '🎞 FILM:',
           films.map(f=>({
-            title:f.title,
+            titolo:f.title,
             sessioni:f.sessions.length
           }))
         );
@@ -272,15 +292,19 @@ export default async function handler(
 
 
 
-      }catch(err:any){
+      } catch(error:any){
 
 
         console.error(
-          '❌ Errore The Space',
-          cinemaId,
-          showingDate,
-          err?.message ?? err
+          '❌ THE SPACE ERROR',
+          {
+            cinemaId,
+            showingDate,
+            message:error?.message,
+            stack:error?.stack
+          }
         );
+
 
 
         days.push({
@@ -291,9 +315,7 @@ export default async function handler(
 
         });
 
-
       }
-
 
     }
 
@@ -316,23 +338,23 @@ export default async function handler(
 
 
 
-  }catch(err:any){
+  } catch(error:any){
 
 
     console.error(
-      'API SHOWTIMES ERROR',
-      err
+      '🔥 SHOWTIMES FATAL ERROR',
+      error
     );
+
 
 
     return res.status(500).json({
 
       error:
-        err.message ??
+        error?.message ??
         'Errore interno'
 
     });
-
 
   }
 
