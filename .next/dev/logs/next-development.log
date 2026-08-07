@@ -1,8 +1,7 @@
-{"timestamp":"00:00:02.124","source":"Server","level":"WARN","message":"⚠ The \"middleware\" file convention is deprecated. Please use \"proxy\" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy"}
-{"timestamp":"00:00:02.335","source":"Server","level":"LOG","message":"- Experiments (use with caution):"}
-{"timestamp":"00:00:02.335","source":"Server","level":"LOG","message":"  ? serverComponentsExternalPackages (invalid experimental key)"}
-{"timestamp":"00:00:02.335","source":"Server","level":"LOG","message":""}
-{"timestamp":"00:00:14.096","source":"Server","level":"LOG","message":"○ Compiling /cinema ..."}
-{"timestamp":"00:00:23.345","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":true}"}
-{"timestamp":"00:00:23.345","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":true}"}
-{"timestamp":"00:00:23.345","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":true,\"isLoading\":false}"}
+{"timestamp":"00:00:02.075","source":"Server","level":"WARN","message":"⚠ The \"middleware\" file convention is deprecated. Please use \"proxy\" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy"}
+{"timestamp":"00:00:02.282","source":"Server","level":"LOG","message":"- Experiments (use with caution):"}
+{"timestamp":"00:00:02.282","source":"Server","level":"LOG","message":"  ? serverComponentsExternalPackages (invalid experimental key)"}
+{"timestamp":"00:00:02.283","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:02.305","source":"Server","level":"WARN","message":"⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload"}
+{"timestamp":"00:00:05.742","source":"Server","level":"WARN","message":"⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload"}
+{"timestamp":"00:00:05.781","source":"Server","level":"LOG","message":"○ Compiling /cinema ..."}

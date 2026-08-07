@@ -2,8 +2,5 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/cinema": "pages/cinema.js",
-  "/": "pages/index.js",
-  "/home": "pages/home.js",
-  "/api/tmdb/trending": "pages/api/tmdb/trending.js"
+  "/cinema": "pages/cinema.js"
 }

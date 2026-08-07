@@ -11,7 +11,7 @@ import {
   MapTrifold, List, X, CircleNotch,
 } from '@phosphor-icons/react';
 import type { TheSpaceCinema } from '@/utils/cinema/theSpaceCinemas';
-import type { ShowtimeDay, ShowtimeFilm } from '@/types/index';
+import type { ShowtimeDay, ShowtimeFilm } from '@/pages/api/cinema/showtimes';
 
 // ─── Leaflet solo client-side ─────────────────────────────────────────────────
 const CinemaMap = dynamic(() => import('@/components/cinema/CineMap'), { ssr: false });
