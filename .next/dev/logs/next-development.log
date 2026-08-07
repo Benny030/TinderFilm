@@ -1,12 +1,8 @@
-{"timestamp":"00:00:11.241","source":"Server","level":"WARN","message":"⚠ The \"middleware\" file convention is deprecated. Please use \"proxy\" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy"}
-{"timestamp":"00:00:12.858","source":"Server","level":"LOG","message":"- Experiments (use with caution):"}
-{"timestamp":"00:00:12.858","source":"Server","level":"LOG","message":"  ? serverComponentsExternalPackages (invalid experimental key)"}
-{"timestamp":"00:00:12.859","source":"Server","level":"LOG","message":""}
-{"timestamp":"00:00:17.721","source":"Server","level":"LOG","message":"○ Compiling / ..."}
-{"timestamp":"00:00:21.304","source":"Server","level":"WARN","message":"⚠ Blocked cross-origin request to Next.js dev resource /_next/webpack-hmr from \"192.168.1.60\".\nCross-origin access to Next.js dev resources is blocked by default for safety.\n\nTo allow this host in development, add it to \"allowedDevOrigins\" in next.config.js and restart the dev server:\n\n// next.config.js\nmodule.exports = {\n  allowedDevOrigins: ['192.168.1.60'],\n}\n\nRead more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins"}
-{"timestamp":"00:00:23.165","source":"Server","level":"WARN","message":"⚠ Blocked cross-origin request to Next.js dev resource /__nextjs_original-stack-frames from \"192.168.1.60\".\nCross-origin access to Next.js dev resources is blocked by default for safety.\n\nTo allow this host in development, add it to \"allowedDevOrigins\" in next.config.js and restart the dev server:\n\n// next.config.js\nmodule.exports = {\n  allowedDevOrigins: ['192.168.1.60'],\n}\n\nRead more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins"}
-{"timestamp":"00:00:52.107","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":true}"}
-{"timestamp":"00:00:52.107","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":true}"}
-{"timestamp":"00:00:52.107","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":false}"}
-{"timestamp":"00:00:52.866","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":true,\"isLoading\":false}"}
-{"timestamp":"00:00:55.889","source":"Server","level":"LOG","message":"○ Compiling /home ..."}
+{"timestamp":"00:00:02.124","source":"Server","level":"WARN","message":"⚠ The \"middleware\" file convention is deprecated. Please use \"proxy\" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy"}
+{"timestamp":"00:00:02.335","source":"Server","level":"LOG","message":"- Experiments (use with caution):"}
+{"timestamp":"00:00:02.335","source":"Server","level":"LOG","message":"  ? serverComponentsExternalPackages (invalid experimental key)"}
+{"timestamp":"00:00:02.335","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:14.096","source":"Server","level":"LOG","message":"○ Compiling /cinema ..."}
+{"timestamp":"00:00:23.345","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":true}"}
+{"timestamp":"00:00:23.345","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":false,\"isLoading\":true}"}
+{"timestamp":"00:00:23.345","source":"Browser","level":"LOG","message":"{\"currentUser\":null,\"isGuest\":true,\"isLoading\":false}"}

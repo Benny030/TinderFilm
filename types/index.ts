@@ -76,3 +76,23 @@ export type Props = {
   movies: Movie[];
   roomId: string;
 };
+
+export type ShowtimeSession = {
+  id: string;
+  time: string;
+  format?: string;
+  bookingUrl: string;
+};
+
+export type ShowtimeFilm = {
+  id: string;
+  title: string;
+  posterUrl?: string;
+  duration?: string;
+  sessions: ShowtimeSession[];
+};
+
+export type ShowtimeDay = {
+  date: string;
+  films: ShowtimeFilm[];
+};
