@@ -4,8 +4,5 @@
   "/_document": "pages/_document.js",
   "/": "pages/index.js",
   "/home": "pages/home.js",
-  "/api/tmdb/trending": "pages/api/tmdb/trending.js",
-  "/cinema": "pages/cinema.js",
-  "/api/cinema/nearby": "pages/api/cinema/nearby.js",
-  "/api/cinema/showtimes": "pages/api/cinema/showtimes.js"
+  "/api/tmdb/trending": "pages/api/tmdb/trending.js"
 }
