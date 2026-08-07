@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { THE_SPACE_CINEMAS } from '@/utils/cinema/theSpaceCinemas';
+import { THE_SPACE_CINEMAS } from '@/utils/cinema/theSpaceCinemasFIX';
 
 function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;

@@ -16,7 +16,6 @@ type PagesPageConfig = {
    * Validated at build-time by parsePagesSegmentConfig.
    */
   config?: {
-    amp?: boolean | 'hybrid' | string // necessary for JS
     maxDuration?: number
     runtime?: 'edge' | 'experimental-edge' | 'nodejs' | string // necessary unless config is exported as const
     regions?: string[]
@@ -27,7 +26,7 @@ type ApiRouteConfig = {
   default: (req: any, res: any) => ReturnType<NextApiHandler>
   config?: {
     api?: {
-      bodyParser?: boolean | { sizeLimit?: string }
+      bodyParser?: boolean | { sizeLimit?: number | string }
       responseLimit?: string | number | boolean
       externalResolver?: boolean
     }
@@ -40,24 +39,6 @@ type ApiRouteConfig = {
 
 
 
-
-// Validate ../../pages/_app.tsx
-{
-  type __IsExpected<Specific extends PagesPageConfig> = Specific
-  const handler = {} as typeof import("../../pages/_app.js")
-  type __Check = __IsExpected<typeof handler>
-  // @ts-ignore
-  type __Unused = __Check
-}
-
-// Validate ../../pages/_document.tsx
-{
-  type __IsExpected<Specific extends PagesPageConfig> = Specific
-  const handler = {} as typeof import("../../pages/_document.js")
-  type __Check = __IsExpected<typeof handler>
-  // @ts-ignore
-  type __Unused = __Check
-}
 
 // Validate ../../pages/auth.tsx
 {
@@ -72,6 +53,15 @@ type ApiRouteConfig = {
 {
   type __IsExpected<Specific extends PagesPageConfig> = Specific
   const handler = {} as typeof import("../../pages/auth/callback.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../pages/cinema.tsx
+{
+  type __IsExpected<Specific extends PagesPageConfig> = Specific
+  const handler = {} as typeof import("../../pages/cinema.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check
@@ -126,6 +116,33 @@ type ApiRouteConfig = {
 {
   type __IsExpected<Specific extends PagesPageConfig> = Specific
   const handler = {} as typeof import("../../pages/username.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../pages/api/cinema/check-film.ts
+{
+  type __IsExpected<Specific extends ApiRouteConfig> = Specific
+  const handler = {} as typeof import("../../pages/api/cinema/check-film.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../pages/api/cinema/nearby.ts
+{
+  type __IsExpected<Specific extends ApiRouteConfig> = Specific
+  const handler = {} as typeof import("../../pages/api/cinema/nearby.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../pages/api/cinema/showtimes.ts
+{
+  type __IsExpected<Specific extends ApiRouteConfig> = Specific
+  const handler = {} as typeof import("../../pages/api/cinema/showtimes.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check
