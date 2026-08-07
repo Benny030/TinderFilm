@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import type { TheSpaceCinema } from '@/utils/cinema/thespaceCinemas';
+import type { TheSpaceCinema } from '@/utils/cinema/theSpaceCinemasFIX';
 import { C, R } from '@/styles/token';
 
 type Props = {
