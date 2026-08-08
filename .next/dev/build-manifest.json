@@ -22,10 +22,25 @@
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
+    "/auth": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/auth.js"
+    ],
+    "/cinema": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/cinema.js"
+    ],
     "/crea-stanza": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
       "static/chunks/pages/crea-stanza.js"
+    ],
+    "/film/[id]": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/film/[id].js"
     ],
     "/home": [
       "static/chunks/webpack.js",

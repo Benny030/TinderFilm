@@ -4,7 +4,6 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/hooks/useAuth';
 import { createBrowserClient } from '@/utils/supabase/browser';
-import { generateRoomCode } from '@/utils/roomCode';
 import { getRecentRooms, type RecentRoom } from '@/utils/recentRoom';
 import AppShell from '@/components/layout/AppShell';
 import { C, R, FONT, TEXT, S, SHADOW } from '@/styles/token';
@@ -442,7 +441,7 @@ export default function HomePage() {
                       <div
                         key={movie.id}
                         className="movie-card-scroll"
-                        onClick={() => router.push(`/stanza?room=${generateRoomCode()}`)}
+                        onClick={() => router.push(`/film/${movie.tmdb_id}`)}
                       >
                         <div style={{ position: 'relative' }}>
                           <img
