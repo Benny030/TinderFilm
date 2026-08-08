@@ -11,7 +11,7 @@ import {
   MapTrifold, List, X, CircleNotch,
 } from '@phosphor-icons/react';
 import type { TheSpaceCinema } from '@/utils/cinema/theSpaceCinemasFIX';
-import type { ShowtimeDay, ShowtimeFilm } from '@/pages/api/cinema/showtimes';
+import type { ShowtimeDay, ShowtimeFilm, } from '@/types/index';
 
 // ─── Leaflet solo client-side ─────────────────────────────────────────────────
 const CinemaMap = dynamic(() => import('@/components/cinema/CineMap'), { ssr: false });
@@ -442,26 +442,7 @@ const handleCitySearch = async () => {
                                   <div style={{ fontSize: TEXT.xs, color: C.muted, marginBottom: '8px' }}>⏱ {film.duration}</div>
                                 )}
                                 {/* Orari */}
-                                <div className="scroll-x">
-  {film.sessions.map((session) => {
-    return (
-      <a
-        key={session.id}
-        href={session.bookingUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="session-chip"
-      >
-        🎟️ {session.time}
-        {session.format && (
-          <span style={{ opacity: 0.6, marginLeft: "4px" }}>
-            · {session.format}
-          </span>
-        )}
-      </a>
-    );
-  })}
-</div>
+<div className="scroll-x"> {film.sessions.map((session) => ( <a key={session.id || `${film.id}-${session.time}`} href={session.bookingUrl} target="_blank" rel="noopener noreferrer" className="session-chip" > 🎟️ {session.time} {session.format && ( <span style={{ opacity: 0.6, marginLeft: '4px' }}> · {session.format} </span> )} </a> ))} </div>
                               </div>
                             </div>
                           ))

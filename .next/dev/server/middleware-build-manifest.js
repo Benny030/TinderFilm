@@ -27,6 +27,11 @@ globalThis.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
+    "/cinema": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/cinema.js"
+    ],
     "/home": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
