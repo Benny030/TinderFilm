@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { THE_SPACE_CINEMAS } from '@/utils/cinema/theSpaceCinemasFIX';
+import { createClient } from '@/utils/supabase/server';
 
 function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
@@ -11,7 +11,7 @@ function getDistanceKm(lat1: number, lng1: number, lat2: number, lng2: number): 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-export default function handler(req: NextApiRequest, res: NextApiResponse) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   const { lat, lng, radius = '25' } = req.query;
@@ -21,11 +21,23 @@ export default function handler(req: NextApiRequest, res: NextApiResponse) {
   const userLng = parseFloat(lng as string);
   const radiusKm = parseInt(radius as string) || 25;
 
-  const nearby = THE_SPACE_CINEMAS
-    .map((c) => ({ ...c, distanceKm: Math.round(getDistanceKm(userLat, userLng, c.lat, c.lng) * 10) / 10 }))
-    .filter((c) => c.distanceKm <= radiusKm)
-    .sort((a, b) => a.distanceKm - b.distanceKm);
+  try {
+    const supabase = createClient();
+    const { data, error } = await supabase.from('cinemas').select('*');
+    if (error) throw error;
 
-  res.setHeader('Cache-Control', 'no-store');
-  return res.status(200).json({ cinemas: nearby });
+    const nearby = (data ?? [])
+      .map((c: any) => ({
+        ...c,
+        distanceKm: Math.round(getDistanceKm(userLat, userLng, c.lat, c.lng) * 10) / 10,
+      }))
+      .filter((c: any) => c.distanceKm <= radiusKm)
+      .sort((a: any, b: any) => a.distanceKm - b.distanceKm);
+
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).json({ cinemas: nearby });
+  } catch (err: any) {
+    console.error('Cinema nearby (Supabase) error:', err);
+    return res.status(500).json({ error: err.message });
+  }
 }

@@ -119,7 +119,11 @@ export default function HomePage() {
   }, []);
 
   const handleCreateRoom = () => {
-    router.push('/crea-stanza'); 
+     router.push('/crea-stanza?tab=create');
+  };
+
+  const handleJoinRoom = () => {
+    router.push('/crea-stanza?tab=join');
   };
 
   const handleEnterRoom = (roomId: string) => {
@@ -507,7 +511,7 @@ export default function HomePage() {
                 </button>
               </div><div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <button
-                  onClick={handleCreateRoom }
+                  onClick={handleJoinRoom}
                   style={{
                     width: '100%', padding: '14px',
                     background: C.primary, color: '#fff',

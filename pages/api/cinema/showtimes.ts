@@ -1,21 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { fetchTheSpace } from '@/utils/cinema/theSpaceFetcher';
-
-
-export type ShowtimeDay = {
-  date: string;
-  films: ShowtimeFilm[];
-};
-
-
-export type ShowtimeFilm = {
-  id: string;
-  title: string;
-  posterUrl: string | null;
-  duration: string | null;
-  sessions: ShowtimeSession[];
-};
-
+import { createClient } from '@/utils/supabase/server';
 
 export type ShowtimeSession = {
   id: string;
@@ -25,337 +9,82 @@ export type ShowtimeSession = {
   bookingUrl: string;
 };
 
+export type ShowtimeFilm = {
+  id: string;
+  title: string;
+  posterUrl: string | null;
+  duration: string | null;
+  sessions: ShowtimeSession[];
+};
 
+export type ShowtimeDay = {
+  date: string;
+  films: ShowtimeFilm[];
+};
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
+function dateKeyFor(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    String(d.getDate()).padStart(2, '0'),
+  ].join('-');
+}
 
-  console.log('🚀 SHOWTIMES API START');
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({
-      error: 'Method not allowed'
-    });
-  }
-
-
-  const cinemaId = String(
-    req.query.cinemaId ?? ''
-  );
-
-
-  if (!cinemaId) {
-    return res.status(400).json({
-      error:'cinemaId obbligatorio'
-    });
-  }
-
-
+  const cinemaId = String(req.query.cinemaId ?? '');
+  if (!cinemaId) return res.status(400).json({ error: 'cinemaId obbligatorio' });
 
   try {
-
-
-    const days: ShowtimeDay[] = [];
-
-
-
-    for(let i = 0; i < 7; i++){
-
-
-      const dateObj = new Date();
-
-      dateObj.setDate(
-        dateObj.getDate() + i
-      );
-
-
-
-      const dateKey =
-        [
-          dateObj.getFullYear(),
-          String(dateObj.getMonth()+1).padStart(2,'0'),
-          String(dateObj.getDate()).padStart(2,'0')
-        ].join('-');
-
-
-
-      const showingDate =
-        `${dateKey}T00:00:00`;
-
-
-
-      const url =
-        `https://www.thespacecinema.it/api/microservice/showings/cinemas/${cinemaId}/films?showingDate=${showingDate}&minEmbargoLevel=3&includesSession=true&includeSessionAttributes=true`;
-
-
-
-      try {
-
-
-        console.log(
-          '🌐 CHIAMATA THE SPACE',
-          url
-        );
-
-
-
-        const response:any =
-          await fetchTheSpace(url);
-
-
-
-        console.log(
-          '📦 RESPONSE OK',
-          cinemaId,
-          dateKey
-        );
-
-
-
-        const data:any[] =
-          Array.isArray(response)
-          ?
-          response
-          :
-          (
-            response?.result ??
-            response?.films ??
-            []
-          );
-
-
-
-        const films: ShowtimeFilm[] =
-          data.map((film:any)=>{
-
-
-            const rawGroups =
-              film.showingGroups ??
-              film.sessions ??
-              film.showings ??
-              [];
-
-
-
-            const groups = Array.isArray(rawGroups)
-              ?
-              rawGroups
-              :
-              [];
-
-
-
-
-            const sessions: ShowtimeSession[] =
-              groups
-              .flatMap((group:any)=>
-
-                Array.isArray(group.sessions)
-                ?
-                group.sessions
-                :
-                (
-                  Array.isArray(group.showings)
-                  ?
-                  group.showings
-                  :
-                  []
-                )
-
-              )
-              .map((session:any)=>{
-
-
-                const rawTime =
-                  session.startTime ??
-                  session.showingTime ??
-                  session.time ??
-                  '';
-
-
-
-                return {
-
-                  id:String(
-                    session.sessionId ??
-                    session.id ??
-                    ''
-                  ),
-
-
-                  time:
-                    typeof rawTime === 'string' &&
-                    rawTime.length >= 16
-                    ?
-                    rawTime.substring(11,16)
-                    :
-                    rawTime,
-
-
-
-                  hall:
-                    session.screenName ??
-                    session.screen?.name ??
-                    session.hall?.name ??
-                    null,
-
-
-
-                  format:
-                    Array.isArray(session.attributes)
-                    ?
-                    session.attributes
-                    .map((a:any)=>a.name)
-                    .filter(Boolean)
-                    .join(', ')
-                    :
-                    null,
-
-
-
-                  bookingUrl:
-                    session.bookingUrl?.startsWith('http')
-                    ?
-                    session.bookingUrl
-                    :
-                    `https://www.thespacecinema.it${session.bookingUrl ?? ''}`
-
-                };
-
-
-              });
-
-
-
-            return {
-
-              id:String(
-                film.filmId ??
-                film.id ??
-                ''
-              ),
-
-
-              title:
-                film.filmTitle ??
-                film.title ??
-                film.name ??
-                'Titolo sconosciuto',
-
-
-
-              posterUrl:
-                film.posterImageSrc ??
-                film.posterUrl ??
-                film.imageUrl ??
-                null,
-
-
-
-              duration:
-                film.runningTime
-                ?
-                `${film.runningTime} min`
-                :
-                null,
-
-
-
-              sessions
-
-            };
-
+    const supabase = createClient();
+    const dateKeys = Array.from({ length: 7 }, (_, i) => dateKeyFor(i));
+
+    const { data, error } = await supabase
+      .from('cinema_showings')
+      .select('*')
+      .eq('cinema_id', Number(cinemaId))
+      .in('showing_date', dateKeys)
+      .order('showing_date', { ascending: true })
+      .order('time', { ascending: true });
+
+    if (error) throw error;
+
+    const rows = data ?? [];
+
+    const days: ShowtimeDay[] = dateKeys.map((dateKey) => {
+      const rowsForDay = rows.filter((r: any) => r.showing_date === dateKey);
+
+      const filmsMap = new Map<string, ShowtimeFilm>();
+      for (const r of rowsForDay) {
+        const filmKey = String(r.film_id);
+        if (!filmsMap.has(filmKey)) {
+          filmsMap.set(filmKey, {
+            id: filmKey,
+            title: r.film_title,
+            posterUrl: r.poster_url ?? null,
+            duration: r.duration ?? null,
+            sessions: [],
           });
-
-
-
-        console.log(
-          '🎞 FILM:',
-          films.map(f=>({
-            titolo:f.title,
-            sessioni:f.sessions.length
-          }))
-        );
-
-
-
-        days.push({
-
-          date:dateKey,
-
-          films
-
+        }
+        filmsMap.get(filmKey)!.sessions.push({
+          id: String(r.session_id ?? r.id),
+          time: r.time,
+          hall: r.hall ?? null,
+          format: r.format ?? null,
+          bookingUrl: r.booking_url,
         });
-
-
-
-      } catch(error:any){
-
-
-        console.error(
-          '❌ THE SPACE ERROR',
-          {
-            cinemaId,
-            showingDate,
-            message:error?.message,
-            stack:error?.stack
-          }
-        );
-
-
-
-        days.push({
-
-          date:dateKey,
-
-          films:[]
-
-        });
-
       }
 
-    }
-
-
-
-    res.setHeader(
-      'Cache-Control',
-      's-maxage=1800, stale-while-revalidate'
-    );
-
-
-
-    return res.status(200).json({
-
-      cinemaId,
-
-      days
-
+      return { date: dateKey, films: Array.from(filmsMap.values()) };
     });
 
-
-
-  } catch(error:any){
-
-
-    console.error(
-      '🔥 SHOWTIMES FATAL ERROR',
-      error
-    );
-
-
-
-    return res.status(500).json({
-
-      error:
-        error?.message ??
-        'Errore interno'
-
-    });
-
+    res.setHeader('Cache-Control', 's-maxage=1800, stale-while-revalidate');
+    return res.status(200).json({ cinemaId, days });
+  } catch (err: any) {
+    console.error('Cinema showtimes (Supabase) error:', err);
+    return res.status(500).json({ error: err.message ?? 'Errore interno' });
   }
-
 }

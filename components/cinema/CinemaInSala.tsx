@@ -1,12 +1,19 @@
+ 
 'use client';
 
 import { useState, useEffect } from 'react';
 import { C, R, FONT, TEXT, S, SHADOW } from '@/styles/token';
-import { Ticket, MapPin, CircleNotch, FilmStrip } from '@phosphor-icons/react';
+import {
+  Ticket,
+  MapPin,
+  CircleNotch,
+  FilmStrip,
+} from '@phosphor-icons/react';
 
 type Session = {
   time: string;
   bookingUrl: string;
+  date: string;
 };
 
 type Showing = {
@@ -28,6 +35,7 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
   const [checked, setChecked] = useState(false);
   const [noLocation, setNoLocation] = useState(false);
 
+
   useEffect(() => {
     const check = async () => {
       setLoading(true);
@@ -47,12 +55,13 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
 
       if (lat === null && navigator.geolocation) {
         try {
-          const pos = await new Promise<GeolocationPosition>((resolve, reject) =>
-            navigator.geolocation.getCurrentPosition(
-              resolve,
-              reject,
-              { timeout: 5000 }
-            )
+          const pos = await new Promise<GeolocationPosition>(
+            (resolve, reject) =>
+              navigator.geolocation.getCurrentPosition(
+                resolve,
+                reject,
+                { timeout: 5000 }
+              )
           );
 
           lat = pos.coords.latitude;
@@ -62,7 +71,6 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
             'cineDateUserCoords',
             JSON.stringify({ lat, lng })
           );
-
         } catch {}
       }
 
@@ -76,13 +84,14 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
         const title = tmdbTitle ?? filmTitle;
 
         const res = await fetch(
-          `/api/cinema/check-film?title=${encodeURIComponent(title)}&lat=${lat}&lng=${lng}&radius=50`
+          `/api/cinema/check-film?title=${encodeURIComponent(
+            title
+          )}&lat=${lat}&lng=${lng}&radius=50`
         );
 
         const data = await res.json();
 
         setShowings(data.showings ?? []);
-
       } catch {}
 
       setChecked(true);
@@ -90,17 +99,29 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
     };
 
     check();
-
   }, [filmTitle, tmdbTitle]);
 
+  // Formatta la data: 2026-08-09 → 9 agosto
+  const formatDate = (date: string) => {
+    if (!date) return '';
+
+    const parsed = new Date(`${date}T00:00:00`);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return date;
+    }
+
+    return new Intl.DateTimeFormat('it-IT', {
+      day: 'numeric',
+      month: 'long',
+    }).format(parsed);
+  };
 
   if (!loading && checked && showings.length === 0) return null;
   if (noLocation) return null;
 
-
   return (
     <div style={{ marginBottom: S.md }}>
-
       <div
         style={{
           fontSize: TEXT.base,
@@ -116,9 +137,7 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
         Al cinema vicino a te
       </div>
 
-
       {loading ? (
-
         <div
           style={{
             padding: S.md,
@@ -139,19 +158,15 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
 
           Controllo cinema vicini...
         </div>
-
       ) : (
-
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: S.sm
+            gap: S.sm,
           }}
         >
-
           {showings.map((s) => (
-
             <div
               key={s.cinemaId}
               style={{
@@ -162,7 +177,6 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
                 boxShadow: SHADOW.sm,
               }}
             >
-
               <div
                 style={{
                   display: 'flex',
@@ -171,19 +185,16 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
                   marginBottom: S.sm,
                 }}
               >
-
                 <div>
-
                   <div
                     style={{
                       fontSize: TEXT.sm,
                       fontWeight: '700',
-                      color: C.ink
+                      color: C.ink,
                     }}
                   >
                     🎬 {s.cinema}
                   </div>
-
 
                   <div
                     style={{
@@ -192,7 +203,7 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
                       marginTop: '2px',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px'
+                      gap: '4px',
                     }}
                   >
                     <MapPin
@@ -203,9 +214,7 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
 
                     {s.distanceKm} km da te
                   </div>
-
                 </div>
-
 
                 <a
                   href={s.bookingUrl}
@@ -226,7 +235,6 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
                     flexShrink: 0,
                   }}
                 >
-
                   <Ticket
                     size={13}
                     color="#fff"
@@ -234,27 +242,21 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
                   />
 
                   Biglietti
-
                 </a>
-
               </div>
 
-
               {s.sessions.length > 0 && (
-
                 <div
                   style={{
                     display: 'flex',
                     gap: '6px',
-                    flexWrap: 'wrap'
+                    flexWrap: 'wrap',
                   }}
                 >
-
                   {s.sessions.map((session) => (
-
                     <a
-                      key={session.time}
-                      href={`https://www.thespacecinema.it${session.bookingUrl}`}
+                      key={`${session.date}-${session.time}`}
+                      href={session.bookingUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={{
@@ -266,29 +268,20 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
                         fontWeight: '700',
                         textDecoration: 'none',
                         fontFamily: FONT.sans,
-                        border: `1px solid #ffd0e0`,
+                        border: '1px solid #ffd0e0',
                         transition: 'all .15s',
                       }}
                     >
-
                       🎟️ {session.time}
-
+                      {session.date && ` · ${formatDate(session.date)}`}
                     </a>
-
                   ))}
-
                 </div>
-
               )}
-
             </div>
-
           ))}
-
         </div>
-
       )}
-
 
       <style>
         {`
@@ -299,8 +292,7 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
           }
         `}
       </style>
-
-
     </div>
   );
 }
+ 

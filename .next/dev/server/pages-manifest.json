@@ -2,8 +2,9 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
+  "/crea-stanza": "pages/crea-stanza.js",
+  "/stanza": "pages/stanza.js",
   "/home": "pages/home.js",
-  "/cinema": "pages/cinema.js",
-  "/api/cinema/nearby": "pages/api/cinema/nearby.js",
-  "/api/cinema/showtimes": "pages/api/cinema/showtimes.js"
+  "/api/rooms": "pages/api/rooms.js",
+  "/api/tmdb/trending": "pages/api/tmdb/trending.js"
 }
