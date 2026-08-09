@@ -63,6 +63,8 @@ export default function CinemaPage() {
   const [showtimes, setShowtimes]         = useState<ShowtimeDay[]>([]);
   const [loadingShowtimes, setLoadingShowtimes] = useState(false);
   const [selectedDay, setSelectedDay]     = useState(0);
+  const [activeFormatFilter, setActiveFormatFilter] = useState('Tutti');
+  const [expandedFilms, setExpandedFilms] = useState<Record<string, boolean>>({});
 
   // ─── Redirect se non autenticato ─────────────────────────────────────────
   useEffect(() => {
@@ -145,6 +147,24 @@ export default function CinemaPage() {
 
   const selectedCinema = cinemas.find((c) => c.id === selectedId);
   const todayFilms     = showtimes[selectedDay]?.films ?? [];
+
+  const filteredFilms = todayFilms
+    .map((film) => ({
+      ...film,
+      sessions: activeFormatFilter === 'Tutti'
+        ? film.sessions
+        : film.sessions.filter((session) =>
+            parseSessionTags(session.format).some((tag) =>
+              tag.toLowerCase().includes(activeFormatFilter.toLowerCase())
+            )
+          ),
+    }))
+    .filter((film) => film.sessions.length > 0);
+
+  const toggleFilmExpanded = (filmId: string | number) => {
+    const key = String(filmId);
+    setExpandedFilms((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   // ─── Set di tutti i tag formato/lingua presenti nel giorno selezionato (solo visivo) ──
   const dayFormatTags = Array.from(
@@ -492,7 +512,7 @@ export default function CinemaPage() {
                             return (
                               <button
                                 key={day.date}
-                                onClick={() => setSelectedDay(i)}
+                                onClick={() => { setSelectedDay(i); setActiveFormatFilter('Tutti'); setExpandedFilms({}); }}
                                 className={`day-nav-card${isActive ? ' active' : ''}`}
                               >
                                 <span className="day-nav-top">{label.top}</span>
@@ -510,11 +530,34 @@ export default function CinemaPage() {
                       {dayFormatTags.length > 0 && (
                         <div style={{ padding: `0 ${S.md} ${S.sm}` }}>
                           <div className="filter-scroll">
-                            <span className="filter-chip" style={{ background: C.ink, color: '#fff', borderColor: C.ink }}>
+                            <button
+                              type="button"
+                              onClick={() => { setActiveFormatFilter('Tutti'); setExpandedFilms({}); }}
+                              className="filter-chip"
+                              style={{
+                                background: activeFormatFilter === 'Tutti' ? C.ink : C.bg,
+                                color: activeFormatFilter === 'Tutti' ? '#fff' : C.muted,
+                                borderColor: activeFormatFilter === 'Tutti' ? C.ink : C.border,
+                                cursor: 'pointer',
+                              }}
+                            >
                               Tutti
-                            </span>
+                            </button>
                             {dayFormatTags.map((tag) => (
-                              <span key={tag} className="filter-chip">{tag}</span>
+                              <button
+                                type="button"
+                                key={tag}
+                                onClick={() => { setActiveFormatFilter(tag); setExpandedFilms({}); }}
+                                className="filter-chip"
+                                style={{
+                                  background: activeFormatFilter === tag ? C.ink : C.bg,
+                                  color: activeFormatFilter === tag ? '#fff' : C.muted,
+                                  borderColor: activeFormatFilter === tag ? C.ink : C.border,
+                                  cursor: 'pointer',
+                                }}
+                              >
+                                {tag}
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -522,12 +565,12 @@ export default function CinemaPage() {
 
                       {/* ── Film del giorno ── */}
                       <div style={{ padding: `0 ${S.md} ${S.md}` }}>
-                        {todayFilms.length === 0 ? (
+                        {filteredFilms.length === 0 ? (
                           <div style={{ textAlign: 'center', padding: S.lg, color: C.muted, fontSize: TEXT.sm }}>
                             Nessuna programmazione per questo giorno
                           </div>
                         ) : (
-                          todayFilms.map((film: ShowtimeFilm) => (
+                          filteredFilms.map((film: ShowtimeFilm) => (
                             <div key={film.id} className="film-row">
                               {/* Poster */}
                               {film.posterUrl ? (
@@ -555,7 +598,7 @@ export default function CinemaPage() {
 
                                 {/* Orari — elemento principale, griglia cliccabile */}
                                 <div className="sessions-grid">
-                                  {film.sessions.map((session) => {
+                                  {(expandedFilms[String(film.id)] ? film.sessions : film.sessions.slice(0, SESSIONS_COLLAPSED_LIMIT)).map((session) => {
                                     const tags = parseSessionTags(session.format);
                                     return (
                                       <a
@@ -572,6 +615,19 @@ export default function CinemaPage() {
                                       </a>
                                     );
                                   })}
+                                  {film.sessions.length > SESSIONS_COLLAPSED_LIMIT && (
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleFilmExpanded(film.id)}
+                                      className="session-btn"
+                                      aria-expanded={!!expandedFilms[String(film.id)]}
+                                      style={{ color: C.primary, fontFamily: FONT.sans }}
+                                    >
+                                      <span className="session-time" style={{ color: C.primary, fontSize: TEXT.xs }}>
+                                        {expandedFilms[String(film.id)] ? 'Meno ↑' : 'Altro ↓'}
+                                      </span>
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -580,7 +636,7 @@ export default function CinemaPage() {
                       </div>
 
                       {/* ── Nota selezione (coerente con riferimento visivo) ── */}
-                      {todayFilms.length > 0 && (
+                      {filteredFilms.length > 0 && (
                         <div style={{
                           display: 'flex', alignItems: 'center', gap: '8px',
                           padding: `${S.sm} ${S.md} ${S.md}`,
