@@ -3,14 +3,8 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/home": "pages/home.js",
-  "/film/[id]": "pages/film/[id].js",
-  "/api/tmdb/movie/[id]": "pages/api/tmdb/movie/[id].js",
-  "/api/tmdb/trending": "pages/api/tmdb/trending.js",
   "/cinema": "pages/cinema.js",
-  "/auth": "pages/auth.js",
   "/api/cinema/nearby": "pages/api/cinema/nearby.js",
   "/api/cinema/showtimes": "pages/api/cinema/showtimes.js",
-  "/crea-stanza": "pages/crea-stanza.js",
-  "/api/rooms": "pages/api/rooms.js",
-  "/stanza": "pages/stanza.js"
+  "/api/tmdb/trending": "pages/api/tmdb/trending.js"
 }

@@ -8,10 +8,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { C, R, FONT, TEXT, S, SHADOW } from '@/styles/token';
 import {
   MapPin, MagnifyingGlass, FilmSlate, Ticket,
-  MapTrifold, List, X, CircleNotch,
+  MapTrifold, List, X, CircleNotch, Clock, Sparkle,
 } from '@phosphor-icons/react';
 import type { TheSpaceCinema } from '@/utils/cinema/theSpaceCinemasFIX';
-import type { ShowtimeDay, ShowtimeFilm, } from '@/types/index';
+import type { ShowtimeDay, ShowtimeFilm } from '@/types/index';
 
 // ─── Leaflet solo client-side ─────────────────────────────────────────────────
 const CinemaMap = dynamic(() => import('@/components/cinema/CineMap'), { ssr: false });
@@ -25,9 +25,19 @@ const RADIUS_OPTIONS: RadiusKm[] = [10, 25, 50];
 const DAYS_IT = ['Dom', 'Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab'];
 const MONTHS_IT = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
 
-function formatDate(dateStr: string): string {
+const SESSIONS_COLLAPSED_LIMIT = 3;
+
+function formatDayLabel(dateStr: string, index: number): { top: string; bottom: string } {
   const d = new Date(dateStr);
-  return `${DAYS_IT[d.getDay()]} ${d.getDate()} ${MONTHS_IT[d.getMonth()]}`;
+  if (index === 0) return { top: 'Oggi', bottom: `${d.getDate()} ${MONTHS_IT[d.getMonth()]}` };
+  if (index === 1) return { top: 'Domani', bottom: `${d.getDate()} ${MONTHS_IT[d.getMonth()]}` };
+  return { top: DAYS_IT[d.getDay()], bottom: `${d.getDate()} ${MONTHS_IT[d.getMonth()]}` };
+}
+
+// ─── Estrae i tag (Laser, 2D, 3D, ITA, OV...) dal campo format libero della sessione ──
+function parseSessionTags(format: string | null): string[] {
+  if (!format) return [];
+  return format.split(',').map((t) => t.trim()).filter(Boolean);
 }
 
 export default function CinemaPage() {
@@ -103,44 +113,45 @@ export default function CinemaPage() {
   }, [selectedId]);
 
   // ─── Geocoding manuale (Nominatim) ───────────────────────────────────────
-const handleCitySearch = async () => {
-  if (!cityInput.trim()) return;
+  const handleCitySearch = async () => {
+    if (!cityInput.trim()) return;
 
-  console.log("Cerco:", cityInput);
+    setGeoLoading(true);
+    setGeoError("");
 
-  setGeoLoading(true);
-  setGeoError("");
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityInput + ", Italia")}&format=json&limit=1`,
+        { headers: { "Accept-Language": "it" } }
+      );
 
-  try {
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cityInput + ", Italia")}&format=json&limit=1`,
-      { headers: { "Accept-Language": "it" } }
-    );
+      const data = await res.json();
 
-    const data = await res.json();
+      if (!data.length) {
+        setGeoError("Città non trovata");
+        return;
+      }
 
-    console.log(data);
-
-    if (!data.length) {
-      setGeoError("Città non trovata");
-      return;
+      setUserLat(parseFloat(data[0].lat));
+      setUserLng(parseFloat(data[0].lon));
+      setShowManual(false);
+    } catch (e) {
+      console.error(e);
+      setGeoError("Errore ricerca città");
+    } finally {
+      setGeoLoading(false);
     }
+  };
 
-    setUserLat(parseFloat(data[0].lat));
-    setUserLng(parseFloat(data[0].lon));
-
-    console.log(data[0].lat, data[0].lon);
-
-    setShowManual(false);
-  } catch (e) {
-    console.error(e);
-    setGeoError("Errore ricerca città");
-  } finally {
-    setGeoLoading(false);
-  }
-};
   const selectedCinema = cinemas.find((c) => c.id === selectedId);
   const todayFilms     = showtimes[selectedDay]?.films ?? [];
+
+  // ─── Set di tutti i tag formato/lingua presenti nel giorno selezionato (solo visivo) ──
+  const dayFormatTags = Array.from(
+    new Set(
+      todayFilms.flatMap((f) => f.sessions.flatMap((s) => parseSessionTags(s.format)))
+    )
+  ).slice(0, 6);
 
   if (isLoading) {
     return (
@@ -155,6 +166,94 @@ const handleCitySearch = async () => {
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
         .spin { animation: spin 1s linear infinite; display: inline-block; }
+
+        /* ── Day nav ── */
+        .day-nav-scroll {
+          display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px;
+          scrollbar-width: none;
+        }
+        .day-nav-scroll::-webkit-scrollbar { display: none; }
+        .day-nav-card {
+          flex-shrink: 0; min-width: 68px;
+          padding: 10px 6px; border-radius: ${R.md};
+          border: 1.5px solid ${C.border}; background: ${C.bg};
+          cursor: pointer; text-align: center;
+          transition: all .15s;
+          display: flex; flex-direction: column; gap: 2px; align-items: center;
+        }
+        .day-nav-card:hover { border-color: ${C.primary}; }
+        .day-nav-card.active {
+          background: ${C.primary}; border-color: ${C.primary};
+          box-shadow: 0 4px 14px rgba(232,56,109,.28);
+        }
+        .day-nav-top { font-size: ${TEXT.sm}; font-weight: 700; color: ${C.ink}; }
+        .day-nav-card.active .day-nav-top { color: #fff; }
+        .day-nav-bottom { font-size: ${TEXT.xs}; color: ${C.muted}; }
+        .day-nav-card.active .day-nav-bottom { color: rgba(255,255,255,0.85); }
+        .day-nav-count { font-size: 10px; color: ${C.faint}; margin-top: 1px; }
+        .day-nav-card.active .day-nav-count { color: rgba(255,255,255,0.7); }
+
+        /* ── Filter bar ── */
+        .filter-scroll {
+          display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px;
+          scrollbar-width: none;
+        }
+        .filter-scroll::-webkit-scrollbar { display: none; }
+        .filter-chip {
+          flex-shrink: 0; padding: 6px 13px; border-radius: ${R.full};
+          border: 1.5px solid ${C.border}; background: ${C.bg};
+          font-size: ${TEXT.xs}; font-weight: 600; color: ${C.muted};
+          font-family: ${FONT.sans}; white-space: nowrap;
+        }
+
+        /* ── Film row ── */
+        .film-row {
+          display: flex; gap: ${S.md};
+          padding: ${S.md} 0;
+          border-bottom: 1px solid ${C.borderSoft};
+        }
+        .film-row:last-child { border-bottom: none; }
+        .film-poster {
+          width: 64px; height: 92px; border-radius: ${R.sm};
+          object-fit: cover; flex-shrink: 0; background: ${C.bgSoft};
+          box-shadow: ${SHADOW.sm};
+        }
+
+        /* ── Sessions grid ── */
+        .sessions-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+          gap: 8px;
+        }
+        .session-btn {
+          display: flex; flex-direction: column; align-items: center;
+          gap: 2px; padding: 8px 6px;
+          border-radius: ${R.sm}; border: 1.5px solid ${C.border};
+          background: ${C.bg}; cursor: pointer; text-decoration: none;
+          transition: all .12s;
+        }
+        .session-btn:hover {
+          border-color: ${C.primary}; background: ${C.primaryFaint};
+          transform: translateY(-1px);
+        }
+        .session-time {
+          font-size: ${TEXT.sm}; font-weight: 800; color: ${C.ink};
+          font-family: ${FONT.sans}; letter-spacing: 0.2px;
+        }
+        .session-btn:hover .session-time { color: ${C.primary}; }
+        .session-tag {
+          font-size: 10px; color: ${C.faint}; font-weight: 500;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+        }
+
+        .cinema-card {
+          padding: ${S.md}; border-radius: ${R.lg};
+          border: 1.5px solid ${C.border}; background: ${C.bg};
+          cursor: pointer; transition: all .15s;
+        }
+        .cinema-card:hover { border-color: ${C.primary}; box-shadow: ${SHADOW.sm}; }
+        .cinema-card.selected { border-color: ${C.primary}; background: ${C.primaryFaint}; }
+
         .day-tab {
           padding: 8px 14px; border: none; border-radius: ${R.full};
           font-size: ${TEXT.xs}; font-weight: 600; cursor: pointer;
@@ -164,23 +263,6 @@ const handleCitySearch = async () => {
         .day-tab.active { background: ${C.primary}; color: #fff; }
         .day-tab.inactive { background: ${C.bgSoft}; color: ${C.muted}; }
         .day-tab.inactive:hover { background: ${C.border}; }
-        .cinema-card {
-          padding: ${S.md}; border-radius: ${R.lg};
-          border: 2px solid ${C.border}; background: ${C.bg};
-          cursor: pointer; transition: all .15s;
-        }
-        .cinema-card:hover { border-color: ${C.primary}; box-shadow: ${SHADOW.sm}; }
-        .cinema-card.selected { border-color: ${C.primary}; background: ${C.primaryFaint}; }
-        .session-chip {
-          padding: 6px 12px; border-radius: ${R.full};
-          background: ${C.bgSoft}; border: 1.5px solid ${C.border};
-          font-size: ${TEXT.xs}; font-weight: 700; color: ${C.ink};
-          cursor: pointer; transition: all .15s; text-decoration: none;
-          display: inline-block;
-        }
-        .session-chip:hover { background: ${C.primary}; color: #fff; border-color: ${C.primary}; }
-        .scroll-x { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
-        .scroll-x::-webkit-scrollbar { display: none; }
       `}</style>
 
       <AppShell activeNav="cinema">
@@ -381,14 +463,14 @@ const handleCitySearch = async () => {
                 <div style={{ background: C.bg, borderRadius: R.lg, border: `1.5px solid ${C.border}`, overflow: 'hidden' }}>
 
                   {/* Header programmazione */}
-                  <div style={{ padding: S.md, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ padding: S.md, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                     <div>
                       <div style={{ fontSize: TEXT.base, fontWeight: '800', color: C.ink }}>{selectedCinema?.name}</div>
-                      <div style={{ fontSize: TEXT.xs, color: C.muted }}>Programmazione prossimi 7 giorni</div>
+                      <div style={{ fontSize: TEXT.xs, color: C.muted, marginTop: '2px' }}>Programmazione prossimi 7 giorni</div>
                     </div>
                     <button
                       onClick={() => { setSelectedId(null); setShowtimes([]); }}
-                      style={{ background: C.bgSoft, border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      style={{ background: C.bgSoft, border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                     >
                       <X size={16} color={C.muted} />
                     </button>
@@ -401,53 +483,113 @@ const handleCitySearch = async () => {
                     </div>
                   ) : (
                     <>
-                      {/* Selezione giorno */}
-                      <div style={{ padding: `${S.sm} ${S.md}`, borderBottom: `1px solid ${C.border}` }}>
-                        <div className="scroll-x">
-                          {showtimes.map((day, i) => (
-                            <button
-                              key={day.date}
-                              onClick={() => setSelectedDay(i)}
-                              className={`day-tab ${selectedDay === i ? 'active' : 'inactive'}`}
-                            >
-                              {i === 0 ? 'Oggi' : i === 1 ? 'Domani' : formatDate(day.date)}
-                              {day.films.length > 0 && (
-                                <span style={{ marginLeft: '4px', opacity: 0.7 }}>({day.films.length})</span>
-                              )}
-                            </button>
-                          ))}
+                      {/* ── Navigazione date — card moderne con giorno + data ── */}
+                      <div style={{ padding: `${S.md} ${S.md} ${S.sm}` }}>
+                        <div className="day-nav-scroll">
+                          {showtimes.map((day, i) => {
+                            const label = formatDayLabel(day.date, i);
+                            const isActive = selectedDay === i;
+                            return (
+                              <button
+                                key={day.date}
+                                onClick={() => setSelectedDay(i)}
+                                className={`day-nav-card${isActive ? ' active' : ''}`}
+                              >
+                                <span className="day-nav-top">{label.top}</span>
+                                <span className="day-nav-bottom">{label.bottom}</span>
+                                <span className="day-nav-count">
+                                  {day.films.length} {day.films.length === 1 ? 'film' : 'film'}
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
-                      {/* Film del giorno */}
-                      <div style={{ padding: S.md, display: 'flex', flexDirection: 'column', gap: S.md }}>
+                      {/* ── Barra filtri formato/lingua (riepilogo visivo del giorno) ── */}
+                      {dayFormatTags.length > 0 && (
+                        <div style={{ padding: `0 ${S.md} ${S.sm}` }}>
+                          <div className="filter-scroll">
+                            <span className="filter-chip" style={{ background: C.ink, color: '#fff', borderColor: C.ink }}>
+                              Tutti
+                            </span>
+                            {dayFormatTags.map((tag) => (
+                              <span key={tag} className="filter-chip">{tag}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── Film del giorno ── */}
+                      <div style={{ padding: `0 ${S.md} ${S.md}` }}>
                         {todayFilms.length === 0 ? (
                           <div style={{ textAlign: 'center', padding: S.lg, color: C.muted, fontSize: TEXT.sm }}>
                             Nessuna programmazione per questo giorno
                           </div>
                         ) : (
                           todayFilms.map((film: ShowtimeFilm) => (
-                            <div key={film.id} style={{ display: 'flex', gap: S.sm }}>
+                            <div key={film.id} className="film-row">
                               {/* Poster */}
                               {film.posterUrl ? (
-                                <img src={film.posterUrl} alt={film.title} style={{ width: '56px', height: '84px', objectFit: 'cover', borderRadius: R.sm, flexShrink: 0 }} />
+                                <img src={film.posterUrl} alt={film.title} className="film-poster" />
                               ) : (
-                                <div style={{ width: '56px', height: '84px', background: C.bgSoft, borderRadius: R.sm, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <FilmSlate size={20} color={C.faint} />
+                                <div className="film-poster" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <FilmSlate size={22} color={C.faint} />
                                 </div>
                               )}
+
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: TEXT.sm, fontWeight: '700', color: C.ink, marginBottom: '4px' }}>{film.title}</div>
+                                {/* Titolo + durata: gerarchia forte */}
+                                <div style={{ fontSize: TEXT.base, fontWeight: '800', color: C.ink, lineHeight: 1.25, marginBottom: '4px' }}>
+                                  {film.title}
+                                </div>
                                 {film.duration && (
-                                  <div style={{ fontSize: TEXT.xs, color: C.muted, marginBottom: '8px' }}>⏱ {film.duration}</div>
+                                  <div style={{
+                                    fontSize: TEXT.xs, color: C.muted, marginBottom: S.sm,
+                                    display: 'flex', alignItems: 'center', gap: '4px',
+                                  }}>
+                                    <Clock size={11} color={C.muted} />
+                                    {film.duration}
+                                  </div>
                                 )}
-                                {/* Orari */}
-<div className="scroll-x"> {film.sessions.map((session) => ( <a key={session.id || `${film.id}-${session.time}`} href={session.bookingUrl} target="_blank" rel="noopener noreferrer" className="session-chip" > 🎟️ {session.time} {session.format && ( <span style={{ opacity: 0.6, marginLeft: '4px' }}> · {session.format} </span> )} </a> ))} </div>
+
+                                {/* Orari — elemento principale, griglia cliccabile */}
+                                <div className="sessions-grid">
+                                  {film.sessions.map((session) => {
+                                    const tags = parseSessionTags(session.format);
+                                    return (
+                                      <a
+                                        key={session.id || `${film.id}-${session.time}`}
+                                        href={session.bookingUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="session-btn"
+                                      >
+                                        <span className="session-time">{session.time}</span>
+                                        {tags.length > 0 && (
+                                          <span className="session-tag">{tags.join(' · ')}</span>
+                                        )}
+                                      </a>
+                                    );
+                                  })}
+                                </div>
                               </div>
                             </div>
                           ))
                         )}
                       </div>
+
+                      {/* ── Nota selezione (coerente con riferimento visivo) ── */}
+                      {todayFilms.length > 0 && (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: '8px',
+                          padding: `${S.sm} ${S.md} ${S.md}`,
+                          fontSize: TEXT.xs, color: C.muted,
+                        }}>
+                          <Sparkle size={13} color={C.primary} weight="fill" />
+                          Seleziona un orario per proseguire con la prenotazione
+                        </div>
+                      )}
                     </>
                   )}
                 </div>

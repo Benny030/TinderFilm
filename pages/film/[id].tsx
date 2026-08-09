@@ -62,7 +62,7 @@ export default function FilmDetailPage() {
         .trailer { width:100%; aspect-ratio:16/9; border:0; border-radius:${R.lg}; box-shadow:${SHADOW.md}; background:#201B18; }
         .cast-row,.similar-row { display:flex; gap:14px; overflow-x:auto; padding:2px 1px 9px; scrollbar-width:none; }
         .cast-card { min-width:106px; max-width:106px; font-size:12px; color:${C.ink}; }
-        .cast-photo { width:106px; height:106px; object-fit:cover; border-radius:50%; background:${C.bgSoft}; display:block; margin-bottom:8px; }
+        .cast-photo { width:106px; height:106px; object-fit:cover; border-radius:50%; background:${C.bgSoft}; display:block; margin-bottom:8px;  }
         .similar-card { min-width:132px; width:132px; cursor:pointer; border:0; padding:0; background:none; text-align:left; font-family:${FONT.sans}; color:${C.ink}; }
         .similar-card img { width:132px; aspect-ratio:2/3; object-fit:cover; border-radius:${R.md}; box-shadow:${SHADOW.sm}; display:block; transition:transform .18s; }
         .similar-card:hover img { transform:translateY(-4px); }
