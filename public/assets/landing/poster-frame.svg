@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 320">
+<defs><linearGradient id="p" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#4d0c2c"/><stop offset="1" stop-color="#ed316d"/></linearGradient></defs>
+<rect x="8" y="8" width="224" height="304" rx="14" fill="#140b12" stroke="#d72b62" stroke-width="3"/>
+<rect x="24" y="24" width="192" height="272" rx="10" fill="url(#p)"/>
+<path d="M35 245 Q120 185 205 245V296H35Z" fill="#08070a" opacity=".9"/>
+<circle cx="120" cy="145" r="38" fill="#08070a"/>
+<text x="120" y="278" text-anchor="middle" fill="#fff" font-family="Arial" font-size="13" opacity=".75">POSTER</text>
+</svg>

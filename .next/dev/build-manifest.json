@@ -27,15 +27,10 @@
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
-    "/cinema": [
+    "/auth": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/cinema.js"
-    ],
-    "/home": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/home.js"
+      "static/chunks/pages/auth.js"
     ]
   }
 }
