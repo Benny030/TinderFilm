@@ -1,14 +1,51 @@
- 
 'use client';
 
 import { useState, useEffect } from 'react';
-import { C, R, FONT, TEXT, S, SHADOW } from '@/styles/token';
+import { useTheme } from '@/context/ThemeContext';
 import {
   Ticket,
   MapPin,
   CircleNotch,
   FilmStrip,
 } from '@phosphor-icons/react';
+
+// ─── Palette dark "cinema elegante" ──────────────────────────────────────
+const D = {
+  bg: '#0a0806',
+  bgSoft: '#14100e',
+  card: '#1c1613',
+  cardHover: '#241d19',
+  border: '#2d221c',
+  gold: '#f5b92f',
+  goldSoft: '#ffd875',
+  goldGlow: 'rgba(245,185,47,0.12)',
+  pink: '#ed3d73',
+  pinkDeep: '#8e1740',
+  pinkGlow: 'rgba(237,61,115,0.15)',
+  text: '#f0ebe6',
+  textMuted: '#b5a89e',
+  textFaint: '#7a6b60',
+};
+
+// ─── Palette light "cinema elegante" ──────────────────────────────────────
+const L = {
+  bg: '#f5efe8',
+  bgSoft: '#ece3d9',
+  card: '#ffffff',
+  cardHover: '#faf5ef',
+  border: '#d6cbbc',
+  gold: '#b8860b',
+  goldSoft: '#e8c84a',
+  goldGlow: 'rgba(184,134,11,0.10)',
+  pink: '#b83060',
+  pinkDeep: '#8a1d44',
+  pinkGlow: 'rgba(184,48,96,0.10)',
+  text: '#1f1a16',
+  textMuted: '#5c5248',
+  textFaint: '#8a7c6e',
+};
+
+const FONT_SANS = "'Inter','Helvetica Neue',sans-serif";
 
 type Session = {
   time: string;
@@ -30,11 +67,14 @@ type Props = {
 };
 
 export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const P = isDark ? D : L;
+
   const [showings, setShowings] = useState<Showing[]>([]);
   const [loading, setLoading] = useState(false);
   const [checked, setChecked] = useState(false);
   const [noLocation, setNoLocation] = useState(false);
-
 
   useEffect(() => {
     const check = async () => {
@@ -121,38 +161,40 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
   if (noLocation) return null;
 
   return (
-    <div style={{ marginBottom: S.md }}>
+    <div style={{ marginBottom: '16px' }}>
       <div
         style={{
-          fontSize: TEXT.base,
+          fontSize: '15px',
           fontWeight: '700',
-          color: C.ink,
-          marginBottom: S.sm,
+          color: P.text,
+          marginBottom: '8px',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
+          fontFamily: FONT_SANS,
         }}
       >
-        <FilmStrip size={18} color={C.primary} weight="fill" />
+        <FilmStrip size={18} color={P.pink} weight="fill" />
         Al cinema vicino a te
       </div>
 
       {loading ? (
         <div
           style={{
-            padding: S.md,
-            background: C.bgSoft,
-            borderRadius: R.md,
+            padding: '16px',
+            background: P.card,
+            borderRadius: 0,
             display: 'flex',
             alignItems: 'center',
-            gap: S.sm,
-            fontSize: TEXT.sm,
-            color: C.muted,
+            gap: '8px',
+            fontSize: '13px',
+            color: P.textMuted,
+            fontFamily: FONT_SANS,
           }}
         >
           <CircleNotch
             size={16}
-            color={C.muted}
+            color={P.textMuted}
             style={{ animation: 'spin 1s linear infinite' }}
           />
 
@@ -163,18 +205,19 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: S.sm,
+            gap: '8px',
           }}
         >
           {showings.map((s) => (
             <div
               key={s.cinemaId}
               style={{
-                background: C.bg,
-                border: `1.5px solid ${C.border}`,
-                borderRadius: R.lg,
-                padding: S.md,
-                boxShadow: SHADOW.sm,
+                background: P.card,
+                border: `1px solid ${P.border}`,
+                borderRadius: 0,
+                padding: '16px',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                fontFamily: FONT_SANS,
               }}
             >
               <div
@@ -182,15 +225,15 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
                   display: 'flex',
                   alignItems: 'flex-start',
                   justifyContent: 'space-between',
-                  marginBottom: S.sm,
+                  marginBottom: '8px',
                 }}
               >
                 <div>
                   <div
                     style={{
-                      fontSize: TEXT.sm,
+                      fontSize: '13px',
                       fontWeight: '700',
-                      color: C.ink,
+                      color: P.text,
                     }}
                   >
                     🎬 {s.cinema}
@@ -198,8 +241,8 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
 
                   <div
                     style={{
-                      fontSize: TEXT.xs,
-                      color: C.muted,
+                      fontSize: '11px',
+                      color: P.textMuted,
                       marginTop: '2px',
                       display: 'flex',
                       alignItems: 'center',
@@ -208,7 +251,7 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
                   >
                     <MapPin
                       size={11}
-                      color={C.muted}
+                      color={P.textMuted}
                       weight="fill"
                     />
 
@@ -224,14 +267,14 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '6px',
-                    background: C.primary,
+                    background: P.pink,
                     color: '#fff',
-                    borderRadius: R.full,
+                    borderRadius: 0,
                     padding: '7px 14px',
-                    fontSize: TEXT.xs,
+                    fontSize: '11px',
                     fontWeight: '700',
                     textDecoration: 'none',
-                    fontFamily: FONT.sans,
+                    fontFamily: FONT_SANS,
                     flexShrink: 0,
                   }}
                 >
@@ -261,14 +304,14 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
                       rel="noopener noreferrer"
                       style={{
                         padding: '5px 12px',
-                        background: C.primaryLight,
-                        color: C.primary,
-                        borderRadius: R.full,
-                        fontSize: TEXT.xs,
+                        background: P.pinkGlow,
+                        color: P.pink,
+                        borderRadius: 0,
+                        fontSize: '11px',
                         fontWeight: '700',
                         textDecoration: 'none',
-                        fontFamily: FONT.sans,
-                        border: '1px solid #ffd0e0',
+                        fontFamily: FONT_SANS,
+                        border: `1px solid ${P.pink}`,
                         transition: 'all .15s',
                       }}
                     >
@@ -295,4 +338,3 @@ export default function CinemaInSala({ filmTitle, tmdbTitle }: Props) {
     </div>
   );
 }
- 

@@ -1,17 +1,76 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, type CSSProperties, type FormEvent } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/hooks/useAuth';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import { getRecentRooms, type RecentRoom } from '@/utils/recentRoom';
+import { normalizeRoomCode } from '@/utils/roomCode';
 import AppShell from '@/components/layout/AppShell';
-import { C, R, FONT, TEXT, S, SHADOW } from '@/styles/token';
+import { useTheme } from '@/context/ThemeContext';
 
 import {
   Bell, FilmSlate, House, ArrowRight,
-  Door, Star, Users, SignIn,
+  Door, Star, Confetti,
+  UsersThree, TrendUp, Sparkle,
+  InstagramLogo, TiktokLogo, XLogo,
+  Sun, Moon, FilmStrip,
+  Heart, Clock,
 } from '@phosphor-icons/react';
+
+// ─── Palette dark "cinema elegante" ──────────────────────────────────────
+const D = {
+  bg: '#0a0806',
+  bgSoft: '#14100e',
+  card: '#1c1613',
+  cardHover: '#241d19',
+  border: '#2d221c',
+  gold: '#f5b92f',
+  goldSoft: '#ffd875',
+  goldGlow: 'rgba(245,185,47,0.12)',
+  pink: '#ed3d73',
+  pinkDeep: '#8e1740',
+  pinkGlow: 'rgba(237,61,115,0.15)',
+  text: '#f0ebe6',
+  textMuted: '#b5a89e',
+  textFaint: '#7a6b60',
+};
+
+// ─── Palette light "cinema elegante" ──────────────────────────────────────
+const L = {
+  bg: '#f5efe8',
+  bgSoft: '#ece3d9',
+  card: '#ffffff',
+  cardHover: '#faf5ef',
+  border: '#d6cbbc',
+  gold: '#b8860b',
+  goldSoft: '#e8c84a',
+  goldGlow: 'rgba(184,134,11,0.10)',
+  pink: '#b83060',
+  pinkDeep: '#8a1d44',
+  pinkGlow: 'rgba(184,48,96,0.10)',
+  text: '#1f1a16',
+  textMuted: '#5c5248',
+  textFaint: '#8a7c6e',
+};
+
+const FONT = "'Inter','Helvetica Neue',sans-serif";
+const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
+const FONT_MONO = "'JetBrains Mono','Courier New',monospace";
+
+const convertHexToRgb = (hex: string) => {
+  const clean = hex.replace('#', '');
+  const full = clean.length === 3
+    ? clean.split('').map((char) => char + char).join('')
+    : clean;
+
+  const value = Number.parseInt(full, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+
+  return `${r}, ${g}, ${b}`;
+};
 
 type TmdbMovie = {
   id: string;
@@ -26,7 +85,23 @@ type TmdbMovie = {
   trama_c: string | null;
 };
 
+const FEATURES = [
+  { icon: UsersThree, title: 'Trova il tuo match', desc: 'Persone con i tuoi stessi gusti' },
+  { icon: FilmSlate,  title: 'Scopri cosa vedere', desc: 'Consigli su misura per te' },
+  { icon: Confetti,   title: 'Vivi il cinema',      desc: 'Insieme è meglio' },
+];
+
+const SUGGESTIONS = [
+  { icon: UsersThree, title: 'Film simili a quelli che ami', desc: 'Altri titoli che potrebbero piacerti' },
+  { icon: TrendUp,     title: 'Top del momento',              desc: 'I film più votati della community' },
+  { icon: Sparkle,     title: 'Scelte della community',       desc: 'I consigli più popolari degli utenti' },
+];
+
 export default function HomePage() {
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
+  const P = isDark ? D : L;
+
   const router = useRouter();
   const { currentUser, isGuest, isLoading, guestName } = useAuth();
   const supabase = useRef(createBrowserClient()).current;
@@ -36,13 +111,33 @@ export default function HomePage() {
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [fallbackUsername, setFallbackUsername] = useState('');
-  const [usernameReady, setUsernameReady] = useState(false);
+
+  const [codeInput, setCodeInput] = useState('');
+  const [codeError, setCodeError] = useState('');
 
   const displayName = currentUser && !currentUser.isGuest
     ? currentUser.username || fallbackUsername || '...'
     : guestName ?? 'Ospite';
 
   const firstName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+
+  const homeThemeVars: CSSProperties = {
+    ['--home-bg' as any]: P.bg,
+    ['--home-bg-soft' as any]: P.bgSoft,
+    ['--home-card' as any]: P.card,
+    ['--home-card-hover' as any]: P.cardHover,
+    ['--home-border' as any]: P.border,
+    ['--home-border-rgb' as any]: convertHexToRgb(P.border),
+    ['--home-gold' as any]: P.gold,
+    ['--home-gold-soft' as any]: P.goldSoft,
+    ['--home-gold-rgb' as any]: convertHexToRgb(P.gold),
+    ['--home-pink' as any]: P.pink,
+    ['--home-pink-deep' as any]: P.pinkDeep,
+    ['--home-pink-rgb' as any]: convertHexToRgb(P.pink),
+    ['--home-text' as any]: P.text,
+    ['--home-text-muted' as any]: P.textMuted,
+    ['--home-text-faint' as any]: P.textFaint,
+  };
 
   useEffect(() => {
     if (isLoading) return;
@@ -51,36 +146,16 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!currentUser || currentUser.isGuest) return;
-    if (currentUser.username) {
-      setFallbackUsername('');
-      setUsernameReady(true);
-      return;
-    }
+    if (currentUser.username) { setFallbackUsername(''); return; }
 
     const retry = async () => {
       const { data: byId } = await supabase
-        .from('users')
-        .select('username')
-        .eq('id', currentUser.id)
-        .maybeSingle();
-
-      if (byId?.username) {
-        setFallbackUsername(byId.username);
-        setUsernameReady(true);
-        return;
-      }
+        .from('users').select('username').eq('id', currentUser.id).maybeSingle();
+      if (byId?.username) { setFallbackUsername(byId.username); return; }
 
       const { data: byEmail } = await supabase
-        .from('users')
-        .select('username')
-        .eq('email', currentUser.email)
-        .maybeSingle();
-
-      if (byEmail?.username) {
-        setFallbackUsername(byEmail.username);
-        setUsernameReady(true);
-        return;
-      }
+        .from('users').select('username').eq('email', currentUser.email).maybeSingle();
+      if (byEmail?.username) { setFallbackUsername(byEmail.username); return; }
 
       router.replace('/username');
     };
@@ -117,17 +192,18 @@ export default function HomePage() {
     load();
   }, []);
 
-  const handleCreateRoom = () => {
-     router.push('/crea-stanza?tab=create');
+  const handleCreateRoom = () => router.push('/crea-stanza?tab=create');
+  const handleJoinRoom = () => router.push('/crea-stanza?tab=join');
+  const handleEnterRoom = (roomId: string) => router.push(`/stanza?room=${roomId}`);
+
+  const handleJoinByCode = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const code = normalizeRoomCode(codeInput);
+    if (code.length < 4) { setCodeError('Codice non valido'); return; }
+    setCodeError('');
+    router.push(`/stanza?room=${code}`);
   };
 
-  const handleJoinRoom = () => {
-    router.push('/crea-stanza?tab=join');
-  };
-
-  const handleEnterRoom = (roomId: string) => {
-    router.push(`/stanza?room=${roomId}`);
-  };
   const scrollRef = useRef<HTMLDivElement>(null);
   const isDown = useRef(false);
   const startX = useRef(0);
@@ -147,160 +223,136 @@ export default function HomePage() {
     const walk = (x - startX.current) * 1.5;
     scrollRef.current.scrollLeft = scrollLeft.current - walk;
   };
+
   if (isLoading || (!currentUser && !isGuest)) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <FilmSlate size={40} color={C.primary} weight="duotone" />
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: P.bg }}>
+        <div className="loading-spinner">
+          <FilmStrip size={48} color={P.pink} weight="duotone" />
+        </div>
       </div>
     );
   }
 
   return (
     <>
-      <style>{`
-        @keyframes shimmer {
-          0%   { background-position: -400px 0; }
-          100% { background-position: 400px 0; }
-        }
-        .skeleton {
-          background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
-          background-size: 400px 100%;
-          animation: shimmer 1.4s ease infinite;
-          border-radius: ${R.md};
-        }
-        .movie-card-scroll {
-          flex-shrink: 0;
-          width: 120px;
-          cursor: pointer;
-          transition: transform .2s;
-        }
-        .movie-card-scroll:hover { transform: translateY(-4px); }
-        .movie-card-scroll img {
-          width: 100%; aspect-ratio: 2/3;
-          object-fit: cover; border-radius: ${R.md};
-          box-shadow: ${SHADOW.sm};
-          background: #f0f0f0;
-        }
-        .room-card {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 14px 16px;
-          background: ${C.bg};
-          border: 1.5px solid ${C.border};
-          border-radius: ${R.md};
-          cursor: pointer;
-          transition: border-color .15s, box-shadow .15s;
-          margin-bottom: 10px;
-        }
-        .room-card:hover { border-color: ${C.primary}; box-shadow: ${SHADOW.sm}; }
-        .btn-enter {
-          background: ${C.primaryLight};
-          color: ${C.primary};
-          border: none; border-radius: ${R.full};
-          padding: 7px 16px; font-size: ${TEXT.sm};
-          font-weight: 600; cursor: pointer;
-          font-family: ${FONT.sans};
-          white-space: nowrap;
-          display: flex; align-items: center; gap: 4px;
-          transition: background .15s;
-        }
-        .btn-enter:hover { background: #ffd0e0; }
-        .section-header {
-          display: flex; align-items: center; justify-content: space-between;
-          margin-bottom: 16px;
-        }
-        .section-title {
-          font-size: ${TEXT.md}; font-weight: 700; color: ${C.ink};
-          display: flex; align-items: center; gap: 8px;
-        }
-        .section-link {
-          font-size: ${TEXT.sm}; color: ${C.primary}; font-weight: 600;
-          background: none; border: none; cursor: pointer;
-          font-family: ${FONT.sans}; padding: 0;
-          display: flex; align-items: center; gap: 4px;
-        }
-        .scroll-row {
-          display: flex;
-          gap: 14px;
-          overflow-x: auto; 
-          padding-bottom: 8px;
-           scrollbar-width: thin;
-        }
-        .scroll-row::-webkit-scrollbar { display: none; }
-        .rating-badge {
-          display: inline-flex; 
-          align-items: center;
-           gap: 3px;
-          font-size: 11px; 
-          font-weight: 700;
-           color: #f59e0b;
-          margin-top: 3px;
-        }
-        @media (min-width: 1024px) {
-          .home-layout {
-            display: grid;
-            grid-template-columns: 1fr 300px;
-            gap: 32px;
-            padding: 32px;
-          }
-          .home-sidebar { display: flex; flex-direction: column; gap: 24px; }
-          .home-main { min-width: 0; }
-          .mobile-only { display: none !important; }
-        }
-        @media (max-width: 1023px) {
-          .home-layout { display: contents; }
-          .home-sidebar { display: contents; }
-          .home-main { display: contents; }
-          .desktop-only { display: none !important; }
-        }
-        @media (min-width: 1024px) {
-            .scroll-row {
-            overflow-x: auto !important;
-            cursor: grab;
-
-            }
-            .scroll-row:active {
-              cursor: grabbing;
-            }
-          }
-      `}</style>
-
       <AppShell activeNav="home">
-        <div style={{ opacity: mounted ? 1 : 0, transition: 'opacity 0.3s ease' }}>
+        <div className="home-cine" style={{ ...homeThemeVars, opacity: mounted ? 1 : 0, transition: 'opacity 0.4s ease' }}>
 
+          {/* ─── HERO HEADER ──────────────────────────────────────────── */}
           <div style={{
-            padding: `${S.lg} ${S.md} ${S.sm}`,
-            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+            padding: '28px 20px 16px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            position: 'relative',
+            overflow: 'hidden',
           }}>
-            <div>
-              <div style={{ fontSize: TEXT.sm, color: C.muted, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <House size={14} color={C.muted} weight="fill" />
-                Home
+            {/* Film strip decoration (molto sottile) */}
+            <div className="film-strip" style={{ top: 0 }}>
+              {[...Array(30)].map((_, i) => (
+                <div key={i} className="sprocket" />
+              ))}
+            </div>
+
+            <div className="animate-in">
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '8px',
+              }}>
+                <FilmStrip size={14} color={P.gold} weight="fill" />
+                <span style={{
+                  fontSize: '11px',
+                  color: P.textFaint,
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  fontWeight: '500',
+                }}>
+                  {new Date().toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </span>
               </div>
-              <div style={{ fontSize: TEXT.xl, fontWeight: '800', color: C.ink, lineHeight: 1.2 }}>
-                Ciao {firstName}! 👋
+
+              <div style={{
+                fontFamily: FONT_DISPLAY,
+                fontSize: '32px',
+                fontWeight: '800',
+                color: P.text,
+                lineHeight: 1.15,
+                marginBottom: '4px',
+                letterSpacing: '-0.02em',
+              }}>
+                Ciao, {firstName} 👋
               </div>
-              <div style={{ fontSize: TEXT.base, color: C.muted, marginTop: '2px' }}>
-                Pronto a trovare il film <span style={{ color: C.primary, fontWeight: '600' }}>perfetto?</span>
+
+              <div style={{
+                fontSize: '15px',
+                color: P.textMuted,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                flexWrap: 'wrap',
+              }}>
+                <span>Pronto per il tuo</span>
+                <span style={{
+                  color: P.gold,
+                  fontWeight: '700',
+                  background: P.goldGlow,
+                  padding: '2px 12px',
+                  border: `1px solid ${P.gold}25`,
+                  fontSize: '14px',
+                }}>
+                  film perfetto
+                </span> 
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <button style={{
-                width: '40px', height: '40px', borderRadius: '50%',
-                background: C.bgSoft, border: `1.5px solid ${C.border}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer',
-              }}>
-                <Bell size={18} color={C.muted} weight="regular" />
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexShrink: 0 }} className="animate-in">
+              <button
+                onClick={toggleTheme}
+                style={{
+                  width: '38px', height: '38px',
+                  background: P.card,
+                  border: `1px solid ${P.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: P.text,
+                  transition: 'border-color 0.25s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = P.gold; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = P.border; }}
+              >
+                {isDark ? <Sun size={17} /> : <Moon size={17} />}
+              </button>
+              <button
+                style={{
+                  width: '38px', height: '38px',
+                  background: P.card,
+                  border: `1px solid ${P.border}`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.25s',
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = P.gold; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = P.border; }}
+              >
+                <Bell size={17} color={P.textMuted} weight="regular" />
               </button>
               <div
                 onClick={() => router.push('/profilo')}
                 style={{
-                  width: '40px', height: '40px', borderRadius: '50%',
-                  background: C.primaryLight,
+                  width: '38px', height: '38px',
+                  background: P.pink + '22',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: TEXT.md, fontWeight: '700', color: C.primary,
+                  fontSize: '15px', fontWeight: '700',
+                  color: P.pink,
                   cursor: 'pointer',
+                  border: `1px solid ${P.pink}30`,
+                  transition: 'border-color 0.25s, transform 0.2s',
                 }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = P.pink; e.currentTarget.style.transform = 'scale(1.05)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = P.pink + '30'; e.currentTarget.style.transform = 'scale(1)'; }}
               >
                 {displayName.charAt(0).toUpperCase()}
               </div>
@@ -308,116 +360,116 @@ export default function HomePage() {
           </div>
 
           <div className="home-layout">
-
             <div className="home-main">
 
-              {/* CTA stanza */}
-              <div style={{ padding: `${S.sm} ${S.md}` }} className="mobile-only">
-                <button
-                  onClick={handleCreateRoom}
-                  style={{
-                    width: '100%', padding: '16px',
-                    background: C.primary, color: '#fff',
-                    border: 'none', borderRadius: R.full,
-                    fontSize: TEXT.base, fontWeight: '700',
-                    cursor: 'pointer', fontFamily: FONT.sans,
-                    boxShadow: `0 4px 20px rgba(232,56,109,.3)`,
-                    display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', gap: '10px',
-                    marginBottom: '10px',
-                  }}
-                >
-                  <FilmSlate size={20} color="#fff" weight="fill" />
-                  Crea o entra in una stanza
-                </button>
-
-                {isGuest && (
-                  <button
-                    onClick={() => router.push('/auth')}
-                    style={{
-                      width: '100%', padding: '14px',
-                      background: 'transparent', color: C.primary,
-                      border: `1.5px solid ${C.primary}`,
-                      borderRadius: R.full, fontSize: TEXT.base,
-                      fontWeight: '600', cursor: 'pointer',
-                      fontFamily: FONT.sans,
-                      display: 'flex', alignItems: 'center',
-                      justifyContent: 'center', gap: '8px',
-                    }}
-                  >
-                    <SignIn size={18} color={C.primary} />
-                    Accedi o registrati
-                  </button>
-                )}
-              </div>
-
-              {/* Stanze recenti — mobile */}
-              <div style={{ padding: `${S.lg} ${S.md} ${S.sm}` }} className="mobile-only">
-                <div className="section-header">
-                  <span className="section-title">
-                    <Door size={18} color={C.primary} weight="fill" />
-                    Stanze recenti
-                  </span>
-                  {recentRooms.length > 0 && (
-                    <button className="section-link">
-                      Vedi tutte <ArrowRight size={14} />
-                    </button>
-                  )}
-                </div>
-
-                {recentRooms.length === 0 ? (
-                  <div style={{
-                    padding: S.lg, background: C.bgSoft,
-                    borderRadius: R.md, textAlign: 'center',
-                    border: `1.5px dashed ${C.border}`,
-                  }}>
-                    <FilmSlate size={32} color={C.faint} weight="duotone" style={{ marginBottom: S.sm }} />
-                    <div style={{ fontSize: TEXT.sm, color: C.muted, lineHeight: 1.6 }}>
-                      Nessuna stanza recente.<br />Creane una!
-                    </div>
-                  </div>
-                ) : (
-                  recentRooms.slice(0, 3).map((room) => (
-                    <div key={room.id} className="room-card" onClick={() => handleEnterRoom(room.id)}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: S.sm }}>
-                        <div style={{
-                          width: '42px', height: '42px', borderRadius: R.sm,
-                          background: C.primaryLight,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                          <FilmSlate size={20} color={C.primary} weight="duotone" />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: TEXT.sm, fontWeight: '700', color: C.ink, fontFamily: FONT.mono, letterSpacing: '1px' }}>
-                            {room.id}
-                          </div>
-                          <div style={{ fontSize: TEXT.xs, color: C.muted, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <Users size={12} color={C.muted} />
-                            {room.memberCount} {room.memberCount === 1 ? 'membro' : 'membri'}
-                          </div>
-                        </div>
+              {/* ─── FEATURE PILLS (desktop) ───────────────────────────── */}
+              <div className="desktop-only" style={{
+                padding: '8px 0 8px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '14px',
+              }}>
+                {FEATURES.map((f, i) => {
+                  const Icon = f.icon;
+                  return (
+                    <div key={f.title} className={`feature-pill animate-in animate-in-delay-${i + 1}`}>
+                      <div className="feature-pill-icon"><Icon size={19} color={P.pink} weight="fill" /></div>
+                      <div>
+                        <div className="feature-pill-title">{f.title}</div>
+                        <div className="feature-pill-desc">{f.desc}</div>
                       </div>
-                      <button className="btn-enter">
-                        Entra <ArrowRight size={14} />
-                      </button>
                     </div>
-                  ))
-                )}
+                  );
+                })}
               </div>
 
-              {/* Film trending TMDB */}
-              <div style={{ padding: `${S.lg} ${S.md} ${S.sm}` }}>
+              {/* ─── CTA MOBILE: "Crea la tua serata" ────────────────── */}
+              <div className="mobile-only" style={{ padding: '10px 20px 6px' }}>
+                <div className="ticket-card" style={{
+                  padding: '22px 20px',
+                  background: `linear-gradient(145deg, ${P.pinkDeep} 0%, ${P.pink} 70%, ${P.pink}20 100%)`,
+                  border: `1px solid ${P.pink}40`,
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '14px',
+                  flexWrap: 'wrap',
+                }}>
+                  <div style={{
+                    fontSize: '32px',
+                    width: '52px',
+                    height: '52px',
+                    background: 'rgba(255,255,255,0.08)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    flexShrink: 0,
+                  }}>
+                    🎬
+                  </div>
+                  <div style={{ flex: 1, minWidth: '160px' }}>
+                    <div style={{
+                      fontSize: '18px',
+                      fontWeight: '800',
+                      fontFamily: FONT_DISPLAY,
+                      marginBottom: '4px',
+                      letterSpacing: '-0.01em',
+                    }}>
+                      Crea la tua serata perfetta
+                    </div>
+                    <div style={{ fontSize: '13px', opacity: 0.85, lineHeight: 1.5, marginBottom: '14px' }}>
+                      Trova il film, invita i tuoi amici e goditi il cinema insieme.
+                    </div>
+                    <button
+                      onClick={handleCreateRoom}
+                      style={{
+                        background: '#fff',
+                        color: P.pinkDeep,
+                        border: 'none',
+                        padding: '10px 20px',
+                        fontSize: '13px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        fontFamily: FONT,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+                        transition: 'transform 0.2s',
+                      }}
+                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                    >
+                      Crea una stanza <ArrowRight size={14} weight="bold" />
+                    </button>
+                  </div>
+                  <div className="ticket-tear" style={{ background: P.bg }} />
+                </div>
+              </div>
+
+              {/* ─── TRENDING MOVIES ──────────────────────────────────── */}
+              <div style={{ padding: '18px 20px 6px' }}>
                 <div className="section-header">
                   <span className="section-title">
-                    <Star size={18} color={C.primary} weight="fill" />
+                    <span className="accent-line" />
+                    <Star size={17} color={P.gold} weight="fill" />
                     In tendenza questa settimana
                   </span>
-                  <button className="section-link">
-                    Vedi tutti <ArrowRight size={14} />
-                  </button>
+                  <button className="section-link">Vedi tutti <ArrowRight size={13} /></button>
                 </div>
 
                 {loadingTrending ? (
+                  <div className="scroll-row">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} style={{ flexShrink: 0, width: '148px' }}>
+                        <div className="skeleton" style={{ width: '148px', height: '222px' }} />
+                        <div className="skeleton" style={{ width: '100px', height: '12px', marginTop: '8px' }} />
+                        <div className="skeleton" style={{ width: '56px', height: '10px', marginTop: '4px' }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
                   <div
                     className="scroll-row"
                     ref={scrollRef}
@@ -426,201 +478,501 @@ export default function HomePage() {
                     onMouseUp={onMouseUp}
                     onMouseMove={onMouseMove}
                   >
-                    
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <div key={i} style={{ flexShrink: 0, width: '120px' }}>
-                        <div className="skeleton" style={{ width: '120px', height: '180px' }} />
-                        <div className="skeleton" style={{ width: '80px', height: '12px', marginTop: '8px' }} />
-                        <div className="skeleton" style={{ width: '50px', height: '10px', marginTop: '4px' }} />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="scroll-row">
-                    {trending.map((movie, i) => (
-                      <div
-                        key={movie.id}
-                        className="movie-card-scroll"
-                        onClick={() => router.push(`/film/${movie.tmdb_id}`)}
-                      >
-                        <div style={{ position: 'relative' }}>
-                          <img
-                            src={movie.cover ?? 'https://placehold.co/120x180/f0f0f0/aaa?text=🎬'}
-                            alt={movie.title}
-                            loading="lazy"
-                          />
-                          {/* Badge top 3 */}
-                          {i < 3 && (
+                    {trending.map((movie, i) => {
+                      const rating = movie.rating || 0;
+                      const fullStars = Math.round(rating / 2);
+                      const emptyStars = 5 - fullStars;
+                      const starString = '★'.repeat(fullStars) + '☆'.repeat(emptyStars);
+                      const isTop = i < 3;
+
+                      return (
+                        <div
+                          key={movie.id}
+                          className="movie-card-scroll"
+                          onClick={() => router.push(`/film/${movie.tmdb_id}`)}
+                        >
+                          <div style={{ position: 'relative' }}>
+                            <img
+                              src={movie.cover ?? 'https://placehold.co/148x222/1c1613/7a6b60?text=🎬'}
+                              alt={movie.title}
+                              loading="lazy"
+                            />
+                            <div className={`movie-badge ${isTop ? 'top' : ''}`}>
+                              {isTop ? '🏆' : i + 1}
+                            </div>
+                            {isTop && (
+                              <div style={{
+                                position: 'absolute',
+                                bottom: '6px',
+                                right: '6px',
+                                background: P.gold,
+                                color: P.bg,
+                                fontSize: '7px',
+                                fontWeight: '800',
+                                padding: '1px 8px',
+                                letterSpacing: '0.08em',
+                                textTransform: 'uppercase',
+                                opacity: 0.9,
+                              }}>
+                                Top
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ marginTop: '8px' }}>
                             <div style={{
-                              position: 'absolute', top: '6px', left: '6px',
-                              background: C.primary, color: '#fff',
-                              borderRadius: R.full, width: '22px', height: '22px',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '11px', fontWeight: '800',
+                              fontSize: '12.5px',
+                              fontWeight: '600',
+                              color: P.text,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              letterSpacing: '-0.01em',
                             }}>
-                              {i + 1}
+                              {movie.title}
                             </div>
-                          )}
-                        </div>
-                        <div style={{ marginTop: '8px' }}>
-                          <div style={{
-                            fontSize: '12px', fontWeight: '600', color: C.ink,
-                            overflow: 'hidden', textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}>
-                            {movie.title}
+                            <div style={{ fontSize: '11px', color: P.textFaint }}>{movie.year}</div>
+                            {movie.rating > 0 && (
+                              <div className="movie-rating-stars">
+                                <span className="stars">{starString}</span>
+                                <span className="num">{movie.rating.toFixed(1)}</span>
+                              </div>
+                            )}
                           </div>
-                          <div style={{ fontSize: '11px', color: C.muted }}>
-                            {movie.year}
-                          </div>
-                          {movie.rating > 0 && (
-                            <div className="rating-badge">
-                              <Star size={10} color="#f59e0b" weight="fill" />
-                              {movie.rating.toFixed(1)}
-                            </div>
-                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
+              </div>
+
+              {/* ─── CODICE STANZA (mobile) ───────────────────────────── */}
+              <div className="mobile-only" style={{ padding: '8px 20px 4px' }}>
+                <div className="ticket-card" style={{ padding: '18px 18px 20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                    <div className="how-icon"><Door size={18} color={P.pink} weight="fill" /></div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: P.text }}>Hai un codice stanza?</div>
+                      <div style={{ fontSize: '12px', color: P.textFaint }}>Entra direttamente nella tua stanza</div>
+                    </div>
+                  </div>
+                  <form onSubmit={handleJoinByCode} style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      className="code-input"
+                      value={codeInput}
+                      onChange={(e) => { setCodeInput(e.target.value); setCodeError(''); }}
+                      placeholder="Inserisci il codice"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                    <button type="submit" className="code-submit">Entra</button>
+                  </form>
+                  {codeError && <div style={{ fontSize: '11.5px', color: P.pink, marginTop: '8px' }}>{codeError}</div>}
+                  <div className="ticket-tear" style={{ background: P.bg }} />
+                </div>
+              </div>
+
+              {/* ─── SPUNTI PER TE ────────────────────────────────────── */}
+              <div style={{ padding: '16px 20px 4px' }}>
+                <div className="section-header">
+                  <div>
+                    <span className="section-title">
+                      <span className="accent-line" />
+                      <Sparkle size={17} color={P.gold} weight="fill" />
+                      Spunti per te
+                    </span>
+                    <div style={{ fontSize: '12.5px', color: P.textFaint, marginTop: '2px' }}>
+                      Scopri nuove idee in base ai tuoi gusti
+                    </div>
+                  </div> 
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '14px' }}>
+                  {SUGGESTIONS.map((s, i) => {
+                    const Icon = s.icon;
+                    return (
+                      <div key={s.title} className={`suggestion-card animate-in animate-in-delay-${i + 1}`}>
+                        <div className="suggestion-icon"><Icon size={19} color={P.pink} weight="fill" /></div>
+                        <div>
+                          <div className="suggestion-title">{s.title}</div>
+                          <div className="suggestion-desc">{s.desc}</div>
+                        </div>
+                        <span className="suggestion-more">
+                          Scopri di più <ArrowRight size={12} weight="bold" />
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ─── COME FUNZIONA (mobile) ──────────────────────────── */}
+              <div className="mobile-only" style={{ padding: '16px 20px 4px' }}>
+                <div className="section-header">
+                  <span className="section-title">
+                    <span className="accent-line" />
+                    Come funziona
+                  </span>
+                  <button className="section-link">Vedi tutto <ArrowRight size={13} /></button>
+                </div>
+                <div className="ticket-card" style={{ padding: '2px 18px 18px' }}>
+                  {FEATURES.map((f) => {
+                    const Icon = f.icon;
+                    return (
+                      <div key={f.title} className="how-row">
+                        <div className="how-icon"><Icon size={18} color={P.pink} weight="fill" /></div>
+                        <div>
+                          <div className="how-title">{f.title}</div>
+                          <div className="how-desc">{f.desc}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="ticket-tear" style={{ background: P.bg }} />
+                </div>
+              </div>
+
+              {/* ─── BANNER FINALE ────────────────────────────────────── */}
+              <div style={{ padding: '16px 20px 24px' }}>
+                <div className="ticket-card" style={{
+                  padding: '24px 22px',
+                  background: `linear-gradient(130deg, ${P.pinkDeep} 0%, ${P.bg} 80%)`,
+                  border: `1px solid ${P.pink}30`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '18px',
+                  flexWrap: 'wrap',
+                }}>
+                  <div style={{
+                    width: '52px',
+                    height: '52px',
+                    background: 'rgba(255,255,255,0.06)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '26px',
+                    flexShrink: 0,
+                    border: '1px solid rgba(255,255,255,0.04)',
+                  }}>
+                    🍿
+                  </div>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{
+                      fontSize: '20px',
+                      fontWeight: '800',
+                      fontFamily: FONT_DISPLAY,
+                      color: '#fff',
+                      marginBottom: '4px',
+                      letterSpacing: '-0.01em',
+                    }}>
+                      Il cinema è meglio insieme
+                    </div>
+                    <div style={{
+                      fontSize: '13px',
+                      color: 'rgba(255,255,255,0.75)',
+                      lineHeight: 1.6,
+                      marginBottom: '14px',
+                      maxWidth: '460px',
+                    }}>
+                      Crea una stanza, invita i tuoi amici e iniziate subito a guardare qualcosa di straordinario.
+                    </div>
+                    <button
+                      onClick={handleCreateRoom}
+                      style={{
+                        background: P.gold,
+                        color: P.bg,
+                        border: 'none',
+                        padding: '11px 22px',
+                        fontSize: '13px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        fontFamily: FONT,
+                        boxShadow: `0 4px 20px ${P.gold}30`,
+                        transition: 'transform 0.2s, box-shadow 0.3s',
+                        letterSpacing: '0.02em',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'scale(1.03)';
+                        e.currentTarget.style.boxShadow = `0 8px 28px ${P.gold}50`;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = `0 4px 20px ${P.gold}30`;
+                      }}
+                    >
+                      Crea una stanza
+                    </button>
+                  </div>
+                  <div className="ticket-tear" style={{ background: P.bg }} />
+                </div>
               </div>
 
             </div>
 
-            <div className="home-sidebar desktop-only">
+            {/* ─── SIDEBAR DESKTOP ────────────────────────────────────── */}
+            <div className="home-sidebar desktop-only" style={{ paddingTop: '12px' }}>
 
-              {/* CTA stanza */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <button
-                  onClick={handleCreateRoom}
-                  style={{
-                    width: '100%', padding: '14px',
-                    background: C.primary, color: '#fff',
-                    border: 'none', borderRadius: R.full,
-                    fontSize: TEXT.sm, fontWeight: '700',
-                    cursor: 'pointer', fontFamily: FONT.sans,
-                    boxShadow: `0 4px 16px rgba(232,56,109,.25)`,
-                    display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', gap: '8px',
-                  }}
-                >
-                  <FilmSlate size={18} color="#fff" weight="fill" />
-                  Crea una stanza
-                </button>
-              </div><div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <button
-                  onClick={handleJoinRoom}
-                  style={{
-                    width: '100%', padding: '14px',
-                    background: C.primary, color: '#fff',
-                    border: 'none', borderRadius: R.full,
-                    fontSize: TEXT.sm, fontWeight: '700',
-                    cursor: 'pointer', fontFamily: FONT.sans,
-                    boxShadow: `0 4px 16px rgba(232,56,109,.25)`,
-                    display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', gap: '8px',
-                  }}
-                >
-                  <Door size={18} color="#fff" weight="fill" />
-                  Hai un codice stanza? Entra
-                </button>
-              </div>
+              <button
+                onClick={handleCreateRoom}
+                style={{
+                  width: '100%',
+                  padding: '14px',
+                  background: P.gold,
+                  color: P.bg,
+                  border: 'none',
+                  fontSize: '13.5px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  fontFamily: FONT,
+                  boxShadow: `0 4px 16px ${P.gold}25`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'transform 0.2s, box-shadow 0.3s',
+                  letterSpacing: '0.02em',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'scale(1.02)';
+                  e.currentTarget.style.boxShadow = `0 8px 28px ${P.gold}40`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'scale(1)';
+                  e.currentTarget.style.boxShadow = `0 4px 16px ${P.gold}25`;
+                }}
+              >
+                <FilmSlate size={18} color={P.bg} weight="fill" /> Crea una stanza
+              </button>
 
-              {/* Stanze recenti desktop */}
-              <div style={{
-                background: C.bg, borderRadius: R.lg,
-                border: `1.5px solid ${C.border}`, padding: S.md,
-              }}>
-                <div className="section-header" style={{ marginBottom: S.sm }}>
-                  <span style={{ fontSize: TEXT.base, fontWeight: '700', color: C.ink, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Door size={16} color={C.primary} weight="fill" />
-                    Stanze recenti
-                  </span>
+              <button
+                onClick={handleJoinRoom}
+                style={{
+                  width: '100%',
+                  padding: '13px',
+                  background: 'transparent',
+                  color: P.gold,
+                  border: `1.5px solid ${P.gold}60`,
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  fontFamily: FONT,
+                  marginTop: '-8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'background 0.25s, color 0.25s, border-color 0.25s',
+                  letterSpacing: '0.02em',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = P.gold + '15';
+                  e.currentTarget.style.borderColor = P.gold;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.borderColor = P.gold + '60';
+                }}
+              >
+                <Door size={17} color={P.gold} weight="fill" /> Hai un codice? Entra
+              </button>
+
+              <div className="ticket-card" style={{ padding: '16px' }}>
+                <div style={{
+                  fontSize: '13.5px',
+                  fontWeight: '700',
+                  color: P.text,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '12px',
+                  letterSpacing: '-0.01em',
+                }}>
+                  <Clock size={16} color={P.gold} weight="fill" />
+                  Stanze recenti
                 </div>
 
                 {recentRooms.length === 0 ? (
-                  <div style={{ fontSize: TEXT.xs, color: C.muted, textAlign: 'center', padding: `${S.sm} 0` }}>
+                  <div style={{
+                    fontSize: '12px',
+                    color: P.textFaint,
+                    textAlign: 'center',
+                    padding: '12px 0',
+                    fontStyle: 'italic',
+                  }}>
                     Nessuna stanza recente
                   </div>
                 ) : (
-                  recentRooms.slice(0, 4).map((room) => (
-                    <div
-                      key={room.id}
-                      className="room-card"
-                      onClick={() => handleEnterRoom(room.id)}
-                      style={{ marginBottom: '8px' }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <FilmSlate size={18} color={C.primary} weight="duotone" />
-                        <span style={{ fontSize: TEXT.xs, fontWeight: '700', fontFamily: FONT.mono, letterSpacing: '1px' }}>
-                          {room.id}
-                        </span>
+                  <>
+                    {recentRooms.slice(0, 4).map((room) => (
+                      <div key={room.id} className="room-card" onClick={() => handleEnterRoom(room.id)}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <div style={{
+                            width: '28px',
+                            height: '28px',
+                            background: P.pink + '18',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}>
+                            <FilmSlate size={14} color={P.pink} weight="fill" />
+                          </div>
+                          <span style={{
+                            fontSize: '12px',
+                            fontWeight: '700',
+                            fontFamily: FONT_MONO,
+                            letterSpacing: '1px',
+                            color: P.text,
+                          }}>
+                            {room.id}
+                          </span>
+                        </div>
+                        <button className="btn-enter">Entra</button>
                       </div>
-                      <button className="btn-enter" style={{ padding: '5px 12px', fontSize: '11px' }}>
-                        Entra
-                      </button>
-                    </div>
-                  ))
+                    ))}
+                    <button className="section-link" style={{ marginTop: '6px', fontSize: '12px' }}>
+                      Vedi tutte le stanze <ArrowRight size={12} />
+                    </button>
+                  </>
                 )}
+                <div className="ticket-tear" style={{ background: P.bg }} />
               </div>
 
-              {/* Banner ospite desktop */}
               {isGuest && (
-                <div style={{
-                  background: `linear-gradient(135deg, ${C.primary} 0%, #c0254f 100%)`,
-                  borderRadius: R.lg, padding: S.md, color: '#fff',
+                <div className="ticket-card" style={{
+                  padding: '18px',
+                  background: `linear-gradient(135deg, ${P.pinkDeep} 0%, ${P.pink} 100%)`,
+                  border: `1px solid ${P.pink}30`,
+                  color: '#fff',
                 }}>
-                  <div style={{ fontSize: TEXT.base, fontWeight: '700', marginBottom: '6px' }}>
+                  <div style={{ fontSize: '15px', fontWeight: '800', fontFamily: FONT_DISPLAY, marginBottom: '4px' }}>
                     Registrati 🚀
                   </div>
-                  <div style={{ fontSize: TEXT.xs, opacity: 0.85, lineHeight: 1.5, marginBottom: S.sm }}>
+                  <div style={{ fontSize: '12px', opacity: 0.85, lineHeight: 1.5, marginBottom: '14px' }}>
                     Salva i match e scrivi recensioni.
                   </div>
                   <button
                     onClick={() => router.push('/auth')}
                     style={{
-                      background: '#fff', color: C.primary, border: 'none',
-                      borderRadius: R.full, padding: '9px 18px',
-                      fontSize: TEXT.xs, fontWeight: '700',
-                      cursor: 'pointer', fontFamily: FONT.sans,
+                      background: '#fff',
+                      color: P.pinkDeep,
+                      border: 'none',
+                      padding: '10px 18px',
+                      fontSize: '12.5px',
+                      fontWeight: '700',
+                      cursor: 'pointer',
+                      fontFamily: FONT,
+                      transition: 'transform 0.2s',
                     }}
+                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                   >
                     Crea account gratuito
                   </button>
+                  <div className="ticket-tear" style={{ background: P.bg }} />
                 </div>
               )}
-
             </div>
           </div>
 
-          {/* Banner ospite mobile */}
+          {/* ─── BANNER OSPITE (mobile) ────────────────────────────── */}
           {isGuest && (
-            <div style={{ padding: `0 ${S.md} ${S.lg}` }} className="mobile-only">
-              <div style={{
-                background: `linear-gradient(135deg, ${C.primary} 0%, #c0254f 100%)`,
-                borderRadius: R.lg, padding: S.lg, color: '#fff',
+            <div className="mobile-only" style={{ padding: '0 20px 20px' }}>
+              <div className="ticket-card" style={{
+                padding: '20px 18px',
+                background: `linear-gradient(135deg, ${P.pinkDeep} 0%, ${P.pink} 100%)`,
+                border: `1px solid ${P.pink}30`,
+                color: '#fff',
               }}>
-                <div style={{ fontSize: TEXT.md, fontWeight: '700', marginBottom: '6px' }}>
+                <div style={{ fontSize: '16px', fontWeight: '800', fontFamily: FONT_DISPLAY, marginBottom: '4px' }}>
                   Registrati per fare di più 🚀
                 </div>
-                <div style={{ fontSize: TEXT.sm, opacity: 0.85, lineHeight: 1.5, marginBottom: S.md }}>
+                <div style={{ fontSize: '13px', opacity: 0.85, lineHeight: 1.5, marginBottom: '14px' }}>
                   Salva i match, scrivi recensioni e accedi alle stanze recenti.
                 </div>
                 <button
                   onClick={() => router.push('/auth')}
                   style={{
-                    background: '#fff', color: C.primary, border: 'none',
-                    borderRadius: R.full, padding: '11px 24px',
-                    fontSize: TEXT.sm, fontWeight: '700',
-                    cursor: 'pointer', fontFamily: FONT.sans,
+                    background: '#fff',
+                    color: P.pinkDeep,
+                    border: 'none',
+                    padding: '10px 22px',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    fontFamily: FONT,
+                    transition: 'transform 0.2s',
                   }}
+                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                 >
                   Crea account gratuito
                 </button>
+                <div className="ticket-tear" style={{ background: P.bg }} />
               </div>
             </div>
           )}
+
+          {/* ─── FOOTER ────────────────────────────────────────────────── */}
+          {false && <div className="footer-cine">
+            <div className="footer-grid">
+              <div>
+                <div style={{
+                  fontSize: '16px',
+                  fontWeight: '800',
+                  color: P.text,
+                  marginBottom: '10px',
+                  fontFamily: FONT_DISPLAY,
+                  letterSpacing: '-0.01em',
+                }}>
+                  CINE<span style={{ color: P.pink }}>DATE</span>
+                </div>
+                <div style={{
+                  fontSize: '12.5px',
+                  color: P.textFaint,
+                  lineHeight: 1.7,
+                  maxWidth: '200px',
+                  fontStyle: 'italic',
+                }}>
+                  "Il cinema, in compagnia. Trova il film perfetto, insieme."
+                </div>
+              </div>
+              <div>
+                <div className="footer-col-title">Navigazione</div>
+                <div className="footer-link">Come funziona</div>
+                <div className="footer-link">Recensioni</div>
+                <div className="footer-link" onClick={() => router.push('/cinema')}>Cinema vicino a te</div>
+              </div>
+              <div>
+                <div className="footer-col-title">Legal</div>
+                <div className="footer-link">Termini di servizio</div>
+                <div className="footer-link">Privacy policy</div>
+                <div className="footer-link">Cookie policy</div>
+              </div>
+              <div>
+                <div className="footer-col-title">Seguici</div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <div className="footer-social"><InstagramLogo size={15} color={P.textMuted} /></div>
+                  <div className="footer-social"><TiktokLogo size={15} color={P.textMuted} /></div>
+                  <div className="footer-social"><XLogo size={15} color={P.textMuted} /></div>
+                </div>
+                <div style={{ marginTop: '16px', fontSize: '11px', color: P.textFaint, lineHeight: 1.6 }}>
+                  <Heart size={12} color={P.pink} weight="fill" style={{ display: 'inline', marginRight: '4px' }} />
+                  Fatto con passione per chi ama il cinema
+                </div>
+              </div>
+            </div>
+            <div style={{
+              fontSize: '11px',
+              color: P.textFaint,
+              textAlign: 'center',
+              marginTop: '28px',
+              letterSpacing: '0.04em',
+              borderTop: `1px solid ${P.border}30`,
+              paddingTop: '18px',
+            }}>
+              © 2026 CineDate — Tutti i diritti riservati
+            </div>
+          </div>}
 
         </div>
       </AppShell>

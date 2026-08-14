@@ -5,7 +5,7 @@ import { useRouter } from 'next/router';
 import AppShell from '@/components/layout/AppShell';
 import { useAuth } from '@/hooks/useAuth';
 import { createBrowserClient } from '@/utils/supabase/browser';
-import { C, R, FONT, TEXT, S, SHADOW, input } from '@/styles/token';
+import { useTheme } from '@/context/ThemeContext';
 import {
   Camera,
   Check,
@@ -15,6 +15,50 @@ import {
   User,
   Warning,
 } from '@phosphor-icons/react';
+
+// ─── Palette dark "cinema elegante" ──────────────────────────────────────
+const D = {
+  bg: '#0a0806',
+  bgSoft: '#14100e',
+  card: '#1c1613',
+  cardHover: '#241d19',
+  border: '#2d221c',
+  gold: '#f5b92f',
+  goldSoft: '#ffd875',
+  goldGlow: 'rgba(245,185,47,0.12)',
+  pink: '#ed3d73',
+  pinkDeep: '#8e1740',
+  pinkGlow: 'rgba(237,61,115,0.15)',
+  text: '#f0ebe6',
+  textMuted: '#b5a89e',
+  textFaint: '#7a6b60',
+  error: '#ef4444',
+  success: '#22c55e',
+};
+
+// ─── Palette light "cinema elegante" ──────────────────────────────────────
+const L = {
+  bg: '#f5efe8',
+  bgSoft: '#ece3d9',
+  card: '#ffffff',
+  cardHover: '#faf5ef',
+  border: '#d6cbbc',
+  gold: '#b8860b',
+  goldSoft: '#e8c84a',
+  goldGlow: 'rgba(184,134,11,0.10)',
+  pink: '#b83060',
+  pinkDeep: '#8a1d44',
+  pinkGlow: 'rgba(184,48,96,0.10)',
+  text: '#1f1a16',
+  textMuted: '#5c5248',
+  textFaint: '#8a7c6e',
+  error: '#dc2626',
+  success: '#16a34a',
+};
+
+const FONT_SANS = "'Inter','Helvetica Neue',sans-serif";
+const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
+const FONT_MONO = "'JetBrains Mono','Courier New',monospace";
 
 type ProfileRow = {
   username: string | null;
@@ -47,6 +91,9 @@ export default function ProfiloPage() {
   const { currentUser, isGuest, isLoading, signOut } = useAuth();
   const supabase = useRef(createBrowserClient()).current;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const P = isDark ? D : L;
 
   const [profileLoading, setProfileLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -212,140 +259,111 @@ export default function ProfiloPage() {
 
   if (isLoading || profileLoading || !currentUser || isGuest) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <FilmSlate size={42} color={C.primary} weight="duotone" />
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: P.bg }}>
+        <FilmSlate size={42} color={P.pink} weight="duotone" />
       </div>
     );
   }
 
+  const inputStyle: React.CSSProperties = {
+    padding: '13px 16px',
+    border: `1px solid ${P.border}`,
+    borderRadius: 0,
+    fontSize: '15px',
+    fontFamily: FONT_SANS,
+    color: P.text,
+    background: P.bgSoft,
+    outline: 'none',
+    width: '100%',
+    boxSizing: 'border-box',
+    transition: 'border-color 0.15s ease',
+  };
+
   return (
     <>
       <style>{`
-        .profile-page {
-          min-height: 100vh;
-          background: ${C.bgSoft};
-          padding: ${S.lg} ${S.md};
-          font-family: ${FONT.sans};
-        }
-        .profile-wrap {
-          width: 100%;
-          max-width: 920px;
-          margin: 0 auto;
-          display: grid;
-          gap: 18px;
-        }
-        .profile-panel {
-          background: ${C.bg};
-          border: 1.5px solid ${C.border};
-          border-radius: ${R.lg};
-          box-shadow: ${SHADOW.sm};
-        }
-        .profile-main {
-          display: grid;
-          grid-template-columns: 260px 1fr;
-          gap: 22px;
-          padding: ${S.lg};
-        }
-        .profile-field {
-          display: flex;
-          flex-direction: column;
-          gap: 7px;
-        }
-        .profile-label {
-          font-size: ${TEXT.xs};
-          color: ${C.muted};
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0;
-        }
-        .profile-input:focus, .profile-textarea:focus {
-          border-color: ${C.primary};
-        }
-        .genre-chip {
-          border: 1.5px solid ${C.border};
-          background: ${C.bg};
-          color: ${C.muted};
-          border-radius: ${R.full};
-          padding: 10px 14px;
-          font-size: ${TEXT.sm};
-          font-weight: 700;
-          font-family: ${FONT.sans};
-          cursor: pointer;
-          transition: background .15s, border-color .15s, color .15s;
-        }
-        .genre-chip.active {
-          background: ${C.primaryLight};
-          border-color: ${C.primary};
-          color: ${C.primary};
-        }
-        .profile-action {
-          border: none;
-          border-radius: ${R.full};
-          padding: 13px 18px;
-          font-size: ${TEXT.sm};
-          font-weight: 800;
-          font-family: ${FONT.sans};
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          transition: opacity .15s, transform .15s;
-        }
-        .profile-action:hover {
-          transform: translateY(-1px);
-        }
-        .profile-action:disabled {
-          opacity: .55;
-          cursor: not-allowed;
-          transform: none;
-        }
-        @media (max-width: 720px) {
-          .profile-page {
-            padding: ${S.lg} ${S.md} ${S.sm};
-          }
-          .profile-main {
-            grid-template-columns: 1fr;
-            padding: ${S.md};
-          }
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,400&display=swap');
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
       `}</style>
 
       <AppShell activeNav="profilo">
-        <main className="profile-page">
-          <div className="profile-wrap">
-            <header style={{ display: 'flex', justifyContent: 'space-between', gap: S.md, alignItems: 'flex-start' }}>
+        <main style={{
+          minHeight: '100vh',
+          background: P.bgSoft,
+          padding: '24px 16px',
+          fontFamily: FONT_SANS,
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: 920,
+            margin: '0 auto',
+            display: 'grid',
+            gap: 18,
+          }}>
+            <header style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
               <div>
-                <div style={{ fontSize: TEXT.sm, color: C.muted, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <User size={15} color={C.muted} weight="fill" />
+                <div style={{ fontSize: '13px', color: P.textMuted, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <User size={15} color={P.textMuted} weight="fill" />
                   Profilo
                 </div>
-                <h1 style={{ fontSize: TEXT.xxl, color: C.ink, marginTop: '6px', lineHeight: 1.15 }}>
+                <h1 style={{
+                  fontSize: '32px',
+                  color: P.text,
+                  marginTop: '6px',
+                  lineHeight: 1.15,
+                  fontFamily: FONT_DISPLAY,
+                  fontWeight: 800,
+                }}>
                   @{username || 'utente'}
                 </h1>
-                <p style={{ color: C.muted, fontSize: TEXT.base, marginTop: '6px', lineHeight: 1.5 }}>
+                <p style={{ color: P.textMuted, fontSize: '15px', marginTop: '6px', lineHeight: 1.5 }}>
                   Identita, bio e preferenze film.
                 </p>
               </div>
 
               <button
                 onClick={handleLogout}
-                className="profile-action"
-                style={{ background: C.bg, color: C.error, border: `1.5px solid ${C.errorLight}` }}
+                style={{
+                  background: P.card,
+                  color: P.error,
+                  border: `1px solid ${P.error}40`,
+                  borderRadius: 0,
+                  padding: '13px 18px',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  fontFamily: FONT_SANS,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  transition: 'background 0.15s, transform 0.15s',
+                }}
               >
                 <SignOut size={18} weight="bold" />
                 Logout
               </button>
             </header>
 
-            <section className="profile-panel profile-main">
-              <aside style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: S.md }}>
+            <section style={{
+              background: P.card,
+              border: `1px solid ${P.border}`,
+              borderRadius: 0,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              display: 'grid',
+              gridTemplateColumns: '260px 1fr',
+              gap: 22,
+              padding: 24,
+            }}>
+              <aside style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
                 <div
                   style={{
                     width: '148px',
                     height: '148px',
                     borderRadius: '50%',
-                    background: visibleAvatarUrl ? C.borderSoft : fallbackColor,
+                    background: visibleAvatarUrl ? P.border : fallbackColor,
                     overflow: 'hidden',
                     display: 'flex',
                     alignItems: 'center',
@@ -353,7 +371,7 @@ export default function ProfiloPage() {
                     color: '#fff',
                     fontSize: '52px',
                     fontWeight: 900,
-                    boxShadow: SHADOW.md,
+                    boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
                   }}
                 >
                   {visibleAvatarUrl ? (
@@ -378,24 +396,38 @@ export default function ProfiloPage() {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploading}
-                  className="profile-action"
-                  style={{ background: C.primaryLight, color: C.primary }}
+                  style={{
+                    background: P.pinkGlow,
+                    color: P.pink,
+                    border: 'none',
+                    borderRadius: 0,
+                    padding: '10px 16px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    fontFamily: FONT_SANS,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    transition: 'opacity 0.15s, transform 0.15s',
+                  }}
                 >
                   <Camera size={18} weight="bold" />
                   {uploading ? 'Upload...' : 'Cambia avatar'}
                 </button>
 
-                <div style={{ textAlign: 'center', maxWidth: '220px' }}>
-                  <div style={{ fontSize: TEXT.sm, color: C.ink, fontWeight: 800 }}>
+                <div style={{ textAlign: 'center', maxWidth: 220 }}>
+                  <div style={{ fontSize: '13px', color: P.text, fontWeight: 700 }}>
                     {email}
                   </div>
-
                 </div>
               </aside>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: S.md }}>
-                <label className="profile-field">
-                  <span className="profile-label">Username</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <span style={{ fontSize: '11px', color: P.textMuted, fontWeight: 700, textTransform: 'uppercase' }}>
+                    Username
+                  </span>
                   <div style={{ position: 'relative' }}>
                     <span
                       style={{
@@ -403,14 +435,14 @@ export default function ProfiloPage() {
                         left: '14px',
                         top: '50%',
                         transform: 'translateY(-50%)',
-                        color: C.muted,
+                        color: P.textMuted,
                         fontWeight: 800,
+                        fontFamily: FONT_SANS,
                       }}
                     >
                       @
                     </span>
                     <input
-                      className="profile-input"
                       value={username}
                       onChange={(event) => {
                         setUsername(normalizeUsername(event.target.value));
@@ -422,24 +454,36 @@ export default function ProfiloPage() {
                       autoCapitalize="none"
                       autoCorrect="off"
                       spellCheck={false}
-                      style={{ ...input.base, paddingLeft: '32px', fontWeight: 800 }}
+                      style={{
+                        ...inputStyle,
+                        paddingLeft: '32px',
+                        fontWeight: 800,
+                      }}
                     />
                   </div>
                 </label>
 
-                <label className="profile-field">
-                  <span className="profile-label">Email</span>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <span style={{ fontSize: '11px', color: P.textMuted, fontWeight: 700, textTransform: 'uppercase' }}>
+                    Email
+                  </span>
                   <input
                     value={email}
                     disabled
-                    style={{ ...input.base, color: C.muted, background: C.bgSoft }}
+                    style={{
+                      ...inputStyle,
+                      color: P.textMuted,
+                      background: P.bgSoft,
+                      cursor: 'not-allowed',
+                    }}
                   />
                 </label>
 
-                <label className="profile-field">
-                  <span className="profile-label">Bio</span>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <span style={{ fontSize: '11px', color: P.textMuted, fontWeight: 700, textTransform: 'uppercase' }}>
+                    Bio
+                  </span>
                   <textarea
-                    className="profile-textarea"
                     value={bio}
                     onChange={(event) => {
                       setBio(event.target.value.slice(0, 220));
@@ -448,20 +492,22 @@ export default function ProfiloPage() {
                     placeholder="Racconta che tipo di film cerchi..."
                     rows={5}
                     style={{
-                      ...input.base,
+                      ...inputStyle,
                       minHeight: '126px',
                       resize: 'vertical',
                       lineHeight: 1.55,
                     }}
                   />
-                  <span style={{ fontSize: TEXT.xs, color: C.faint, alignSelf: 'flex-end' }}>
+                  <span style={{ fontSize: '11px', color: P.textFaint, alignSelf: 'flex-end' }}>
                     {bio.length}/220
                   </span>
                 </label>
 
-                <div className="profile-field">
-                  <span className="profile-label">Generi preferiti</span>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '9px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <span style={{ fontSize: '11px', color: P.textMuted, fontWeight: 700, textTransform: 'uppercase' }}>
+                    Generi preferiti
+                  </span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9 }}>
                     {GENRES.map((genre) => {
                       const selected = favoriteGenres.includes(genre);
                       return (
@@ -469,9 +515,22 @@ export default function ProfiloPage() {
                           key={genre}
                           type="button"
                           onClick={() => toggleGenre(genre)}
-                          className={`genre-chip${selected ? ' active' : ''}`}
+                          style={{
+                            border: `1px solid ${selected ? P.pink : P.border}`,
+                            background: selected ? P.pinkGlow : 'transparent',
+                            color: selected ? P.pink : P.textMuted,
+                            borderRadius: 0,
+                            padding: '10px 14px',
+                            fontSize: '13px',
+                            fontWeight: 700,
+                            fontFamily: FONT_SANS,
+                            cursor: 'pointer',
+                            transition: 'background 0.15s, border-color 0.15s, color 0.15s',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                          }}
                         >
-                          {selected && <Check size={13} weight="bold" style={{ marginRight: '5px', verticalAlign: '-2px' }} />}
+                          {selected && <Check size={13} weight="bold" style={{ marginRight: 5, verticalAlign: -2 }} />}
                           {genre}
                         </button>
                       );
@@ -484,13 +543,14 @@ export default function ProfiloPage() {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
-                      borderRadius: R.md,
+                      gap: 8,
+                      borderRadius: 0,
                       padding: '12px 14px',
-                      fontSize: TEXT.sm,
-                      color: error ? C.error : C.success,
-                      background: error ? C.errorLight : C.successLight,
+                      fontSize: '13px',
+                      color: error ? P.error : P.success,
+                      background: error ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)',
                       fontWeight: 700,
+                      border: `1px solid ${error ? P.error : P.success}40`,
                     }}
                   >
                     {error ? <Warning size={17} weight="fill" /> : <Check size={17} weight="bold" />}
@@ -501,8 +561,23 @@ export default function ProfiloPage() {
                 <button
                   onClick={saveProfile}
                   disabled={saving || uploading}
-                  className="profile-action"
-                  style={{ background: C.primary, color: '#fff', boxShadow: '0 4px 16px rgba(232,56,109,.25)' }}
+                  style={{
+                    background: P.pink,
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 0,
+                    padding: '13px 18px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    fontFamily: FONT_SANS,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    boxShadow: `0 4px 16px ${P.pinkGlow}`,
+                    transition: 'opacity 0.15s, transform 0.15s',
+                  }}
                 >
                   <FloppyDisk size={18} weight="bold" />
                   {saving ? 'Salvataggio...' : 'Salva profilo'}

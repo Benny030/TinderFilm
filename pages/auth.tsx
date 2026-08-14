@@ -4,20 +4,73 @@ import { useState, useEffect, useRef, type FormEvent } from 'react';
 import { useRouter } from 'next/router';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import { useAuth } from '@/hooks/useAuth';
-import { C, R, FONT, TEXT, S, SHADOW, btn, input } from '@/styles/token';
-import { SignOut} from '@phosphor-icons/react';
+import { useTheme } from '@/context/ThemeContext';
+import {
+  SignOut,
+  Eye,
+  EyeSlash,
+  Moon,
+  Sun,
+} from '@phosphor-icons/react';
 
 type Mode = 'login' | 'register';
 
 type PasswordCheck = { label: string; ok: boolean };
 
+// ─── Palette (già allineata alla home) ─────────────────────────────────
+const D = {
+  bg: '#0a0806',
+  bgSoft: '#14100e',
+  card: '#1c1613',
+  cardHover: '#241d19',
+  border: '#2d221c',
+  gold: '#f5b92f',
+  goldSoft: '#ffd875',
+  goldGlow: 'rgba(245,185,47,0.12)',
+  pink: '#ed3d73',
+  pinkDeep: '#8e1740',
+  pinkGlow: 'rgba(237,61,115,0.15)',
+  text: '#f0ebe6',
+  textMuted: '#b5a89e',
+  textFaint: '#7a6b60',
+};
+
+const L = {
+  bg: '#f5efe8',
+  bgSoft: '#ece3d9',
+  card: '#ffffff',
+  cardHover: '#faf5ef',
+  border: '#d6cbbc',
+  gold: '#b8860b',
+  goldSoft: '#e8c84a',
+  goldGlow: 'rgba(184,134,11,0.10)',
+  pink: '#b83060',
+  pinkDeep: '#8a1d44',
+  pinkGlow: 'rgba(184,48,96,0.10)',
+  text: '#1f1a16',
+  textMuted: '#5c5248',
+  textFaint: '#8a7c6e',
+};
+
+const convertHexToRgb = (hex: string) => {
+  const clean = hex.replace('#', '');
+  const full = clean.length === 3
+    ? clean.split('').map((char) => char + char).join('')
+    : clean;
+  const value = Number.parseInt(full, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `${r}, ${g}, ${b}`;
+};
+
 function getPasswordChecks(p: string): PasswordCheck[] {
   return [
-    { label: 'Almeno 8 caratteri',           ok: p.length >= 8 },
-    { label: 'Una lettera maiuscola',         ok: /[A-Z]/.test(p) },
-    { label: 'Una lettera minuscola',         ok: /[a-z]/.test(p) },
-    { label: 'Un numero',                     ok: /[0-9]/.test(p) },
-    { label: 'Un carattere speciale (!@#$)',  ok: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(p) },
+    { label: 'Almeno 8 caratteri', ok: p.length >= 8 },
+    { label: 'Una lettera maiuscola', ok: /[A-Z]/.test(p) },
+    { label: 'Una lettera minuscola', ok: /[a-z]/.test(p) },
+    { label: 'Un numero', ok: /[0-9]/.test(p) },
+    { label: 'Un carattere speciale (!@#$)', ok: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(p) },
   ];
 }
 
@@ -43,40 +96,34 @@ async function getUserProfile(supabase: ReturnType<typeof createBrowserClient>, 
   return byEmail;
 }
 
-function getAuthReturnParams() {
-  const searchParams = new URLSearchParams(window.location.search);
-  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-
-  return {
-    code: searchParams.get('code'),
-    tokenHash: searchParams.get('token_hash'),
-    type: searchParams.get('type') as any,
-    accessToken: hashParams.get('access_token'),
-    refreshToken: hashParams.get('refresh_token'),
-    authError: searchParams.get('error') ?? hashParams.get('error'),
-    errorDescription: searchParams.get('error_description') ?? hashParams.get('error_description'),
-  };
-}
-
 function getOAuthCallbackUrl() {
   return `${window.location.origin}/auth/callback`;
 }
 
-async function waitForSession(supabase: ReturnType<typeof createBrowserClient>) {
-  for (let attempt = 0; attempt < 10; attempt += 1) {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    if (session?.user) return session;
-    if (error) throw error;
-    await new Promise((resolve) => setTimeout(resolve, 150));
-  }
+// ─── SVG Logo Google ──────────────────────────────────────────────────
+const GoogleLogo = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48">
+    <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+    <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
+    <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
+    <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
+  </svg>
+);
 
-  return null;
-}
+// ─── SVG Logo Apple ──────────────────────────────────────────────────
+const AppleLogo = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 384 512">
+    <path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-152.1c-24.3-29.4-58.9-42.1-88.5-42.1-25.9 0-59.4 13.4-83.2 37.8-24.7 25.4-37.4 60-33.5 93.2 36 2.7 67.8-15.1 92.3-40.9 24-25.2 35.5-58.6 32.9-88z"/>
+  </svg>
+);
 
 export default function AuthPage() {
   const router = useRouter();
   const supabase = useRef(createBrowserClient()).current;
   const { enterAsGuest } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === 'dark';
+  const P = isDark ? D : L;
 
   const [mode, setMode] = useState<Mode>('login');
   const [mounted, setMounted] = useState(false);
@@ -97,32 +144,35 @@ export default function AuthPage() {
   const [successMsg, setSuccessMsg] = useState('');
   const [shake, setShake] = useState(false);
 
+  // Animated swipe state
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right'>('right');
+
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 50);
     return () => clearTimeout(t);
   }, []);
 
-useEffect(() => {
-  if (!router.isReady) return;
-
-  const check = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.user) return;
-
-    const profile = await getUserProfile(supabase, {
-      id: session.user.id,
-      email: session.user.email,
-    });
-
-    router.replace(profile?.username ? '/home' : '/username');
-  };
-
-  check().catch(console.error);
-}, [router.isReady]); // ← solo router.isReady
   useEffect(() => {
-    setEmail(''); setEmailConfirm('');
-    setPassword(''); setPasswordConfirm('');
-    setError(''); setSuccessMsg('');
+    if (!router.isReady) return;
+    const check = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+      const profile = await getUserProfile(supabase, {
+        id: session.user.id,
+        email: session.user.email,
+      });
+      router.replace(profile?.username ? '/home' : '/username');
+    };
+    check().catch(console.error);
+  }, [router.isReady, supabase]);
+
+  useEffect(() => {
+    setEmail('');
+    setEmailConfirm('');
+    setPassword('');
+    setPasswordConfirm('');
+    setError('');
+    setSuccessMsg('');
     setPasswordFocused(false);
   }, [mode]);
 
@@ -136,6 +186,12 @@ useEffect(() => {
     setTimeout(() => setShake(false), 500);
   };
 
+  const handleModeSwitch = (newMode: Mode) => {
+    if (newMode === mode) return;
+    setSwipeDirection(newMode === 'register' ? 'left' : 'right');
+    setMode(newMode);
+  };
+
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
     setError('');
@@ -143,9 +199,7 @@ useEffect(() => {
       sessionStorage.setItem('cineDateOAuthStarted', 'true');
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo: getOAuthCallbackUrl(),
-        },
+        options: { redirectTo: getOAuthCallbackUrl() },
       });
       if (error) throw error;
     } catch (err: any) {
@@ -156,12 +210,25 @@ useEffect(() => {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError(''); setSuccessMsg('');
+    setError('');
+    setSuccessMsg('');
 
     if (mode === 'register') {
-      if (!emailsMatch) { setError('Le email non coincidono'); triggerShake(); return; }
-      if (!passwordValid) { setError('La password non soddisfa i requisiti'); triggerShake(); return; }
-      if (!passwordsMatch) { setError('Le password non coincidono'); triggerShake(); return; }
+      if (!emailsMatch) {
+        setError('Le email non coincidono');
+        triggerShake();
+        return;
+      }
+      if (!passwordValid) {
+        setError('La password non soddisfa i requisiti');
+        triggerShake();
+        return;
+      }
+      if (!passwordsMatch) {
+        setError('Le password non coincidono');
+        triggerShake();
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -196,326 +263,431 @@ useEffect(() => {
     window.location.href = '/home';
   };
 
+  const cssVars = {
+    '--home-bg': P.bg,
+    '--home-bg-soft': P.bgSoft,
+    '--home-card': P.card,
+    '--home-card-hover': P.cardHover,
+    '--home-border': P.border,
+    '--home-border-rgb': convertHexToRgb(P.border),
+    '--home-gold': P.gold,
+    '--home-gold-soft': P.goldSoft,
+    '--home-gold-rgb': convertHexToRgb(P.gold),
+    '--home-pink': P.pink,
+    '--home-pink-deep': P.pinkDeep,
+    '--home-pink-rgb': convertHexToRgb(P.pink),
+    '--home-text': P.text,
+    '--home-text-muted': P.textMuted,
+    '--home-text-faint': P.textFaint,
+  } as React.CSSProperties;
+
   if (emailSent) {
     return (
-      <>
-        <style>{`
-          @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
-          @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-        `}</style>
-        <div style={{ minHeight: '100vh', background: C.bgSoft, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: S.lg }}>
-          <div style={{ background: C.bg, borderRadius: R.xl, padding: S.xl, maxWidth: '400px', width: '100%', textAlign: 'center', boxShadow: SHADOW.lg, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: S.md }}>
-            <div style={{ fontSize: '64px', animation: 'pulse 2s ease infinite' }}>📬</div>
-            <div style={{ fontSize: TEXT.xl, fontWeight: '800', color: C.ink }}>Controlla la tua email</div>
-            <div style={{ fontSize: TEXT.sm, color: C.muted, lineHeight: '1.6' }}>Abbiamo inviato un link di conferma a</div>
-            <div style={{ fontSize: TEXT.base, fontWeight: '700', color: C.primary, background: C.primaryLight, padding: '8px 20px', borderRadius: R.full }}>
-              {registeredEmail}
-            </div>
-            <div style={{ background: C.bgSoft, borderRadius: R.md, padding: S.md, width: '100%', display: 'flex', flexDirection: 'column', gap: S.sm }}>
-              {[
-                { icon: '1️⃣', text: 'Apri la tua casella email' },
-                { icon: '2️⃣', text: 'Clicca il link di conferma' },
-                { icon: '3️⃣', text: 'Scegli il tuo username' },
-              ].map((s) => (
-                <div key={s.icon} style={{ display: 'flex', gap: S.sm, alignItems: 'center', fontSize: TEXT.sm, color: C.muted }}>
-                  <span>{s.icon}</span><span>{s.text}</span>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={async () => {
-                await supabase.auth.resend({ type: 'signup', email: registeredEmail });
-                setSuccessMsg('Email inviata di nuovo!');
-                setTimeout(() => setSuccessMsg(''), 3000);
-              }}
-              style={{ ...btn.ghost, width: 'auto', padding: '10px 24px' }}
-            >
-              🔄 Invia di nuovo
-            </button>
-            {successMsg && <div style={{ fontSize: TEXT.sm, color: C.success }}>{successMsg}</div>}
-            <button onClick={() => setEmailSent(false)} style={{ fontSize: TEXT.sm, color: C.faint, background: 'none', border: 'none', cursor: 'pointer' }}>← Torna al login</button>
+      <div className="home-cine" style={{ ...cssVars, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+        <div className="ticket-card animate-in" style={{ width: '100%', maxWidth: '400px', padding: '28px 24px', textAlign: 'center', boxShadow: '0 24px 80px rgba(0,0,0,0.6)' }}>
+          <div style={{ fontSize: '40px', marginBottom: '10px' }}>📬</div>
+          <div style={{ fontSize: '18px', fontWeight: '800', fontFamily: 'var(--home-font-display)', color: 'var(--home-text)', marginBottom: '4px' }}>Controlla la tua email</div>
+          <div style={{ color: 'var(--home-text-muted)', fontSize: '12px', lineHeight: '1.5' }}>Abbiamo inviato un link di conferma a</div>
+          <div style={{ display: 'inline-block', margin: '12px 0 16px', padding: '6px 14px', background: 'rgba(var(--home-pink-rgb), 0.15)', border: '1px solid rgba(var(--home-pink-rgb), 0.3)', color: 'var(--home-pink)', fontSize: '12px', fontWeight: '600' }}>{registeredEmail}</div>
+          <div style={{ padding: '10px 14px', background: 'var(--home-bg-soft)', border: '1px solid var(--home-border)', textAlign: 'left', display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '14px', fontSize: '11px' }}>
+            {['1️⃣ Apri la tua casella email', '2️⃣ Clicca il link di conferma', '3️⃣ Scegli il tuo username'].map((s) => (
+              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--home-text-faint)' }}><span>{s}</span></div>
+            ))}
           </div>
+          <button onClick={async () => { await supabase.auth.resend({ type: 'signup', email: registeredEmail }); setSuccessMsg('Email inviata di nuovo!'); setTimeout(() => setSuccessMsg(''), 3000); }} style={{ border: '1px solid var(--home-border)', background: 'transparent', color: 'var(--home-text-muted)', padding: '6px 16px', cursor: 'pointer', fontFamily: 'var(--home-font)', fontSize: '11px', transition: 'all 0.25s ease' }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--home-gold)'; e.currentTarget.style.color = 'var(--home-gold)'; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--home-border)'; e.currentTarget.style.color = 'var(--home-text-muted)'; }}>🔄 Invia di nuovo</button>
+          {successMsg && <div style={{ marginTop: '10px', padding: '8px 12px', fontSize: '11px', color: '#5dd97c', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.12)' }}>{successMsg}</div>}
+          <button onClick={() => setEmailSent(false)} style={{ display: 'block', margin: '16px auto 0', border: 0, background: 'transparent', color: 'var(--home-text-faint)', cursor: 'pointer', fontFamily: 'var(--home-font)', fontSize: '11px', transition: 'color 0.2s' }} onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--home-text-muted)')} onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--home-text-faint)')}>← Torna al login</button>
         </div>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
-      <style jsx>{`
-        @keyframes shake {
-          0%,100%{transform:translateX(0)}
-          20%{transform:translateX(-8px)}
-          40%{transform:translateX(8px)}
-          60%{transform:translateX(-6px)}
-          80%{transform:translateX(6px)}
-        }
-        @keyframes fadeIn {
-          from{opacity:0;transform:translateY(8px)}
-          to{opacity:1;transform:translateY(0)}
-        }
-        @keyframes fadeUp {
-          from{opacity:0;transform:translateY(20px)}
-          to{opacity:1;transform:translateY(0)}
-        }
-        .auth-input:focus { border-color: ${C.primary} !important; }
-        .auth-btn-primary:hover { opacity: 0.9; }
-        .auth-btn-social:hover { background: ${C.bgSoft} !important; }
-        .auth-tab { flex:1; padding:10px; border:none; background:${C.bgSoft}; cursor:pointer; font-size:${TEXT.base}; font-weight:600; color:${C.muted}; transition:all 0.2s; font-family:${FONT.sans}; }
-        .auth-tab:first-child { border-radius:${R.full} 0 0 ${R.full}; }
-        .auth-tab:last-child  { border-radius:0 ${R.full} ${R.full} 0; }
-        .auth-tab-active { background:${C.primary} !important; color:${C.white} !important; }
-      `}</style>
+    <div className="home-cine" style={{ ...cssVars, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--home-bg)', position: 'relative', overflow: 'hidden', padding: '20px' }}>
 
-      <div style={{
-        minHeight: '100vh',
-        background: C.bgSoft,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: S.md,
-      }}>
-        <div style={{
-          background: C.bg,
-          borderRadius: R.xl,
-          padding: `${S.xl} ${S.lg}`,
-          width: '100%',
-          maxWidth: '420px',
-          boxShadow: SHADOW.lg,
-          opacity: mounted ? 1 : 0,
-          transform: mounted ? 'translateY(0)' : 'translateY(20px)',
-          transition: 'opacity 0.4s ease, transform 0.4s ease',
-        }}>
-          <button
-          onClick={() => router.push('/')}
-          title="Esci"
-          style={{
-             background: 'none',
-             border: 'none',
-             cursor: 'pointer',
-             opacity: 0.6,
-             padding: '4px', 
-            }}>
-              <SignOut size={14} />
-            </button>
-          <div style={{ textAlign: 'center', marginBottom: S.lg }}>
-            <div style={{ fontSize: TEXT.xl, fontWeight: '800', color: C.primary, letterSpacing: '1px' }}>
-              🎬 CINEDATE
+      {/* ─── Sfondo con animazioni (solo dark mode) ─────────────────── */}
+      {isDark && (
+        <>
+          <div className="bg-film-grain" />
+          <div className="bg-scanlines" />
+          <div className="bg-flicker" />
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+            <img src="/assets/landing/authbk.png" alt="background" style={{ width: 'auto', height: '100%', position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%) rotate(45deg) scale(1.4)', opacity: 0.3, objectFit: 'cover' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)' }} />
+          </div>
+        </>
+      )}
+
+      <div style={{ width: '100%', maxWidth: '400px', position: 'relative', zIndex: 1 }}>
+        <div className={`ticket-card ${mounted ? 'mounted' : ''}`} style={{ padding: '24px 24px 20px', backdropFilter: 'blur(12px)', border: '1px solid rgba(var(--home-border-rgb), 0.6)', boxShadow: '0 24px 64px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.03)', animation: mounted ? 'fadeUp 0.5s ease both 0.1s' : 'none', transform: shake ? 'translateX(-6px)' : 'none' }}>
+          <div className="ticket-tear" style={{ background: 'var(--home-bg)' }} />
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <button onClick={() => router.push('/')} className="icon-btn" style={{ background: 'transparent', border: '1px solid var(--home-border)', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--home-text-faint)', transition: 'all 0.25s' }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--home-gold)'; e.currentTarget.style.color = 'var(--home-gold)'; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--home-border)'; e.currentTarget.style.color = 'var(--home-text-faint)'; }}><SignOut size={14} /></button>
+            <button onClick={toggleTheme} className="icon-btn" style={{ background: 'var(--home-bg-soft)', border: '1px solid var(--home-border)', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--home-text)', transition: 'border-color 0.25s' }} onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--home-gold)')} onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--home-border)')}>{isDark ? <Sun size={14} /> : <Moon size={14} />}</button>
+          </div>
+
+          <div className="auth-brand" style={{ textAlign: 'center', marginBottom: '6px' }}>
+            <div className="cine-logo" style={{ fontSize: '20px', fontWeight: '800', letterSpacing: '-0.5px', fontFamily: 'var(--home-font-display)' }}>
+              <span className="logo-cine" style={{ color: 'var(--home-text)' }}>CINE</span>
+              <span className="logo-date" style={{ color: 'var(--home-pink)' }}>DATE</span>
             </div>
-            <div style={{ fontSize: TEXT.sm, color: C.muted, marginTop: S.xs }}>
-              {mode === 'login' ? 'Bentornato!' : 'Crea il tuo account'}
-            </div>
+            <div className="auth-subtitle" style={{ color: 'var(--home-text-faint)', fontSize: '12px', marginTop: '2px' }}>{mode === 'login' ? 'Bentornato!' : 'Crea il tuo account'}</div>
           </div>
 
-          <div style={{ display: 'flex', borderRadius: R.full, overflow: 'hidden', marginBottom: S.lg, border: `1.5px solid ${C.border}` }}>
-            <button className={`auth-tab ${mode === 'login' ? 'auth-tab-active' : ''}`} onClick={() => setMode('login')}>Accedi</button>
-            <button className={`auth-tab ${mode === 'register' ? 'auth-tab-active' : ''}`} onClick={() => setMode('register')}>Registrati</button>
-          </div>
-
-          <button
-            className="auth-btn-social"
-            onClick={handleGoogleLogin}
-            disabled={isGoogleLoading}
-            style={{ ...btn.social, marginBottom: S.sm, opacity: isGoogleLoading ? 0.7 : 1 }}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18">
-              <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-              <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
-              <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
-              <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.166 6.656 3.58 9 3.58z"/>
-            </svg>
-            {isGoogleLoading ? 'Reindirizzamento...' : 'Continua con Google'}
-          </button>
-
-          <button
-            style={{ ...btn.social, marginBottom: S.lg, opacity: 0.4, cursor: 'not-allowed' }}
-            disabled
-            title="Disponibile prossimamente"
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
-              <path d="M13.173 9.438c-.02-2.137 1.748-3.17 1.826-3.22-1-1.458-2.548-1.658-3.094-1.677-1.315-.134-2.573.776-3.24.776-.666 0-1.692-.757-2.784-.737-1.43.021-2.754.835-3.49 2.118-1.492 2.589-.382 6.425 1.072 8.523.714 1.024 1.563 2.175 2.676 2.133 1.077-.042 1.483-.692 2.784-.692 1.302 0 1.666.692 2.805.67 1.16-.02 1.89-1.046 2.598-2.074.822-1.188 1.16-2.34 1.18-2.4-.026-.01-2.308-.885-2.333-3.42z"/>
-              <path d="M11.07 3.18c.594-.72.993-1.72.883-2.72-.854.035-1.888.57-2.5 1.287-.546.634-1.027 1.647-.898 2.617.952.073 1.92-.484 2.515-1.184z"/>
-            </svg>
-            Continua con Apple
-          </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: S.sm, marginBottom: S.lg }}>
-            <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
-            <span style={{ fontSize: TEXT.xs, color: C.faint }}>oppure</span>
-            <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
-          </div>
-
-          <form
-            onSubmit={handleSubmit}
-            style={{
-              display: 'flex', flexDirection: 'column', gap: S.sm,
-              animation: shake ? 'shake 0.5s ease' : 'none',
-            }}
-          >
-            {/* Email */}
-            <input
-              className="auth-input"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
-              required
-              autoComplete="email"
-              style={input.base}
+          {/* ─── TABS CON ANIMAZIONE SWIPE ───────────────────────────── */}
+          <div className="tabs-container" style={{ display: 'flex', margin: '16px 0 14px', border: '1px solid var(--home-border)', overflow: 'hidden', background: 'var(--home-bg-soft)', position: 'relative' }}>
+            <div 
+              className={`tabs-slider ${swipeDirection}`}
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                width: '50%',
+                background: 'linear-gradient(180deg, var(--home-pink), var(--home-pink-deep))',
+                boxShadow: '0 4px 16px rgba(var(--home-pink-rgb), 0.4)',
+                transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                transform: mode === 'login' ? 'translateX(0%)' : 'translateX(100%)',
+                zIndex: 1,
+              }}
             />
+            <button 
+              onClick={() => handleModeSwitch('login')} 
+              className={`tab-btn ${mode === 'login' ? 'active' : ''}`}
+              style={{ 
+                flex: 1, 
+                height: '36px', 
+                border: 0, 
+                background: 'transparent',
+                color: mode === 'login' ? '#fff' : 'var(--home-text-faint)',
+                fontSize: '12px', 
+                fontWeight: '600', 
+                cursor: 'pointer', 
+                fontFamily: 'var(--home-font)', 
+                transition: 'color 0.3s ease',
+                position: 'relative',
+                zIndex: 2,
+              }}
+            >
+              Accedi
+            </button>
+            <button 
+              onClick={() => handleModeSwitch('register')} 
+              className={`tab-btn ${mode === 'register' ? 'active' : ''}`}
+              style={{ 
+                flex: 1, 
+                height: '36px', 
+                border: 0, 
+                background: 'transparent',
+                color: mode === 'register' ? '#fff' : 'var(--home-text-faint)',
+                fontSize: '12px', 
+                fontWeight: '600', 
+                cursor: 'pointer', 
+                fontFamily: 'var(--home-font)', 
+                transition: 'color 0.3s ease',
+                position: 'relative',
+                zIndex: 2,
+              }}
+            >
+              Registrati
+            </button>
+          </div>
 
-            {/* Email conferma — solo register */}
-            {mode === 'register' && (
-              <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                <input
-                  className="auth-input"
-                  type="email"
-                  value={emailConfirm}
-                  onChange={(e) => setEmailConfirm(e.target.value)}
-                  placeholder="Conferma email"
-                  required
-                  style={{
-                    ...input.base,
-                    borderColor: emailConfirm.length > 0
-                      ? emailsMatch ? C.success : C.error
-                      : C.border,
-                  }}
-                />
-                {emailConfirm.length > 0 && (
-                  <div style={{ fontSize: TEXT.xs, color: emailsMatch ? C.success : C.error, marginTop: '4px' }}>
-                    {emailsMatch ? '✓ Le email coincidono' : '✗ Le email non coincidono'}
+          <button onClick={handleGoogleLogin} disabled={isGoogleLoading} className="social-btn" style={{ width: '100%', height: '40px', border: '1px solid var(--home-border)', background: 'var(--home-bg-soft)', color: 'var(--home-text)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontFamily: 'var(--home-font)', fontSize: '12px', fontWeight: '500', cursor: 'pointer', transition: 'all 0.3s ease', opacity: isGoogleLoading ? 0.4 : 1 }} onMouseEnter={(e) => { if (!isGoogleLoading) { e.currentTarget.style.background = 'var(--home-card-hover)'; e.currentTarget.style.borderColor = 'var(--home-gold)'; } }} onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--home-bg-soft)'; e.currentTarget.style.borderColor = 'var(--home-border)'; }}><GoogleLogo />{isGoogleLoading ? 'Reindirizzamento...' : 'Continua con Google'}</button>
+
+          <button disabled className="social-btn" style={{ width: '100%', height: '40px', marginTop: '8px', border: '1px solid var(--home-border)', background: 'var(--home-bg-soft)', color: 'var(--home-text-faint)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', fontFamily: 'var(--home-font)', fontSize: '12px', fontWeight: '500', cursor: 'not-allowed', opacity: 0.4 }}><AppleLogo />Continua con Apple</button>
+
+          <div className="divider" style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '16px 0', color: 'var(--home-text-faint)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' }}><span style={{ flex: 1, height: '1px', background: 'var(--home-border)' }} /><span>oppure</span><span style={{ flex: 1, height: '1px', background: 'var(--home-border)' }} /></div>
+
+          {/* ─── FORM CON ANIMAZIONE SWIPE ───────────────────────────── */}
+          <div className="form-container" style={{ overflow: 'hidden' }}>
+            <div 
+              className={`form-slider ${swipeDirection}`}
+              style={{
+                display: 'flex',
+                transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                transform: mode === 'login' ? 'translateX(0%)' : 'translateX(-50%)',
+                width: '200%',
+              }}
+            >
+              {/* ─── LOGIN FORM ────────────────────────────────────── */}
+              <div style={{ width: '50%', paddingLeft: '15px', paddingRight: '15px' }}>
+                <form onSubmit={handleSubmit} className="auth-form" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div className="form-field">
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required autoComplete="email" className="auth-input" style={{ width: '100%', height: '40px', padding: '0 14px', border: '1px solid var(--home-border)', outline: 'none', background: 'var(--home-bg-soft)', color: 'var(--home-text)', fontFamily: 'var(--home-font)', fontSize: '12px', transition: 'border-color 0.3s, box-shadow 0.3s', boxSizing: 'border-box' }} onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--home-gold)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(var(--home-gold-rgb), 0.2)'; }} onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--home-border)'; e.currentTarget.style.boxShadow = 'none'; }} />
                   </div>
-                )}
-              </div>
-            )}
 
-            {/* Password */}
-            <div>
-              <div style={{ position: 'relative' }}>
-                <input
-                  className="auth-input"
-                  type={showPass ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onFocus={() => setPasswordFocused(true)}
-                  onBlur={() => setPasswordFocused(false)}
-                  placeholder="Password"
-                  required
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                  style={{
-                    ...input.base,
-                    paddingRight: '44px',
-                    borderColor: mode === 'register' && password.length > 0
-                      ? passwordValid ? C.success : C.error
-                      : C.border,
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass((v) => !v)}
-                  style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', opacity: showPass ? 1 : 0.4 }}
-                >👁️</button>
-              </div>
-
-              {/* Checklist — solo register */}
-              {mode === 'register' && (passwordFocused || password.length > 0) && (
-                <div style={{ background: C.bgSoft, borderRadius: R.sm, padding: S.sm, marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '4px', animation: 'fadeIn 0.2s ease' }}>
-                  {checks.map((c) => (
-                    <div key={c.label} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: TEXT.xs, color: c.ok ? C.success : C.faint, transition: 'color 0.2s' }}>
-                      <span>{c.ok ? '✅' : '⬜'}</span>{c.label}
+                  <div className="form-field">
+                    <div style={{ position: 'relative' }}>
+                      <input type={showPass ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} onFocus={(e) => { setPasswordFocused(true); e.currentTarget.style.borderColor = 'var(--home-gold)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(var(--home-gold-rgb), 0.2)'; }} onBlur={(e) => { setPasswordFocused(false); if (password.length === 0) { e.currentTarget.style.borderColor = 'var(--home-border)'; } e.currentTarget.style.boxShadow = 'none'; }} placeholder="Password" required autoComplete="current-password" className="auth-input" style={{ width: '100%', height: '40px', padding: '0 40px 0 14px', border: '1px solid var(--home-border)', outline: 'none', background: 'var(--home-bg-soft)', color: 'var(--home-text)', fontFamily: 'var(--home-font)', fontSize: '12px', transition: 'border-color 0.3s, box-shadow 0.3s', boxSizing: 'border-box' }} />
+                      <button type="button" onClick={() => setShowPass((v) => !v)} className="toggle-vis" style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', width: '30px', height: '30px', display: 'grid', placeItems: 'center', border: 0, background: 'transparent', color: 'var(--home-text-faint)', cursor: 'pointer', fontSize: '14px', transition: 'color 0.3s, background 0.3s' }} onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--home-text)'; e.currentTarget.style.background = 'var(--home-border)'; }} onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--home-text-faint)'; e.currentTarget.style.background = 'transparent'; }}>{showPass ? <Eye size={16} /> : <EyeSlash size={16} />}</button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Password conferma — solo register */}
-            {mode === 'register' && (
-              <div style={{ animation: 'fadeIn 0.3s ease' }}>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    className="auth-input"
-                    type={showPassConfirm ? 'text' : 'password'}
-                    value={passwordConfirm}
-                    onChange={(e) => setPasswordConfirm(e.target.value)}
-                    placeholder="Conferma password"
-                    required
-                    autoComplete="new-password"
-                    style={{
-                      ...input.base,
-                      paddingRight: '44px',
-                      borderColor: passwordConfirm.length > 0
-                        ? passwordsMatch ? C.success : C.error
-                        : C.border,
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassConfirm((v) => !v)}
-                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px', opacity: showPassConfirm ? 1 : 0.4 }}
-                  >👁️</button>
-                </div>
-                {passwordConfirm.length > 0 && (
-                  <div style={{ fontSize: TEXT.xs, color: passwordsMatch ? C.success : C.error, marginTop: '4px' }}>
-                    {passwordsMatch ? '✓ Le password coincidono' : '✗ Le password non coincidono'}
                   </div>
-                )}
-              </div>
-            )}
 
-            {/* Errore */}
-            {error && (
-              <div style={{ background: C.errorLight, color: C.error, borderRadius: R.sm, padding: '10px 14px', fontSize: TEXT.sm, animation: 'fadeIn 0.2s ease' }}>
-                ⚠️ {error}
-              </div>
-            )}
+                  {error && <div className="auth-error" style={{ padding: '10px 14px', fontSize: '11px', color: '#ff6868', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.12)' }}>⚠️ {error}</div>}
+                  {successMsg && <div className="auth-success" style={{ padding: '10px 14px', fontSize: '11px', color: '#5dd97c', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.12)' }}>✅ {successMsg}</div>}
 
-            {/* Successo */}
-            {successMsg && (
-              <div style={{ background: C.successLight, color: C.success, borderRadius: R.sm, padding: '10px 14px', fontSize: TEXT.sm }}>
-                ✅ {successMsg}
+                  <button type="submit" disabled={isLoading} className="submit-btn" style={{ width: '100%', height: '40px', marginTop: '2px', border: 0, background: 'linear-gradient(180deg, var(--home-gold), var(--home-gold-soft))', color: '#0a0a0a', fontFamily: 'var(--home-font)', fontSize: '12px', fontWeight: '700', cursor: 'pointer', transition: 'all 0.3s ease', textTransform: 'uppercase', letterSpacing: '0.6px', boxShadow: '0 4px 20px rgba(var(--home-gold-rgb), 0.3)', opacity: isLoading ? 0.5 : 1 }} onMouseEnter={(e) => { if (!isLoading) { e.currentTarget.style.filter = 'brightness(1.08)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(var(--home-gold-rgb), 0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }} onMouseLeave={(e) => { e.currentTarget.style.filter = 'brightness(1)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(var(--home-gold-rgb), 0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }}>{isLoading ? '⏳ Caricamento...' : 'Accedi'}</button>
+                </form>
               </div>
-            )}
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="auth-btn-primary"
-              style={{ ...btn.primary, opacity: isLoading ? 0.7 : 1, marginTop: S.xs }}
-            >
-              {isLoading ? '⏳ Caricamento...' : mode === 'login' ? 'Accedi' : 'Registrati'}
+              {/* ─── REGISTER FORM ─────────────────────────────────── */}
+              <div style={{ width: '50%', paddingLeft: '15px', paddingRight: '15px' }}>
+                <form onSubmit={handleSubmit} className="auth-form" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div className="form-field">
+                    <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" required autoComplete="email" className="auth-input" style={{ width: '100%', height: '40px', padding: '0 14px', border: '1px solid var(--home-border)', outline: 'none', background: 'var(--home-bg-soft)', color: 'var(--home-text)', fontFamily: 'var(--home-font)', fontSize: '12px', transition: 'border-color 0.3s, box-shadow 0.3s', boxSizing: 'border-box' }} onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--home-gold)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(var(--home-gold-rgb), 0.2)'; }} onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--home-border)'; e.currentTarget.style.boxShadow = 'none'; }} />
+                  </div>
+
+                  <div className="form-field">
+                    <input type="email" value={emailConfirm} onChange={(e) => setEmailConfirm(e.target.value)} placeholder="Conferma email" required className="auth-input" style={{ width: '100%', height: '40px', padding: '0 14px', border: `1px solid ${emailConfirm.length > 0 ? (emailsMatch ? '#43c96a' : '#ef5555') : 'var(--home-border)'}`, outline: 'none', background: 'var(--home-bg-soft)', color: 'var(--home-text)', fontFamily: 'var(--home-font)', fontSize: '12px', transition: 'border-color 0.3s, box-shadow 0.3s', boxSizing: 'border-box' }} onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--home-gold)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(var(--home-gold-rgb), 0.2)'; }} onBlur={(e) => { if (emailConfirm.length === 0) { e.currentTarget.style.borderColor = 'var(--home-border)'; } e.currentTarget.style.boxShadow = 'none'; }} />
+                    {emailConfirm.length > 0 && <div className="validation-msg" style={{ marginTop: '4px', fontSize: '11px', color: emailsMatch ? '#43c96a' : '#ef5555', display: 'flex', alignItems: 'center', gap: '4px' }}>{emailsMatch ? '✓' : '✗'} {emailsMatch ? 'Le email coincidono' : 'Le email non coincidono'}</div>}
+                  </div>
+
+                  <div className="form-field">
+                    <div style={{ position: 'relative' }}>
+                      <input type={showPass ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} onFocus={(e) => { setPasswordFocused(true); e.currentTarget.style.borderColor = 'var(--home-gold)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(var(--home-gold-rgb), 0.2)'; }} onBlur={(e) => { setPasswordFocused(false); if (password.length === 0) { e.currentTarget.style.borderColor = 'var(--home-border)'; } else { e.currentTarget.style.borderColor = passwordValid ? '#43c96a' : '#ef5555'; } e.currentTarget.style.boxShadow = 'none'; }} placeholder="Password" required autoComplete="new-password" className="auth-input" style={{ width: '100%', height: '40px', padding: '0 40px 0 14px', border: `1px solid ${password.length > 0 ? (passwordValid ? '#43c96a' : '#ef5555') : 'var(--home-border)'}`, outline: 'none', background: 'var(--home-bg-soft)', color: 'var(--home-text)', fontFamily: 'var(--home-font)', fontSize: '12px', transition: 'border-color 0.3s, box-shadow 0.3s', boxSizing: 'border-box' }} />
+                      <button type="button" onClick={() => setShowPass((v) => !v)} className="toggle-vis" style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', width: '30px', height: '30px', display: 'grid', placeItems: 'center', border: 0, background: 'transparent', color: 'var(--home-text-faint)', cursor: 'pointer', fontSize: '14px', transition: 'color 0.3s, background 0.3s' }} onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--home-text)'; e.currentTarget.style.background = 'var(--home-border)'; }} onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--home-text-faint)'; e.currentTarget.style.background = 'transparent'; }}>{showPass ? <Eye size={16} /> : <EyeSlash size={16} />}</button>
+                    </div>
+                    {(passwordFocused || password.length > 0) && (
+                      <div className="password-checks" style={{ marginTop: '6px', padding: '10px 14px', background: 'var(--home-bg-soft)', border: '1px solid var(--home-border)', display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '10px' }}>
+                        {checks.map((c) => <div key={c.label} className="check-item" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: c.ok ? '#43c96a' : 'var(--home-text-faint)', transition: 'color 0.3s' }}><span>{c.ok ? '✅' : '⬜'}</span>{c.label}</div>)}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="form-field">
+                    <div style={{ position: 'relative' }}>
+                      <input type={showPassConfirm ? 'text' : 'password'} value={passwordConfirm} onChange={(e) => setPasswordConfirm(e.target.value)} placeholder="Conferma password" required autoComplete="new-password" className="auth-input" style={{ width: '100%', height: '40px', padding: '0 40px 0 14px', border: `1px solid ${passwordConfirm.length > 0 ? (passwordsMatch ? '#43c96a' : '#ef5555') : 'var(--home-border)'}`, outline: 'none', background: 'var(--home-bg-soft)', color: 'var(--home-text)', fontFamily: 'var(--home-font)', fontSize: '12px', transition: 'border-color 0.3s, box-shadow 0.3s', boxSizing: 'border-box' }} onFocus={(e) => { e.currentTarget.style.borderColor = 'var(--home-gold)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(var(--home-gold-rgb), 0.2)'; }} onBlur={(e) => { if (passwordConfirm.length === 0) { e.currentTarget.style.borderColor = 'var(--home-border)'; } e.currentTarget.style.boxShadow = 'none'; }} />
+                      <button type="button" onClick={() => setShowPassConfirm((v) => !v)} className="toggle-vis" style={{ position: 'absolute', right: '6px', top: '50%', transform: 'translateY(-50%)', width: '30px', height: '30px', display: 'grid', placeItems: 'center', border: 0, background: 'transparent', color: 'var(--home-text-faint)', cursor: 'pointer', fontSize: '14px', transition: 'color 0.3s, background 0.3s' }} onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--home-text)'; e.currentTarget.style.background = 'var(--home-border)'; }} onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--home-text-faint)'; e.currentTarget.style.background = 'transparent'; }}>{showPassConfirm ? <Eye size={16} /> : <EyeSlash size={16} />}</button>
+                    </div>
+                    {passwordConfirm.length > 0 && <div className="validation-msg" style={{ marginTop: '4px', fontSize: '11px', color: passwordsMatch ? '#43c96a' : '#ef5555', display: 'flex', alignItems: 'center', gap: '4px' }}>{passwordsMatch ? '✓' : '✗'} {passwordsMatch ? 'Le password coincidono' : 'Le password non coincidono'}</div>}
+                  </div>
+
+                  {error && <div className="auth-error" style={{ padding: '10px 14px', fontSize: '11px', color: '#ff6868', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.12)' }}>⚠️ {error}</div>}
+                  {successMsg && <div className="auth-success" style={{ padding: '10px 14px', fontSize: '11px', color: '#5dd97c', background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.12)' }}>✅ {successMsg}</div>}
+
+                  <button type="submit" disabled={isLoading} className="submit-btn" style={{ width: '100%', height: '40px', marginTop: '2px', border: 0, background: 'linear-gradient(180deg, var(--home-gold), var(--home-gold-soft))', color: '#0a0a0a', fontFamily: 'var(--home-font)', fontSize: '12px', fontWeight: '700', cursor: 'pointer', transition: 'all 0.3s ease', textTransform: 'uppercase', letterSpacing: '0.6px', boxShadow: '0 4px 20px rgba(var(--home-gold-rgb), 0.3)', opacity: isLoading ? 0.5 : 1 }} onMouseEnter={(e) => { if (!isLoading) { e.currentTarget.style.filter = 'brightness(1.08)'; e.currentTarget.style.boxShadow = '0 6px 24px rgba(var(--home-gold-rgb), 0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; } }} onMouseLeave={(e) => { e.currentTarget.style.filter = 'brightness(1)'; e.currentTarget.style.boxShadow = '0 4px 20px rgba(var(--home-gold-rgb), 0.3)'; e.currentTarget.style.transform = 'translateY(0)'; }}>{isLoading ? '⏳ Caricamento...' : 'Registrati'}</button>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center', marginTop: '14px' }}>
+            <button onClick={() => { handleModeSwitch(mode === 'login' ? 'register' : 'login'); setError(''); }} className="switch-mode" style={{ border: 0, background: 'transparent', color: 'var(--home-text-faint)', cursor: 'pointer', fontFamily: 'var(--home-font)', fontSize: '11px', transition: 'color 0.3s' }} onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--home-text-muted)')} onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--home-text-faint)')}>
+              {mode === 'login' ? <>Non hai un account? <span style={{ color: 'var(--home-gold)', fontWeight: '600' }}>Registrati</span></> : <>Hai già un account? <span style={{ color: 'var(--home-gold)', fontWeight: '600' }}>Accedi</span></>}
             </button>
-          </form>
-
-          <div style={{ textAlign: 'center', marginTop: S.md }}>
-            <button
-              onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: TEXT.sm, color: C.muted }}
-            >
-              {mode === 'login'
-                ? <>Non hai un account? <span style={{ color: C.primary, fontWeight: '600' }}>Registrati</span></>
-                : <>Hai già un account? <span style={{ color: C.primary, fontWeight: '600' }}>Accedi</span></>
-              }
-            </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: S.sm, margin: `${S.md} 0` }}>
-            <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
-            <span style={{ fontSize: TEXT.xs, color: C.faint }}>oppure</span>
-            <div style={{ flex: 1, borderTop: `1px solid ${C.border}` }} />
-          </div>
+          <div className="divider" style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '14px 0 12px', color: 'var(--home-text-faint)', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' }}><span style={{ flex: 1, height: '1px', background: 'var(--home-border)' }} /><span>oppure</span><span style={{ flex: 1, height: '1px', background: 'var(--home-border)' }} /></div>
 
-          <button onClick={handleGuest} style={{ ...btn.ghost }}>
-            👤 Accedi come ospite
-          </button>
+          <button onClick={handleGuest} className="guest-btn" style={{ width: '100%', height: '40px', border: '1px solid var(--home-border)', background: 'var(--home-bg-soft)', color: 'var(--home-text-muted)', cursor: 'pointer', fontFamily: 'var(--home-font)', fontSize: '11px', transition: 'all 0.3s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }} onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--home-gold)'; e.currentTarget.style.background = 'var(--home-card-hover)'; e.currentTarget.style.color = 'var(--home-text)'; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--home-border)'; e.currentTarget.style.background = 'var(--home-bg-soft)'; e.currentTarget.style.color = 'var(--home-text-muted)'; }}>👤 Accedi come ospite</button>
 
-          <div style={{ fontSize: TEXT.xs, color: C.faint, textAlign: 'center', marginTop: S.sm, lineHeight: '1.5' }}>
-            Come ospite puoi fare swipe e usare le stanze.<br />
-            Recensioni e match salvati richiedono un account.
-          </div>
+          <div style={{ textAlign: 'center', color: 'var(--home-text-faint)', fontSize: '9px', lineHeight: '1.5', marginTop: '10px' }}>Come ospite puoi fare swipe e usare le stanze.<br />Recensioni e match salvati richiedono un account.</div>
+
+          <div className="ticket-tear" style={{ background: 'var(--home-bg)', bottom: '-1px', top: 'auto' }} />
         </div>
       </div>
-    </>
+
+      <style jsx>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,400&display=swap');
+
+        .home-cine {
+          --home-font: 'Inter', 'Helvetica Neue', sans-serif;
+          --home-font-display: 'Playfair Display', Georgia, serif;
+          --home-font-mono: 'JetBrains Mono', 'Courier New', monospace;
+          font-family: var(--home-font);
+          background: var(--home-bg);
+          color: var(--home-text);
+          min-height: 100%;
+          letter-spacing: -0.01em;
+        }
+
+        .home-cine button,
+        .home-cine input {
+          border-radius: 0 !important;
+        }
+        .home-cine input:focus {
+          outline: none;
+        }
+
+        /* ─── TICKET CARD ────────────────────────────────────────────── */
+        .ticket-card {
+          background: var(--home-card);
+          border: 1px solid var(--home-border);
+          position: relative;
+          transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1), box-shadow 0.3s ease;
+          overflow: hidden;
+        }
+        .ticket-card::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border: 1px solid transparent;
+          transition: border-color 0.3s ease;
+          pointer-events: none;
+        }
+        .ticket-card:hover::after {
+          border-color: rgba(var(--home-gold-rgb), 0.38);
+        }
+        .ticket-card .ticket-tear {
+          position: absolute;
+          left: 50%;
+          bottom: -1px;
+          transform: translateX(-50%);
+          width: 14px;
+          height: 5px;
+          background: var(--home-bg);
+          border-radius: 50% 50% 0 0;
+          border-left: 1px solid var(--home-border);
+          border-right: 1px solid var(--home-border);
+          border-top: 1px solid var(--home-border);
+          opacity: 0.6;
+          animation: tearPulse 3s ease-in-out infinite;
+        }
+
+        @keyframes tearPulse {
+          0%, 100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+          50% { opacity: 0.9; transform: translateX(-50%) scale(1.1); }
+        }
+
+        /* ─── ANIMAZIONI SFONDO (solo dark) ─────────────────────────── */
+        .bg-film-grain {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          pointer-events: none;
+          opacity: 0.08;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+          background-repeat: repeat;
+          background-size: 256px 256px; 
+        }
+
+        .bg-scanlines {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          pointer-events: none;
+          opacity: 0.05;
+          background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.03) 2px, rgba(255,255,255,0.03) 4px);
+        }
+
+        .bg-flicker {
+          position: absolute;
+          inset: 0;
+          z-index: 0;
+          pointer-events: none;
+          animation: flicker 8s infinite;
+          opacity: 0.02;
+        }
+
+        @keyframes flicker {
+          0%, 100% { opacity: 0.02; }
+          10% { opacity: 0.06; }
+          20% { opacity: 0.01; }
+          30% { opacity: 0.05; }
+          40% { opacity: 0.01; }
+          70% { opacity: 0.03; }
+          80% { opacity: 0.01; }
+          90% { opacity: 0.05; }
+        }
+
+        /* ─── LOGO ANIMATO ───────────────────────────────────────────── */
+        .cine-logo {
+          display: inline-block;
+        }
+        .logo-cine {
+          animation: goldGlow 4s ease-in-out infinite;
+        }
+        .logo-date {
+          animation: pinkGlow 4s ease-in-out infinite 0.5s;
+        }
+
+        @keyframes goldGlow {
+          0%, 100% { color: var(--home-text); }
+          50% { color: var(--home-gold); }
+        }
+        @keyframes pinkGlow {
+          0%, 100% { color: var(--home-pink); }
+          50% { color: var(--home-gold); }
+        }
+
+        /* ─── SUBTITLE REVEAL ────────────────────────────────────────── */
+        .auth-subtitle {
+          animation: subtitleReveal 1.2s ease both;
+        }
+        @keyframes subtitleReveal {
+          0% { opacity: 0; transform: translateY(4px); }
+          100% { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ─── BOTTONE SUBMIT PULSE ───────────────────────────────────── */
+        .submit-btn {
+          animation: submitPulse 3s ease-in-out infinite;
+        }
+        @keyframes submitPulse {
+          0%, 100% { box-shadow: 0 4px 10px rgba(var(--home-gold-rgb), 0.3); }
+          50% { box-shadow: 0 4px 15px rgba(var(--home-gold-rgb), 0.6); }
+        }
+
+        /* ─── SHIMMER BORDO CARD ────────────────────────────────────── */
+        .ticket-card::before {
+          content: '';
+          position: absolute;
+          inset: -1px;
+          background: linear-gradient(90deg, transparent, rgba(var(--home-gold-rgb), 0.1), transparent);
+          background-size: 200% 100%;
+          animation: shimmerBorder 4s linear infinite;
+          pointer-events: none;
+          z-index: 0;
+          opacity: 0.3;
+        }
+        @keyframes shimmerBorder {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+
+        /* ─── SWIPE ANIMATION PER TABS ──────────────────────────────── */
+        .tabs-slider.left {
+          transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .tabs-slider.right {
+          transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* ─── SWIPE ANIMATION PER FORM ──────────────────────────────── */
+        .form-slider.left {
+          transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .form-slider.right {
+          transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* ─── ALTRE ANIMAZIONI ───────────────────────────────────────── */
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .ticket-card.mounted {
+          animation: fadeUp 0.5s ease both 0.1s;
+        }
+        .animate-in {
+          animation: fadeUp 0.4s ease forwards;
+        }
+
+        /* ─── RESPONSIVE ─────────────────────────────────────────────── */
+        @media (max-width: 480px) {
+          .ticket-card {
+            padding: 18px 16px 16px !important;
+          }
+          .ticket-card .ticket-tear {
+            width: 10px;
+            height: 4px;
+          }
+          .home-cine {
+            padding: 12px !important;
+          }
+        }
+      `}</style>
+    </div>
   );
 }

@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, type CSSProperties } from 'react';
 import { useRouter } from 'next/router';
 import dynamic from 'next/dynamic';
 import AppShell from '@/components/layout/AppShell';
 import { useAuth } from '@/hooks/useAuth';
-import { C, R, FONT, TEXT, S, SHADOW } from '@/styles/token';
+import { useTheme } from '@/context/ThemeContext';
 import {
   MapPin, MagnifyingGlass, FilmSlate, Ticket,
   MapTrifold, List, X, CircleNotch, Clock, Sparkle,
@@ -27,6 +27,60 @@ const MONTHS_IT = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set'
 
 const SESSIONS_COLLAPSED_LIMIT = 3;
 
+// ─── Palette dark "cinema elegante" ──────────────────────────────────────
+const D = {
+  bg: '#0a0806',
+  bgSoft: '#14100e',
+  card: '#1c1613',
+  cardHover: '#241d19',
+  border: '#2d221c',
+  gold: '#f5b92f',
+  goldSoft: '#ffd875',
+  goldGlow: 'rgba(245,185,47,0.12)',
+  pink: '#ed3d73',
+  pinkDeep: '#8e1740',
+  pinkGlow: 'rgba(237,61,115,0.15)',
+  text: '#f0ebe6',
+  textMuted: '#b5a89e',
+  textFaint: '#7a6b60',
+};
+
+// ─── Palette light "cinema elegante" ──────────────────────────────────────
+const L = {
+  bg: '#f5efe8',
+  bgSoft: '#ece3d9',
+  card: '#ffffff',
+  cardHover: '#faf5ef',
+  border: '#d6cbbc',
+  gold: '#b8860b',
+  goldSoft: '#e8c84a',
+  goldGlow: 'rgba(184,134,11,0.10)',
+  pink: '#b83060',
+  pinkDeep: '#8a1d44',
+  pinkGlow: 'rgba(184,48,96,0.10)',
+  text: '#1f1a16',
+  textMuted: '#5c5248',
+  textFaint: '#8a7c6e',
+};
+
+const FONT = "'Inter','Helvetica Neue',sans-serif";
+const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
+const FONT_MONO = "'JetBrains Mono','Courier New',monospace";
+
+const convertHexToRgb = (hex: string) => {
+  const clean = hex.replace('#', '');
+  const full = clean.length === 3
+    ? clean.split('').map((char) => char + char).join('')
+    : clean;
+
+  const value = Number.parseInt(full, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+
+  return `${r}, ${g}, ${b}`;
+};
+
 function formatDayLabel(dateStr: string, index: number): { top: string; bottom: string } {
   const d = new Date(dateStr);
   if (index === 0) return { top: 'Oggi', bottom: `${d.getDate()} ${MONTHS_IT[d.getMonth()]}` };
@@ -43,6 +97,11 @@ function parseSessionTags(format: string | null): string[] {
 export default function CinemaPage() {
   const router = useRouter();
   const { isLoading, currentUser, isGuest } = useAuth();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+  const P = isDark ? D : L;
+
+  const [mounted, setMounted] = useState(false);
 
   // ─── Stato geo ────────────────────────────────────────────────────────────
   const [userLat, setUserLat]       = useState<number | null>(null);
@@ -145,6 +204,11 @@ export default function CinemaPage() {
     }
   };
 
+  // Mounted for opacity transition
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const selectedCinema = cinemas.find((c) => c.id === selectedId);
   const todayFilms     = showtimes[selectedDay]?.films ?? [];
 
@@ -173,10 +237,30 @@ export default function CinemaPage() {
     )
   ).slice(0, 6);
 
+  const cinemaThemeVars: CSSProperties = {
+    ['--home-bg' as any]: P.bg,
+    ['--home-bg-soft' as any]: P.bgSoft,
+    ['--home-card' as any]: P.card,
+    ['--home-card-hover' as any]: P.cardHover,
+    ['--home-border' as any]: P.border,
+    ['--home-border-rgb' as any]: convertHexToRgb(P.border),
+    ['--home-gold' as any]: P.gold,
+    ['--home-gold-soft' as any]: P.goldSoft,
+    ['--home-gold-rgb' as any]: convertHexToRgb(P.gold),
+    ['--home-pink' as any]: P.pink,
+    ['--home-pink-deep' as any]: P.pinkDeep,
+    ['--home-pink-rgb' as any]: convertHexToRgb(P.pink),
+    ['--home-text' as any]: P.text,
+    ['--home-text-muted' as any]: P.textMuted,
+    ['--home-text-faint' as any]: P.textFaint,
+  };
+
   if (isLoading) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <FilmSlate size={40} color={C.primary} weight="duotone" />
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: P.bg }}>
+        <div className="loading-spinner">
+          <FilmSlate size={40} color={P.pink} weight="duotone" />
+        </div>
       </div>
     );
   }
@@ -184,474 +268,753 @@ export default function CinemaPage() {
   return (
     <>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,400&display=swap');
+
         @keyframes spin { to { transform: rotate(360deg); } }
         .spin { animation: spin 1s linear infinite; display: inline-block; }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+        .loading-spinner { animation: pulse 1.4s ease-in-out infinite; }
 
-        /* ── Day nav ── */
+        .cinema-page {
+          --home-font: 'Inter','Helvetica Neue',sans-serif;
+          --home-font-display: 'Playfair Display',Georgia,serif;
+          --home-font-mono: 'JetBrains Mono','Courier New',monospace;
+          font-family: var(--home-font);
+          background: var(--home-bg);
+          color: var(--home-text);
+          min-height: 100%;
+          letter-spacing: -0.01em;
+        }
+
+        .cinema-page *,
+        .cinema-page *::before,
+        .cinema-page *::after {
+          box-sizing: border-box;
+        }
+
+        .cinema-page button,
+        .cinema-page input {
+          border-radius: 0 !important;
+          font-family: var(--home-font);
+        }
+
+        .cinema-page ::selection {
+          background: var(--home-pink);
+          color: #fff;
+        }
+
+        /* Layout principale */
+        .cinema-layout {
+          display: grid;
+          grid-template-columns: 1fr 320px;
+          gap: 32px;
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 24px 20px;
+          align-items: start;
+        }
+        @media (max-width: 1023px) {
+          .cinema-layout {
+            grid-template-columns: 1fr;
+            gap: 20px;
+            padding: 16px;
+          }
+          .cinema-sidebar {
+            display: none;
+          }
+        }
+
+        /* Header */
+        .cinema-header-title {
+          font-family: var(--home-font-display);
+          font-size: 32px;
+          font-weight: 800;
+          color: var(--home-text);
+          line-height: 1.15;
+          letter-spacing: -0.02em;
+          margin-bottom: 4px;
+        }
+
+        /* Card generica */
+        .cinema-card {
+          background: var(--home-card);
+          border: 1px solid var(--home-border);
+          padding: 16px;
+          cursor: pointer;
+          transition: border-color 0.25s, transform 0.2s;
+          position: relative;
+        }
+        .cinema-card:hover {
+          border-color: rgba(var(--home-gold-rgb), 0.38);
+          transform: translateY(-2px);
+        }
+        .cinema-card.selected {
+          border-color: var(--home-gold);
+          box-shadow: 0 0 0 1px var(--home-gold) inset;
+        }
+
+        /* Day nav */
         .day-nav-scroll {
-          display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 6px;
+          display: flex;
+          gap: 8px;
+          overflow-x: auto;
+          padding: 2px 2px 6px;
           scrollbar-width: none;
         }
         .day-nav-scroll::-webkit-scrollbar { display: none; }
         .day-nav-card {
-          flex-shrink: 0; min-width: 68px;
-          padding: 10px 6px; border-radius: ${R.md};
-          border: 1.5px solid ${C.border}; background: ${C.bg};
-          cursor: pointer; text-align: center;
-          transition: all .15s;
-          display: flex; flex-direction: column; gap: 2px; align-items: center;
+          flex-shrink: 0;
+          min-width: 72px;
+          padding: 12px 8px;
+          border: 1.5px solid var(--home-border);
+          background: var(--home-card);
+          cursor: pointer;
+          text-align: center;
+          transition: all 0.15s;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          align-items: center;
+          border-radius: 0;
+          font-family: var(--home-font);
         }
-        .day-nav-card:hover { border-color: ${C.primary}; }
+        .day-nav-card:hover { border-color: var(--home-gold); }
         .day-nav-card.active {
-          background: ${C.primary}; border-color: ${C.primary};
-          box-shadow: 0 4px 14px rgba(232,56,109,.28);
+          border-color: var(--home-gold);
+          background: var(--home-card);
+          box-shadow: 0 0 0 1px var(--home-gold) inset;
         }
-        .day-nav-top { font-size: ${TEXT.sm}; font-weight: 700; color: ${C.ink}; }
-        .day-nav-card.active .day-nav-top { color: #fff; }
-        .day-nav-bottom { font-size: ${TEXT.xs}; color: ${C.muted}; }
-        .day-nav-card.active .day-nav-bottom { color: rgba(255,255,255,0.85); }
-        .day-nav-count { font-size: 10px; color: ${C.faint}; margin-top: 1px; }
-        .day-nav-card.active .day-nav-count { color: rgba(255,255,255,0.7); }
+        .day-nav-top { font-size: 13px; font-weight: 700; color: var(--home-text-muted); }
+        .day-nav-card.active .day-nav-top { color: var(--home-text); }
+        .day-nav-bottom { font-size: 11px; color: var(--home-text-faint); }
+        .day-nav-card.active .day-nav-bottom { color: var(--home-text-muted); }
+        .day-nav-count { font-size: 10px; color: var(--home-text-faint); margin-top: 1px; }
+        .day-nav-card.active .day-nav-count { color: var(--home-text-muted); }
 
-        /* ── Filter bar ── */
+        /* Filter bar */
         .filter-scroll {
-          display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px;
+          display: flex;
+          gap: 6px;
+          overflow-x: auto;
+          padding-bottom: 2px;
           scrollbar-width: none;
         }
         .filter-scroll::-webkit-scrollbar { display: none; }
         .filter-chip {
-          flex-shrink: 0; padding: 6px 13px; border-radius: ${R.full};
-          border: 1.5px solid ${C.border}; background: ${C.bg};
-          font-size: ${TEXT.xs}; font-weight: 600; color: ${C.muted};
-          font-family: ${FONT.sans}; white-space: nowrap;
+          flex-shrink: 0;
+          padding: 6px 14px;
+          border: 1.5px solid var(--home-border);
+          background: var(--home-card);
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--home-text-muted);
+          font-family: var(--home-font);
+          white-space: nowrap;
+          transition: all 0.15s;
+          cursor: pointer;
+          border-radius: 0;
         }
+        .filter-chip:hover { border-color: var(--home-text-muted); }
 
-        /* ── Film row ── */
+        /* Film row */
         .film-row {
-          display: flex; gap: ${S.md};
-          padding: ${S.md} 0;
-          border-bottom: 1px solid ${C.borderSoft};
+          display: flex;
+          gap: 16px;
+          padding: 16px 0;
+          border-bottom: 1px solid var(--home-border);
         }
         .film-row:last-child { border-bottom: none; }
         .film-poster {
-          width: 64px; height: 92px; border-radius: ${R.sm};
-          object-fit: cover; flex-shrink: 0; background: ${C.bgSoft};
-          box-shadow: ${SHADOW.sm};
+          width: 72px;
+          height: 100px;
+          border-radius: 0;
+          object-fit: cover;
+          flex-shrink: 0;
+          background: var(--home-card);
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
 
-        /* ── Sessions grid ── */
+        /* Sessions grid */
         .sessions-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+          display: flex;
+          flex-wrap: wrap;
           gap: 8px;
         }
         .session-btn {
-          display: flex; flex-direction: column; align-items: center;
-          gap: 2px; padding: 8px 6px;
-          border-radius: ${R.sm}; border: 1.5px solid ${C.border};
-          background: ${C.bg}; cursor: pointer; text-decoration: none;
-          transition: all .12s;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 2px;
+          padding: 8px 12px;
+          border: none;
+          background: var(--home-gold);
+          cursor: pointer;
+          text-decoration: none;
+          transition: all 0.15s;
+          min-width: 80px;
+          border-radius: 0;
         }
-        .session-btn:hover {
-          border-color: ${C.primary}; background: ${C.primaryFaint};
-          transform: translateY(-1px);
-        }
+        .session-btn:hover { background: var(--home-gold-soft); transform: translateY(-1px); }
         .session-time {
-          font-size: ${TEXT.sm}; font-weight: 800; color: ${C.ink};
-          font-family: ${FONT.sans}; letter-spacing: 0.2px;
+          font-size: 14px;
+          font-weight: 800;
+          color: var(--home-bg);
+          font-family: var(--home-font);
+          letter-spacing: 0.2px;
         }
-        .session-btn:hover .session-time { color: ${C.primary}; }
         .session-tag {
-          font-size: 10px; color: ${C.faint}; font-weight: 500;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+          font-size: 10px;
+          color: rgba(0,0,0,0.7);
+          font-weight: 500;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          max-width: 100%;
+          opacity: 0.7;
+        }
+        .session-btn.expand-btn {
+          background: transparent;
+          border: 1px solid var(--home-border);
+          color: var(--home-text-muted);
+        }
+        .session-btn.expand-btn:hover {
+          background: var(--home-card-hover);
+          border-color: var(--home-gold);
+          color: var(--home-gold);
         }
 
-        .cinema-card {
-          padding: ${S.md}; border-radius: ${R.lg};
-          border: 1.5px solid ${C.border}; background: ${C.bg};
-          cursor: pointer; transition: all .15s;
-        }
-        .cinema-card:hover { border-color: ${C.primary}; box-shadow: ${SHADOW.sm}; }
-        .cinema-card.selected { border-color: ${C.primary}; background: ${C.primaryFaint}; }
-
+        /* Radius tabs */
         .day-tab {
-          padding: 8px 14px; border: none; border-radius: ${R.full};
-          font-size: ${TEXT.xs}; font-weight: 600; cursor: pointer;
-          font-family: ${FONT.sans}; white-space: nowrap;
-          transition: all .15s;
+          padding: 6px 16px;
+          border: 1px solid var(--home-border);
+          border-radius: 0;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          font-family: var(--home-font);
+          white-space: nowrap;
+          transition: all 0.15s;
+          background: transparent;
+          color: var(--home-text-muted);
         }
-        .day-tab.active { background: ${C.primary}; color: #fff; }
-        .day-tab.inactive { background: ${C.bgSoft}; color: ${C.muted}; }
-        .day-tab.inactive:hover { background: ${C.border}; }
+        .day-tab:hover { border-color: var(--home-text-muted); color: var(--home-text); }
+        .day-tab.active {
+          background: var(--home-pink);
+          border-color: var(--home-pink);
+          color: #fff;
+          box-shadow: 0 4px 14px rgba(var(--home-pink-rgb), 0.3);
+        }
+
+        /* Ticket card (sidebar) */
+        .ticket-card {
+          background: var(--home-card);
+          border: 1px solid var(--home-border);
+          position: relative;
+          transition: transform 0.25s cubic-bezier(0.2,0,0,1), box-shadow 0.3s ease;
+          cursor: pointer;
+          overflow: hidden;
+          padding: 20px;
+        }
+        .ticket-card::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          border: 1px solid transparent;
+          transition: border-color 0.3s ease;
+          pointer-events: none;
+        }
+        .ticket-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        .ticket-card:hover::after {
+          border-color: rgba(var(--home-gold-rgb), 0.38);
+        }
+        .ticket-tear {
+          position: absolute;
+          left: 50%;
+          bottom: -1px;
+          transform: translateX(-50%);
+          width: 16px;
+          height: 6px;
+          background: var(--home-bg);
+          border-radius: 50% 50% 0 0;
+          border-left: 1px solid var(--home-border);
+          border-right: 1px solid var(--home-border);
+          border-top: 1px solid var(--home-border);
+          opacity: 0.6;
+        }
+
+        .sidebar-title {
+          font-size: 18px;
+          font-weight: 800;
+          font-family: var(--home-font-display);
+          color: var(--home-text);
+          margin-bottom: 8px;
+          letter-spacing: -0.01em;
+        }
+        .sidebar-text {
+          font-size: 13px;
+          color: var(--home-text-muted);
+          line-height: 1.5;
+        }
+        .sidebar-button {
+          margin-top: 16px;
+          padding: 10px 20px;
+          background: var(--home-gold);
+          color: var(--home-bg);
+          border: none;
+          font-weight: 700;
+          font-size: 13px;
+          cursor: pointer;
+          font-family: var(--home-font);
+          transition: background 0.25s, transform 0.2s;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .sidebar-button:hover {
+          background: var(--home-gold-soft);
+          transform: scale(1.02);
+        }
+        .sidebar-button-outline {
+          margin-top: 16px;
+          padding: 10px 20px;
+          background: transparent;
+          color: var(--home-gold);
+          border: 1px solid var(--home-gold);
+          font-weight: 600;
+          font-size: 13px;
+          cursor: pointer;
+          font-family: var(--home-font);
+          transition: background 0.25s, color 0.25s;
+        }
+        .sidebar-button-outline:hover {
+          background: var(--home-gold);
+          color: var(--home-bg);
+        }
       `}</style>
 
       <AppShell activeNav="cinema">
-        <div style={{ padding: S.md, paddingBottom: '32px', maxWidth: '700px', margin: '0 auto' }}>
-
-          {/* ── Header ── */}
-          <div style={{ marginBottom: S.lg }}>
-            <div style={{ fontSize: TEXT.xs, color: C.muted, marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <MapPin size={13} color={C.muted} weight="fill" /> Cinema
-            </div>
-            <div style={{ fontSize: TEXT.xl, fontWeight: '800', color: C.ink }}>
-              Cinema vicino a te
-            </div>
-            <div style={{ fontSize: TEXT.sm, color: C.muted, marginTop: '2px' }}>
-              The Space Cinema — programmazione settimana
-            </div>
-          </div>
-
-          {/* ── Stato geolocalizzazione ── */}
-          {geoLoading && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: S.sm, padding: S.md, background: C.primaryLight, borderRadius: R.md, marginBottom: S.md, fontSize: TEXT.sm, color: C.primary }}>
-              <CircleNotch size={18} color={C.primary} className="spin" />
-              {showManual ? 'Ricerca in corso...' : 'Rilevamento posizione...'}
-            </div>
-          )}
-
-          {/* ── Input manuale città ── */}
-          {showManual && !geoLoading && (
-            <div style={{ marginBottom: S.lg, background: C.bgSoft, borderRadius: R.lg, padding: S.md }}>
-              <div style={{ fontSize: TEXT.sm, fontWeight: '600', color: C.ink, marginBottom: S.sm }}>
-                📍 Inserisci la tua città
+        <div className="cinema-page" style={{ ...cinemaThemeVars, opacity: mounted ? 1 : 0, transition: 'opacity 0.4s ease' }}>
+          <div className="cinema-layout">
+            {/* ─── COLONNA CENTRALE ── */}
+            <div style={{ minWidth: 0 }}>
+              {/* Header */}
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{ fontSize: '11px', color: P.textFaint, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
+                  <MapPin size={13} color={P.gold} weight="fill" /> Cinema
+                </div>
+                <div className="cinema-header-title">
+                  Cinema vicino a te
+                </div>
+                <div style={{ fontSize: '15px', color: P.textMuted, marginTop: '4px' }}>
+                  The Space Cinema — programmazione settimanale
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: S.sm }}>
-                <input
-                  value={cityInput}
-                  onChange={(e) => setCityInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleCitySearch(); }}
-                  placeholder="es. Milano, Roma, Napoli..."
-                  style={{
-                    flex: 1, padding: '11px 14px',
-                    border: `1.5px solid ${C.border}`, borderRadius: R.md,
-                    fontSize: TEXT.sm, fontFamily: FONT.sans,
-                    color: C.ink, background: C.bg, outline: 'none',
-                  }}
-                />
-                <button
-                  onClick={handleCitySearch}
-                  style={{
-                    padding: '11px 16px', background: C.primary, color: '#fff',
-                    border: 'none', borderRadius: R.md, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    fontSize: TEXT.sm, fontWeight: '600', fontFamily: FONT.sans,
-                  }}
-                >
-                  <MagnifyingGlass size={16} color="#fff" weight="bold" />
-                  Cerca
-                </button>
-              </div>
-              {geoError && (
-                <div style={{ fontSize: TEXT.xs, color: C.error, marginTop: '8px' }}>⚠️ {geoError}</div>
+
+              {/* Stato geolocalizzazione */}
+              {geoLoading && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '16px', background: P.card, border: `1px solid ${P.border}`, marginBottom: '16px', fontSize: '13px', color: P.gold }}>
+                  <CircleNotch size={18} color={P.gold} className="spin" />
+                  {showManual ? 'Ricerca in corso...' : 'Rilevamento posizione...'}
+                </div>
               )}
+
+              {/* Input manuale città */}
+              {showManual && !geoLoading && (
+                <div style={{ marginBottom: '24px', background: P.card, border: `1px solid ${P.border}`, padding: '20px', position: 'relative' }}>
+                  <div style={{ fontSize: '15px', fontWeight: '700', color: P.text, marginBottom: '8px' }}>
+                    📍 Inserisci la tua città
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      value={cityInput}
+                      onChange={(e) => setCityInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleCitySearch(); }}
+                      placeholder="es. Milano, Roma, Napoli..."
+                      style={{
+                        flex: 1,
+                        padding: '12px 16px',
+                        border: `1.5px solid ${P.border}`,
+                        fontSize: '14px',
+                        fontFamily: FONT,
+                        color: P.text,
+                        background: P.bgSoft,
+                        outline: 'none',
+                        borderRadius: 0,
+                      }}
+                    />
+                    <button
+                      onClick={handleCitySearch}
+                      style={{
+                        padding: '12px 20px',
+                        background: P.pink,
+                        color: '#fff',
+                        border: 'none',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        fontFamily: FONT,
+                        borderRadius: 0,
+                      }}
+                    >
+                      <MagnifyingGlass size={16} color="#fff" weight="bold" />
+                      Cerca
+                    </button>
+                  </div>
+                  {geoError && (
+                    <div style={{ fontSize: '12px', color: P.pink, marginTop: '8px' }}>⚠️ {geoError}</div>
+                  )}
+                  {userLat && (
+                    <div style={{ fontSize: '12px', color: '#22c55e', marginTop: '8px' }}>
+                      ✅ Posizione impostata
+                    </div>
+                  )}
+                  <div className="ticket-tear" style={{ background: P.bg }} />
+                </div>
+              )}
+
+              {/* Posizione trovata */}
+              {userLat && !showManual && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '12px', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <MapPin size={13} color="#22c55e" weight="fill" />
+                    Posizione rilevata automaticamente
+                  </div>
+                  <button
+                    onClick={() => setShowManual(true)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: P.textMuted, fontFamily: FONT, textDecoration: 'underline' }}
+                  >
+                    Cambia
+                  </button>
+                </div>
+              )}
+
               {userLat && (
-                <div style={{ fontSize: TEXT.xs, color: C.success, marginTop: '8px' }}>
-                  ✅ Posizione impostata
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── Posizione trovata — pulsante per cambiarla ── */}
-          {userLat && !showManual && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: S.md }}>
-              <div style={{ fontSize: TEXT.xs, color: C.success, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <MapPin size={13} color={C.success} weight="fill" />
-                Posizione rilevata automaticamente
-              </div>
-              <button
-                onClick={() => setShowManual(true)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: TEXT.xs, color: C.muted, fontFamily: FONT.sans }}
-              >
-                Cambia →
-              </button>
-            </div>
-          )}
-
-          {userLat && (
-            <>
-              {/* ── Filtri: raggio + vista ── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: S.md, flexWrap: 'wrap', gap: S.sm }}>
-                {/* Raggio */}
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  {RADIUS_OPTIONS.map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => setRadius(r)}
-                      className={`day-tab ${radius === r ? 'active' : 'inactive'}`}
-                    >
-                      {r} km
-                    </button>
-                  ))}
-                </div>
-                {/* Vista mappa / lista */}
-                <div style={{ display: 'flex', gap: '4px', background: C.bgSoft, borderRadius: R.full, padding: '3px' }}>
-                  <button
-                    onClick={() => setView('map')}
-                    style={{ padding: '6px 14px', border: 'none', borderRadius: R.full, cursor: 'pointer', background: view === 'map' ? C.primary : 'transparent', color: view === 'map' ? '#fff' : C.muted, fontSize: TEXT.xs, fontWeight: '600', fontFamily: FONT.sans, display: 'flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    <MapTrifold size={14} /> Mappa
-                  </button>
-                  <button
-                    onClick={() => setView('list')}
-                    style={{ padding: '6px 14px', border: 'none', borderRadius: R.full, cursor: 'pointer', background: view === 'list' ? C.primary : 'transparent', color: view === 'list' ? '#fff' : C.muted, fontSize: TEXT.xs, fontWeight: '600', fontFamily: FONT.sans, display: 'flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    <List size={14} /> Lista
-                  </button>
-                </div>
-              </div>
-
-              {/* ── Loading cinema ── */}
-              {loadingCinemas && (
-                <div style={{ textAlign: 'center', padding: S.xl, color: C.muted, fontSize: TEXT.sm }}>
-                  <CircleNotch size={24} color={C.primary} className="spin" style={{ marginBottom: S.sm }} />
-                  <div>Cerco cinema vicini...</div>
-                </div>
-              )}
-
-              {/* ── Nessun cinema trovato ── */}
-              {!loadingCinemas && cinemas.length === 0 && (
-                <div style={{ textAlign: 'center', padding: S.xl, background: C.bgSoft, borderRadius: R.lg }}>
-                  <div style={{ fontSize: '32px', marginBottom: S.sm }}>🎬</div>
-                  <div style={{ fontSize: TEXT.base, fontWeight: '700', color: C.ink }}>Nessun cinema trovato</div>
-                  <div style={{ fontSize: TEXT.sm, color: C.muted, marginTop: S.xs }}>
-                    Prova ad aumentare il raggio di ricerca
-                  </div>
-                </div>
-              )}
-
-              {/* ── MAPPA ── */}
-              {!loadingCinemas && cinemas.length > 0 && view === 'map' && (
-                <div style={{ marginBottom: S.md }}>
-                  <CinemaMap
-                    cinemas={cinemas}
-                    userLat={userLat!}
-                    userLng={userLng!}
-                    selectedId={selectedId}
-                    onSelect={(id) => setSelectedId((prev) => prev === id ? null : id)}
-                  />
-                  {/* Lista sotto la mappa */}
-                  <div style={{ marginTop: S.sm, display: 'flex', flexDirection: 'column', gap: S.sm }}>
-                    {cinemas.map((c) => (
-                      <div
-                        key={c.id}
-                        className={`cinema-card${selectedId === c.id ? ' selected' : ''}`}
-                        onClick={() => setSelectedId((prev) => prev === c.id ? null : c.id)}
+                <>
+                  {/* Filtri: raggio + vista */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      {RADIUS_OPTIONS.map((r) => (
+                        <button
+                          key={r}
+                          onClick={() => setRadius(r)}
+                          className={`day-tab ${radius === r ? 'active' : ''}`}
+                        >
+                          {r} km
+                        </button>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', background: P.card, padding: '4px', border: `1px solid ${P.border}` }}>
+                      <button
+                        onClick={() => setView('map')}
+                        style={{ padding: '6px 16px', border: 'none', cursor: 'pointer', background: view === 'map' ? P.gold : 'transparent', color: view === 'map' ? P.bg : P.textMuted, fontSize: '13px', fontWeight: '600', fontFamily: FONT, display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.15s', borderRadius: 0 }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div>
-                            <div style={{ fontSize: TEXT.base, fontWeight: '700', color: C.ink }}>{c.name}</div>
-                            <div style={{ fontSize: TEXT.xs, color: C.muted, marginTop: '2px' }}>{c.address}</div>
-                          </div>
-                          <div style={{ fontSize: TEXT.xs, fontWeight: '700', color: C.primary, background: C.primaryLight, borderRadius: R.full, padding: '4px 10px', flexShrink: 0, marginLeft: S.sm }}>
-                            {c.distanceKm} km
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── LISTA ── */}
-              {!loadingCinemas && cinemas.length > 0 && view === 'list' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: S.sm, marginBottom: S.md }}>
-                  {cinemas.map((c) => (
-                    <div
-                      key={c.id}
-                      className={`cinema-card${selectedId === c.id ? ' selected' : ''}`}
-                      onClick={() => setSelectedId((prev) => prev === c.id ? null : c.id)}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div>
-                          <div style={{ fontSize: TEXT.base, fontWeight: '700', color: C.ink }}>{c.name}</div>
-                          <div style={{ fontSize: TEXT.xs, color: C.muted, marginTop: '2px' }}>{c.address}, {c.city}</div>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', flexShrink: 0, marginLeft: S.sm }}>
-                          <div style={{ fontSize: TEXT.xs, fontWeight: '700', color: C.primary, background: C.primaryLight, borderRadius: R.full, padding: '4px 10px' }}>
-                            {c.distanceKm} km
-                          </div>
-                        </div>
-                      </div>
+                        <MapTrifold size={16} weight={view === 'map' ? 'fill' : 'regular'} /> Mappa
+                      </button>
+                      <button
+                        onClick={() => setView('list')}
+                        style={{ padding: '6px 16px', border: 'none', cursor: 'pointer', background: view === 'list' ? P.gold : 'transparent', color: view === 'list' ? P.bg : P.textMuted, fontSize: '13px', fontWeight: '600', fontFamily: FONT, display: 'flex', alignItems: 'center', gap: '6px', transition: 'all 0.15s', borderRadius: 0 }}
+                      >
+                        <List size={16} weight={view === 'list' ? 'fill' : 'regular'} /> Lista
+                      </button>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {/* ── PROGRAMMAZIONE cinema selezionato ── */}
-              {selectedId && (
-                <div style={{ background: C.bg, borderRadius: R.lg, border: `1.5px solid ${C.border}`, overflow: 'hidden' }}>
-
-                  {/* Header programmazione */}
-                  <div style={{ padding: S.md, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                    <div>
-                      <div style={{ fontSize: TEXT.base, fontWeight: '800', color: C.ink }}>{selectedCinema?.name}</div>
-                      <div style={{ fontSize: TEXT.xs, color: C.muted, marginTop: '2px' }}>Programmazione prossimi 7 giorni</div>
-                    </div>
-                    <button
-                      onClick={() => { setSelectedId(null); setShowtimes([]); }}
-                      style={{ background: C.bgSoft, border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                    >
-                      <X size={16} color={C.muted} />
-                    </button>
                   </div>
 
-                  {loadingShowtimes ? (
-                    <div style={{ textAlign: 'center', padding: S.xl, color: C.muted }}>
-                      <CircleNotch size={24} color={C.primary} className="spin" />
-                      <div style={{ fontSize: TEXT.sm, marginTop: S.sm }}>Carico programmazione...</div>
+                  {/* Loading cinema */}
+                  {loadingCinemas && (
+                    <div style={{ textAlign: 'center', padding: '32px', color: P.textMuted, fontSize: '13px' }}>
+                      <CircleNotch size={24} color={P.gold} className="spin" style={{ marginBottom: '8px' }} />
+                      <div>Cerco cinema vicini...</div>
                     </div>
-                  ) : (
-                    <>
-                      {/* ── Navigazione date — card moderne con giorno + data ── */}
-                      <div style={{ padding: `${S.md} ${S.md} ${S.sm}` }}>
-                        <div className="day-nav-scroll">
-                          {showtimes.map((day, i) => {
-                            const label = formatDayLabel(day.date, i);
-                            const isActive = selectedDay === i;
-                            return (
-                              <button
-                                key={day.date}
-                                onClick={() => { setSelectedDay(i); setActiveFormatFilter('Tutti'); setExpandedFilms({}); }}
-                                className={`day-nav-card${isActive ? ' active' : ''}`}
-                              >
-                                <span className="day-nav-top">{label.top}</span>
-                                <span className="day-nav-bottom">{label.bottom}</span>
-                                <span className="day-nav-count">
-                                  {day.films.length} {day.films.length === 1 ? 'film' : 'film'}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                  )}
+
+                  {/* Nessun cinema trovato */}
+                  {!loadingCinemas && cinemas.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '32px', background: P.card, border: `1px solid ${P.border}`, position: 'relative' }}>
+                      <div style={{ fontSize: '32px', marginBottom: '8px' }}>🎬</div>
+                      <div style={{ fontSize: '15px', fontWeight: '700', color: P.text }}>Nessun cinema trovato</div>
+                      <div style={{ fontSize: '13px', color: P.textMuted, marginTop: '4px' }}>
+                        Prova ad aumentare il raggio di ricerca
                       </div>
+                      <div className="ticket-tear" style={{ background: P.bg }} />
+                    </div>
+                  )}
 
-                      {/* ── Barra filtri formato/lingua (riepilogo visivo del giorno) ── */}
-                      {dayFormatTags.length > 0 && (
-                        <div style={{ padding: `0 ${S.md} ${S.sm}` }}>
-                          <div className="filter-scroll">
-                            <button
-                              type="button"
-                              onClick={() => { setActiveFormatFilter('Tutti'); setExpandedFilms({}); }}
-                              className="filter-chip"
-                              style={{
-                                background: activeFormatFilter === 'Tutti' ? C.ink : C.bg,
-                                color: activeFormatFilter === 'Tutti' ? '#fff' : C.muted,
-                                borderColor: activeFormatFilter === 'Tutti' ? C.ink : C.border,
-                                cursor: 'pointer',
-                              }}
-                            >
-                              Tutti
-                            </button>
-                            {dayFormatTags.map((tag) => (
-                              <button
-                                type="button"
-                                key={tag}
-                                onClick={() => { setActiveFormatFilter(tag); setExpandedFilms({}); }}
-                                className="filter-chip"
-                                style={{
-                                  background: activeFormatFilter === tag ? C.ink : C.bg,
-                                  color: activeFormatFilter === tag ? '#fff' : C.muted,
-                                  borderColor: activeFormatFilter === tag ? C.ink : C.border,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                {tag}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* ── Film del giorno ── */}
-                      <div style={{ padding: `0 ${S.md} ${S.md}` }}>
-                        {filteredFilms.length === 0 ? (
-                          <div style={{ textAlign: 'center', padding: S.lg, color: C.muted, fontSize: TEXT.sm }}>
-                            Nessuna programmazione per questo giorno
-                          </div>
-                        ) : (
-                          filteredFilms.map((film: ShowtimeFilm) => (
-                            <div key={film.id} className="film-row">
-                              {/* Poster */}
-                              {film.posterUrl ? (
-                                <img src={film.posterUrl} alt={film.title} className="film-poster" />
-                              ) : (
-                                <div className="film-poster" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <FilmSlate size={22} color={C.faint} />
-                                </div>
-                              )}
-
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                {/* Titolo + durata: gerarchia forte */}
-                                <div style={{ fontSize: TEXT.base, fontWeight: '800', color: C.ink, lineHeight: 1.25, marginBottom: '4px' }}>
-                                  {film.title}
-                                </div>
-                                {film.duration && (
-                                  <div style={{
-                                    fontSize: TEXT.xs, color: C.muted, marginBottom: S.sm,
-                                    display: 'flex', alignItems: 'center', gap: '4px',
-                                  }}>
-                                    <Clock size={11} color={C.muted} />
-                                    {film.duration}
-                                  </div>
-                                )}
-
-                                {/* Orari — elemento principale, griglia cliccabile */}
-                                <div className="sessions-grid">
-                                  {(expandedFilms[String(film.id)] ? film.sessions : film.sessions.slice(0, SESSIONS_COLLAPSED_LIMIT)).map((session) => {
-                                    const tags = parseSessionTags(session.format);
-                                    return (
-                                      <a
-                                        key={session.id || `${film.id}-${session.time}`}
-                                        href={session.bookingUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="session-btn"
-                                      >
-                                        <span className="session-time">{session.time}</span>
-                                        {tags.length > 0 && (
-                                          <span className="session-tag">{tags.join(' · ')}</span>
-                                        )}
-                                      </a>
-                                    );
-                                  })}
-                                  {film.sessions.length > SESSIONS_COLLAPSED_LIMIT && (
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleFilmExpanded(film.id)}
-                                      className="session-btn"
-                                      aria-expanded={!!expandedFilms[String(film.id)]}
-                                      style={{ color: C.primary, fontFamily: FONT.sans }}
-                                    >
-                                      <span className="session-time" style={{ color: C.primary, fontSize: TEXT.xs }}>
-                                        {expandedFilms[String(film.id)] ? 'Meno ↑' : 'Altro ↓'}
-                                      </span>
-                                    </button>
-                                  )}
-                                </div>
+                  {/* MAPPA */}
+                  {!loadingCinemas && cinemas.length > 0 && view === 'map' && (
+                    <div style={{ marginBottom: '24px' }}>
+                      <div>
+                        <CinemaMap
+                          cinemas={cinemas}
+                          userLat={userLat!}
+                          userLng={userLng!}
+                          selectedId={selectedId}
+                          onSelect={(id) => setSelectedId((prev) => prev === id ? null : id)}
+                        />
+                      </div>
+                      <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {cinemas.map((c) => (
+                          <div
+                            key={c.id}
+                            className={`cinema-card${selectedId === c.id ? ' selected' : ''}`}
+                            onClick={() => setSelectedId((prev) => prev === c.id ? null : c.id)}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div>
+                                <div style={{ fontSize: '15px', fontWeight: '700', color: P.text }}>{c.name}</div>
+                                <div style={{ fontSize: '12px', color: P.textFaint, marginTop: '2px' }}>{c.address}</div>
+                              </div>
+                              <div style={{ fontSize: '12px', fontWeight: '700', color: P.gold, flexShrink: 0, marginLeft: '8px' }}>
+                                {c.distanceKm} km
                               </div>
                             </div>
-                          ))
-                        )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* LISTA */}
+                  {!loadingCinemas && cinemas.length > 0 && view === 'list' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+                      {cinemas.map((c) => (
+                        <div
+                          key={c.id}
+                          className={`cinema-card${selectedId === c.id ? ' selected' : ''}`}
+                          onClick={() => setSelectedId((prev) => prev === c.id ? null : c.id)}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div>
+                              <div style={{ fontSize: '15px', fontWeight: '700', color: P.text }}>{c.name}</div>
+                              <div style={{ fontSize: '12px', color: P.textFaint, marginTop: '2px' }}>{c.address}, {c.city}</div>
+                            </div>
+                            <div style={{ fontSize: '12px', fontWeight: '700', color: P.gold, flexShrink: 0, marginLeft: '8px' }}>
+                              {c.distanceKm} km
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* PROGRAMMAZIONE cinema selezionato */}
+                  {selectedId && (
+                    <div style={{ background: P.card, border: `1.5px solid ${P.gold}`, overflow: 'hidden', position: 'relative' }}>
+                      {/* Header programmazione */}
+                      <div style={{ padding: '20px', borderBottom: `1px solid ${P.border}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ fontSize: '18px', fontWeight: '800', color: P.text, fontFamily: FONT_DISPLAY }}>{selectedCinema?.name}</div>
+                          <div style={{ fontSize: '12px', color: P.textMuted, marginTop: '4px' }}>Programmazione prossimi 7 giorni</div>
+                        </div>
+                        <button
+                          onClick={() => { setSelectedId(null); setShowtimes([]); }}
+                          style={{ background: P.cardHover, border: 'none', width: '32px', height: '32px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: P.textMuted }}
+                        >
+                          <X size={18} />
+                        </button>
                       </div>
 
-                      {/* ── Nota selezione (coerente con riferimento visivo) ── */}
-                      {filteredFilms.length > 0 && (
-                        <div style={{
-                          display: 'flex', alignItems: 'center', gap: '8px',
-                          padding: `${S.sm} ${S.md} ${S.md}`,
-                          fontSize: TEXT.xs, color: C.muted,
-                        }}>
-                          <Sparkle size={13} color={C.primary} weight="fill" />
-                          Seleziona un orario per proseguire con la prenotazione
+                      {loadingShowtimes ? (
+                        <div style={{ textAlign: 'center', padding: '48px', color: P.textMuted }}>
+                          <CircleNotch size={24} color={P.gold} className="spin" />
+                          <div style={{ fontSize: '13px', marginTop: '12px' }}>Carico programmazione...</div>
                         </div>
+                      ) : (
+                        <>
+                          {/* Navigazione date */}
+                          <div style={{ padding: '20px 20px 12px' }}>
+                            <div className="day-nav-scroll">
+                              {showtimes.map((day, i) => {
+                                const label = formatDayLabel(day.date, i);
+                                const isActive = selectedDay === i;
+                                return (
+                                  <button
+                                    key={day.date}
+                                    onClick={() => { setSelectedDay(i); setActiveFormatFilter('Tutti'); setExpandedFilms({}); }}
+                                    className={`day-nav-card${isActive ? ' active' : ''}`}
+                                  >
+                                    <span className="day-nav-top">{label.top}</span>
+                                    <span className="day-nav-bottom">{label.bottom}</span>
+                                    <span className="day-nav-count">
+                                      {day.films.length} film
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Filtri formato/lingua */}
+                          {dayFormatTags.length > 0 && (
+                            <div style={{ padding: '0 20px 12px' }}>
+                              <div className="filter-scroll">
+                                <button
+                                  type="button"
+                                  onClick={() => { setActiveFormatFilter('Tutti'); setExpandedFilms({}); }}
+                                  className="filter-chip"
+                                  style={{
+                                    background: activeFormatFilter === 'Tutti' ? P.cardHover : P.card,
+                                    color: activeFormatFilter === 'Tutti' ? P.text : P.textMuted,
+                                    borderColor: activeFormatFilter === 'Tutti' ? P.gold : P.border,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  Tutti
+                                </button>
+                                {dayFormatTags.map((tag) => (
+                                  <button
+                                    type="button"
+                                    key={tag}
+                                    onClick={() => { setActiveFormatFilter(tag); setExpandedFilms({}); }}
+                                    className="filter-chip"
+                                    style={{
+                                      background: activeFormatFilter === tag ? P.cardHover : P.card,
+                                      color: activeFormatFilter === tag ? P.text : P.textMuted,
+                                      borderColor: activeFormatFilter === tag ? P.gold : P.border,
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    {tag}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Film del giorno */}
+                          <div style={{ padding: '0 20px 20px' }}>
+                            {filteredFilms.length === 0 ? (
+                              <div style={{ textAlign: 'center', padding: '24px', color: P.textMuted, fontSize: '13px' }}>
+                                Nessuna programmazione per questo giorno
+                              </div>
+                            ) : (
+                              filteredFilms.map((film: ShowtimeFilm) => (
+                                <div key={film.id} className="film-row">
+                                  {film.posterUrl ? (
+                                    <img src={film.posterUrl} alt={film.title} className="film-poster" />
+                                  ) : (
+                                    <div className="film-poster" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: P.card }}>
+                                      <FilmSlate size={24} color={P.textFaint} />
+                                    </div>
+                                  )}
+
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: '18px', fontWeight: '800', color: P.text, lineHeight: 1.25, marginBottom: '4px' }}>
+                                      {film.title}
+                                    </div>
+                                    {film.duration && (
+                                      <div style={{
+                                        fontSize: '12px', color: P.textMuted, marginBottom: '12px',
+                                        display: 'flex', alignItems: 'center', gap: '4px',
+                                      }}>
+                                        <Clock size={12} color={P.textMuted} />
+                                        {film.duration}
+                                      </div>
+                                    )}
+
+                                    <div className="sessions-grid">
+                                      {(expandedFilms[String(film.id)] ? film.sessions : film.sessions.slice(0, SESSIONS_COLLAPSED_LIMIT)).map((session) => {
+                                        const tags = parseSessionTags(session.format);
+                                        return (
+                                          <a
+                                            key={session.id || `${film.id}-${session.time}`}
+                                            href={session.bookingUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="session-btn"
+                                          >
+                                            <span className="session-time">{session.time}</span>
+                                            {tags.length > 0 && (
+                                              <span className="session-tag">{tags.join(' · ')}</span>
+                                            )}
+                                          </a>
+                                        );
+                                      })}
+                                      {film.sessions.length > SESSIONS_COLLAPSED_LIMIT && (
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleFilmExpanded(film.id)}
+                                          className="session-btn expand-btn"
+                                          aria-expanded={!!expandedFilms[String(film.id)]}
+                                        >
+                                          <span className="session-time" style={{ fontSize: '12px', color: 'inherit' }}>
+                                            {expandedFilms[String(film.id)] ? 'Meno ↑' : 'Altro ↓'}
+                                          </span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))
+                            )}
+                          </div>
+
+                          {/* Nota selezione */}
+                          {filteredFilms.length > 0 && (
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: '8px',
+                              padding: '8px 20px 20px',
+                              fontSize: '12px', color: P.textMuted,
+                            }}>
+                              <Sparkle size={14} color={P.gold} weight="fill" />
+                              Seleziona un orario per proseguire con la prenotazione
+                            </div>
+                          )}
+                        </>
                       )}
-                    </>
+                      <div className="ticket-tear" style={{ background: P.bg }} />
+                    </div>
                   )}
-                </div>
+                </>
               )}
-            </>
-          )}
+            </div>
+
+            {/* ─── SIDEBAR DESTRA ── */}
+            <div className="cinema-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div className="ticket-card">
+                <div style={{ fontSize: '28px', marginBottom: '12px' }}>🍿</div>
+                <div className="sidebar-title">Il cinema è meglio insieme</div>
+                <div className="sidebar-text">
+                  Crea una stanza, invita i tuoi amici e inizia subito a guardare insieme.
+                </div>
+                <button className="sidebar-button">
+                  Crea una stanza →
+                </button>
+                <div className="ticket-tear" style={{ background: P.bg }} />
+              </div>
+
+              <div className="ticket-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', fontWeight: '800', color: P.text, marginBottom: '8px' }}>
+                  <span style={{ color: P.gold }}>⭐</span> I tuoi cinema preferiti
+                </div>
+                <div className="sidebar-text">
+                  Salva i cinema che ami di più per trovarli subito!
+                </div>
+                <button className="sidebar-button-outline">
+                  Aggiungi un preferito
+                </button>
+                <div className="ticket-tear" style={{ background: P.bg }} />
+              </div>
+
+              <div className="ticket-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', fontWeight: '800', color: P.text, marginBottom: '8px' }}>
+                  <span style={{ color: P.gold }}>📺</span> Cinema premium vicino a te
+                </div>
+                <div className="sidebar-text">
+                  Scopri offerte esclusive e sale premium per la tua serata.
+                </div>
+                <button className="sidebar-button-outline">
+                  Esplora cinema premium →
+                </button>
+                <div className="ticket-tear" style={{ background: P.bg }} />
+              </div>
+            </div>
+          </div>
         </div>
       </AppShell>
     </>

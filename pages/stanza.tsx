@@ -214,6 +214,7 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
             onJoinByCode={handleJoinByCode}
             onEnter={() => setScreen('swipe')}
             onAddFilms={() => router.push('/home')}
+            
           />
         )}
 
