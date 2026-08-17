@@ -15,7 +15,7 @@ import {
   UsersThree, TrendUp, Sparkle,
   InstagramLogo, TiktokLogo, XLogo,
   Sun, Moon, FilmStrip,
-  Heart, Clock,
+  Heart, Clock, HandWavingIcon, Medal,
 } from '@phosphor-icons/react';
 
 // ─── Palette dark "cinema elegante" ──────────────────────────────────────
@@ -111,6 +111,7 @@ export default function HomePage() {
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [fallbackUsername, setFallbackUsername] = useState('');
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
@@ -120,6 +121,50 @@ export default function HomePage() {
     : guestName ?? 'Ospite';
 
   const firstName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.isGuest) {
+      setUnreadNotifications(0);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadUnreadNotifications = async () => {
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', currentUser.id)
+        .eq('is_read', false);
+
+      if (!cancelled && !error) {
+        setUnreadNotifications(count ?? 0);
+      }
+    };
+
+    void loadUnreadNotifications();
+
+    const channel = supabase
+      .channel(`home-notifications-${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${currentUser.id}`,
+        },
+        () => {
+          void loadUnreadNotifications();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [currentUser, supabase]);
 
   const homeThemeVars: CSSProperties = {
     ['--home-bg' as any]: P.bg,
@@ -282,8 +327,17 @@ export default function HomePage() {
                 lineHeight: 1.15,
                 marginBottom: '4px',
                 letterSpacing: '-0.02em',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
               }}>
-                Ciao, {firstName} 👋
+                Ciao, {firstName}
+                <HandWavingIcon
+                  size={28}
+                  color={P.gold}
+                  weight="fill"
+                  style={{ display: 'inline', verticalAlign: 'middle' }}
+                />
               </div>
 
               <div style={{
@@ -326,18 +380,52 @@ export default function HomePage() {
                 {isDark ? <Sun size={17} /> : <Moon size={17} />}
               </button>
               <button
+                type="button"
+                onClick={() => router.push('/notifiche')}
+                aria-label="Notifiche"
+                title="Notifiche"
                 style={{
                   width: '38px', height: '38px',
                   background: P.card,
-                  border: `1px solid ${P.border}`,
+                  border: `1px solid ${unreadNotifications > 0 ? `${P.pink}70` : P.border}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   cursor: 'pointer',
                   transition: 'border-color 0.25s',
+                  position: 'relative',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = P.gold; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = P.border; }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = unreadNotifications > 0 ? P.pink : P.gold; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = unreadNotifications > 0 ? `${P.pink}70` : P.border; }}
               >
-                <Bell size={17} color={P.textMuted} weight="regular" />
+                <Bell
+                  size={17}
+                  color={unreadNotifications > 0 ? P.pink : P.textMuted}
+                  weight={unreadNotifications > 0 ? 'fill' : 'regular'}
+                />
+
+                {unreadNotifications > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: -6,
+                      right: -6,
+                      minWidth: 18,
+                      height: 18,
+                      padding: '0 4px',
+                      borderRadius: 999,
+                      background: P.pink,
+                      color: '#fff',
+                      border: `2px solid ${P.bg}`,
+                      display: 'grid',
+                      placeItems: 'center',
+                      fontSize: 8,
+                      lineHeight: 1,
+                      fontWeight: 900,
+                      fontFamily: FONT,
+                    }}
+                  >
+                    {unreadNotifications > 99 ? '99+' : unreadNotifications}
+                  </span>
+                )}
               </button>
               <div
                 onClick={() => router.push('/profilo')}
@@ -485,6 +573,7 @@ export default function HomePage() {
                       const starString = '★'.repeat(fullStars) + '☆'.repeat(emptyStars);
                       const isTop = i < 3;
 
+                   
                       return (
                         <div
                           key={movie.id}
@@ -498,7 +587,7 @@ export default function HomePage() {
                               loading="lazy"
                             />
                             <div className={`movie-badge ${isTop ? 'top' : ''}`}>
-                              {isTop ? '🏆' : i + 1}
+                              { i + 1}
                             </div>
                             {isTop && (
                               <div style={{

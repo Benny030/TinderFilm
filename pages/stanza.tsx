@@ -58,13 +58,14 @@ export default function StanzaPage({ movies: initialMovies, roomId }: Props) {
   // ── Resetta flip al cambio film ──────────────────────────────────────────
   const remaining    = movies.filter((m) => swipes[m.id]?.[userId] === undefined);
   const currentMovie = remaining[0] ?? null;
+  const nextMovies   = remaining.slice(1, 4);
 
   useEffect(() => { setIsFlipped(false); }, [currentMovie?.id]);
 
 // ─── Sostituisci il destructuring di useSwipe ────────────────────────────────
 const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = useSwipe((liked) => {
   if (currentMovie) handleSwipe(currentMovie.id, liked);
-});;
+});
 
   // ── Global drag events ───────────────────────────────────────────────────
   useEffect(() => {
@@ -223,6 +224,8 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
            // ─── Sostituisci la chiamata a SwipeCard ─────────────────────────────────────
             <SwipeCard
               movie={currentMovie}
+              nextMovies={nextMovies}
+              
               remainingCount={remaining.length}
               card={card}               // ← era dragOffset
               isDragging={isDragging}
@@ -234,7 +237,7 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
               onMatches={() => { if (matches.length > 0) setScreen('match'); }}
               onBack={() => setScreen('welcome')}
               userName={displayName}
-              matchCount={matches.length}
+              matchCount={matches.length} 
             />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

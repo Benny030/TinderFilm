@@ -2,8 +2,13 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
+  "/": "pages/index.js",
+  "/api/tmdb/trending": "pages/api/tmdb/trending.js",
   "/home": "pages/home.js",
   "/crea-stanza": "pages/crea-stanza.js",
-  "/cinema": "pages/cinema.js",
-  "/api/cinema/nearby": "pages/api/cinema/nearby.js"
+  "/recensioni": "pages/recensioni.js",
+  "/auth": "pages/auth.js",
+  "/auth/callback": "pages/auth/callback.js",
+  "/profilo": "pages/profilo.js",
+  "/admin/sospensioni": "pages/admin/sospensioni.js"
 }

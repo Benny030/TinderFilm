@@ -42,32 +42,21 @@ function setGuestCookie(enabled: boolean) {
 
 async function getUserProfile(
   supabase: ReturnType<typeof createBrowserClient>,
-  user: { id: string; email?: string }
+  user: { id: string }
 ) {
   try {
-    const { data: byId, error: byIdError } = await supabase
+    const { data, error } = await supabase
       .from('users')
       .select('username')
       .eq('id', user.id)
       .maybeSingle();
 
-    if (byIdError) {
-      console.warn('Unable to load user profile by id:', byIdError.message);
+    if (error) {
+      console.warn('Unable to load user profile:', error.message);
+      return null;
     }
 
-    if (byId?.username || !user.email) return byId;
-
-    const { data: byEmail, error: byEmailError } = await supabase
-      .from('users')
-      .select('username')
-      .eq('email', user.email)
-      .maybeSingle();
-
-    if (byEmailError) {
-      console.warn('Unable to load user profile by email:', byEmailError.message);
-    }
-
-    return byEmail;
+    return data;
   } catch (error) {
     console.error('Unexpected error while loading user profile:', error);
     return null;
@@ -86,7 +75,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const applySessionUser = async (session: Session) => {
     const userData = await getUserProfile(supabase, {
       id: session.user.id,
-      email: session.user.email,
     });
 
     setCurrentUser((prev) => ({

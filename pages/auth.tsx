@@ -78,22 +78,22 @@ function isPasswordValid(p: string) {
   return getPasswordChecks(p).every((c) => c.ok);
 }
 
-async function getUserProfile(supabase: ReturnType<typeof createBrowserClient>, user: { id: string; email?: string }) {
-  const { data: byId } = await supabase
+async function getUserProfile(
+  supabase: ReturnType<typeof createBrowserClient>,
+  user: { id: string }
+) {
+  const { data, error } = await supabase
     .from('users')
     .select('username')
     .eq('id', user.id)
     .maybeSingle();
 
-  if (byId?.username || !user.email) return byId;
+  if (error) {
+    console.error('Unable to load user profile:', error.message);
+    return null;
+  }
 
-  const { data: byEmail } = await supabase
-    .from('users')
-    .select('username')
-    .eq('email', user.email)
-    .maybeSingle();
-
-  return byEmail;
+  return data;
 }
 
 function getOAuthCallbackUrl() {
@@ -159,7 +159,6 @@ export default function AuthPage() {
       if (!session?.user) return;
       const profile = await getUserProfile(supabase, {
         id: session.user.id,
-        email: session.user.email,
       });
       router.replace(profile?.username ? '/home' : '/username');
     };

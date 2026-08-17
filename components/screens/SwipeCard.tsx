@@ -4,10 +4,7 @@ import { type CSSProperties } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import { FilmSlate, Heart, X, ArrowLeft, Info, Star } from '@phosphor-icons/react';
 import type { ExtendedMovie } from '@/types/stanza';
-import type { CardState } from '@/hooks/useSwipe';
-
-const THROW_DURATION = 650;
-const SNAP_DURATION  = 520;
+import { THROW_DURATION, SNAP_DURATION, type CardState } from '@/hooks/useSwipe';
 
 // ─── Palette dark "cinema elegante" ──────────────────────────────────────
 const D = {
@@ -60,6 +57,7 @@ const convertHexToRgb = (hex: string) => {
 
 type Props = {
   movie: ExtendedMovie;
+  nextMovies?: ExtendedMovie[];
   remainingCount: number;
   card: CardState;
   isDragging: boolean;
@@ -75,7 +73,7 @@ type Props = {
 };
 
 export default function SwipeCard({
-  movie, remainingCount, card, isDragging,
+  movie, nextMovies = [], remainingCount, card, isDragging,
   handleStart, onSwipe, triggerSwipe, onFlip, isFlipped,
   onMatches, onBack, userName, matchCount,
 }: Props) {
@@ -86,23 +84,30 @@ export default function SwipeCard({
   // ── Transition dinamica in base allo stato ────────────────────────────────
   const cardTransition = (() => {
     if (isDragging)       return 'none';
-    if (card.isFlying)    return `transform ${THROW_DURATION}ms cubic-bezier(0.22, 1, 0.36, 1), opacity ${THROW_DURATION}ms cubic-bezier(0.22, 1, 0.36, 1), filter ${THROW_DURATION}ms cubic-bezier(0.22, 1, 0.36, 1)`;
-    if (card.isSnapping)  return `transform ${SNAP_DURATION}ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity ${SNAP_DURATION}ms ease`;
+    if (card.isFlying)    return `transform ${THROW_DURATION}ms cubic-bezier(0.18, 0.84, 0.24, 1), opacity ${Math.round(THROW_DURATION * 0.72)}ms cubic-bezier(0.4, 0, 1, 1), filter ${THROW_DURATION}ms ease`;
+    if (card.isSnapping)  return `transform ${SNAP_DURATION}ms cubic-bezier(0.22, 1.45, 0.36, 1), opacity ${SNAP_DURATION}ms ease, filter ${SNAP_DURATION}ms ease`;
     return 'none';
   })();
 
   // ── Overlay intensità ─────────────────────────────────────────────────────
-  const overlayOpacity = Math.min(Math.abs(card.x) / 80, 1);
-  const showOverlay    = !isFlipped && Math.abs(card.x) > 20;
-  const likingRight    = card.x > 0;
-  const dragProgress   = Math.min(Math.abs(card.x) / 120, 1);
-  const cardScale      = card.isFlying ? 1.12 : isDragging ? 1 + dragProgress * 0.06 : 1;
-  const dynamicRotate  = card.rotate * (1 + dragProgress * 0.45);
-  const swipeGlow      = Math.abs(card.x) > 90
+  const absX = Math.abs(card.x);
+  const dragProgress = Math.min(absX / 110, 1);
+  const commitProgress = Math.min(Math.max((absX - 24) / 78, 0), 1);
+  const overlayOpacity = Math.pow(commitProgress, 0.82);
+  const showOverlay = !isFlipped && absX > 16;
+  const likingRight = card.x > 0;
+  const cardScale = card.isFlying
+    ? 1.075
+    : isDragging
+      ? 1 + Math.sin(dragProgress * Math.PI * 0.5) * 0.035
+      : 1;
+  const dynamicRotate = card.rotate * (1 + dragProgress * 0.14);
+  const liftY = card.isFlying ? -10 : isDragging ? -4 * dragProgress : 0;
+  const swipeGlow = absX > 36
     ? likingRight
-      ? 'drop-shadow(0 0 25px rgba(34,197,94,.7))'
-      : 'drop-shadow(0 0 25px rgba(239,68,68,.7))'
-    : 'none';
+      ? `drop-shadow(0 18px ${20 + dragProgress * 18}px rgba(34,197,94,${0.14 + dragProgress * 0.24}))`
+      : `drop-shadow(0 18px ${20 + dragProgress * 18}px rgba(239,68,68,${0.14 + dragProgress * 0.24}))`
+    : 'drop-shadow(0 10px 22px rgba(0,0,0,.12))';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: FONT_SANS }}>
@@ -110,8 +115,15 @@ export default function SwipeCard({
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,400&display=swap');
 
         @keyframes heartBeat {
-          from { transform: scale(1); }
-          to { transform: scale(1.25); }
+          0% { transform: scale(1); }
+          45% { transform: scale(1.32); }
+          100% { transform: scale(1.08); }
+        }
+
+        @keyframes badgePop {
+          0% { transform: scale(.82); }
+          60% { transform: scale(1.08); }
+          100% { transform: scale(1); }
         }
 
         @keyframes floatHeart {
@@ -129,8 +141,8 @@ export default function SwipeCard({
         }
 
         @keyframes shake {
-          from { transform: translateX(-3px); }
-          to { transform: translateX(3px); }
+          from { transform: translateX(-2px) rotate(-2deg); }
+          to { transform: translateX(2px) rotate(2deg); }
         }
 
         @keyframes cardPulse {
@@ -192,17 +204,88 @@ export default function SwipeCard({
           {remainingCount} {remainingCount === 1 ? 'rimasto' : 'rimasti'}
         </div>
 
-        {/* ── Card fisica ── */}
-        <div
+        {/* ── Mazzo: carta attiva + prossime carte ── */}
+        <div style={{
+          position: 'relative',
+          width: 'min(300px, 88vw)',
+          height: 'min(440px, 65vh)',
+          marginBottom: '46px',
+          isolation: 'isolate',
+        }}>
+          {nextMovies.slice(0, 3).map((next, index) => {
+            const depth = index + 1;
+            const baseScale = 1 - depth * 0.035;
+            const baseY = depth * 16;
+            const targetScale = index === 0 ? 1 : 1 - index * 0.035;
+            const targetY = index * 16;
+
+            // Il mazzo resta discreto durante il drag:
+            // avanza solo leggermente, così la carta sotto non sembra "evidenziata".
+            const deckProgress = Math.min(dragProgress * 0.18, 0.18);
+            const scale = baseScale + (targetScale - baseScale) * deckProgress;
+            const y = baseY + (targetY - baseY) * deckProgress;
+
+            return (
+              <div
+                key={next.id}
+                aria-hidden="true"
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  zIndex: 8 - index,
+                  overflow: 'hidden',
+                  pointerEvents: 'none',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  background: P.bgSoft,
+                  border: `1px solid ${P.border}`,
+                  boxShadow: `0 ${10 + depth * 2}px ${26 + depth * 6}px rgba(0,0,0,${0.14 - index * 0.02})`,
+                  transformOrigin: '50% 0%',
+                  transform: `translate3d(0, ${y}px, 0) scale(${scale})`,
+                  opacity: 0.78 - index * 0.12,
+                  filter: `brightness(${0.82 - index * 0.05}) saturate(${0.88 - index * 0.05})`,
+                  transition: isDragging
+                    ? 'none'
+                    : `transform ${SNAP_DURATION}ms cubic-bezier(0.22, 1.25, 0.36, 1), opacity ${SNAP_DURATION}ms ease, filter ${SNAP_DURATION}ms ease`,
+                  willChange: 'transform',
+                }}
+              >
+                <img
+                  src={next.cover?.startsWith('http')
+                    ? next.cover
+                    : 'https://placehold.co/300x440/f8f8f8/aaa?text=🎬'}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    display: 'block',
+                  }}
+                />
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: `linear-gradient(to bottom, rgba(0,0,0,${0.03 + index * 0.03}), rgba(0,0,0,${0.12 + index * 0.04}))`,
+                }} />
+              </div>
+            );
+          })}
+
+          {/* ── Carta attiva ── */}
+          <div
           style={{
-            width: 'min(300px, 88vw)',
-            height: 'min(440px, 65vh)',
+            position: 'absolute',
+            inset: 0,
+            zIndex: 10,
+            width: '100%',
+            height: '100%',
             touchAction: 'none',
             userSelect: 'none',
             cursor: isDragging ? 'grabbing' : 'grab',
             transform: isFlipped
-              ? 'translateX(0) rotate(0deg)'
-              : `translateX(${card.x}px) rotate(${dynamicRotate}deg) scale(${cardScale})`,
+              ? 'translate3d(0,0,0) rotate(0deg)'
+              : `translate3d(${card.x}px, ${liftY}px, 0) rotate(${dynamicRotate}deg) scale(${cardScale})`,
             opacity: card.opacity,
             transition: isFlipped ? 'none' : cardTransition,
             willChange: 'transform, opacity, filter',
@@ -276,27 +359,34 @@ export default function SwipeCard({
               {showOverlay && (
                 <div style={{
                   position: 'absolute', inset: 0,
-                  background: likingRight ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)',
+                  background: likingRight
+                    ? `radial-gradient(circle at 28% 45%, rgba(34,197,94,${0.14 + overlayOpacity * 0.22}), rgba(34,197,94,${0.04 + overlayOpacity * 0.09}) 55%, transparent 78%)`
+                    : `radial-gradient(circle at 72% 45%, rgba(239,68,68,${0.14 + overlayOpacity * 0.22}), rgba(239,68,68,${0.04 + overlayOpacity * 0.09}) 55%, transparent 78%)`,
                   opacity: overlayOpacity,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: isDragging ? 'none' : 'opacity 0.1s',
                 }}>
                   <div style={{
-                    background: likingRight ? '#22c55e' : '#ef4444',
-                    borderRadius: '999px', padding: '10px 28px',
+                    background: likingRight ? 'rgba(34,197,94,.94)' : 'rgba(239,68,68,.94)',
+                    border: '1px solid rgba(255,255,255,.28)',
+                    backdropFilter: 'blur(10px)',
+                    borderRadius: '999px', padding: '11px 28px',
                     display: 'flex', alignItems: 'center', gap: '10px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-                    transform: `scale(${0.8 + overlayOpacity * 0.35}) rotate(${likingRight ? -8 : 8}deg)`,
-                    transition: isDragging ? 'none' : 'transform 0.1s',
+                    boxShadow: likingRight
+                      ? `0 12px 34px rgba(34,197,94,${0.18 + overlayOpacity * 0.28})`
+                      : `0 12px 34px rgba(239,68,68,${0.18 + overlayOpacity * 0.28})`,
+                    transform: `translateY(${-6 * overlayOpacity}px) scale(${0.82 + overlayOpacity * 0.18}) rotate(${likingRight ? -7 : 7}deg)`,
+                    animation: overlayOpacity > 0.92 ? 'badgePop .22s cubic-bezier(.2,.9,.3,1)' : 'none',
+                    transition: isDragging ? 'none' : 'transform 0.12s ease',
                   }}>
                     {likingRight
-                      ? <Heart size={26} color="#fff" weight="fill" style={{ animation: 'heartBeat .55s ease-in-out infinite alternate' }} />
-                      : <X size={26} color="#fff" weight="bold" style={{ animation: 'shake .16s ease-in-out infinite alternate' }} />
+                      ? <Heart size={26} color="#fff" weight="fill" style={{ animation: overlayOpacity > 0.7 ? 'heartBeat .52s ease-in-out infinite' : 'none' }} />
+                      : <X size={26} color="#fff" weight="bold" style={{ animation: overlayOpacity > 0.7 ? 'shake .14s ease-in-out infinite alternate' : 'none' }} />
                     }
                     <span style={{ color: '#fff', fontWeight: '800', fontSize: '15px', letterSpacing: '1.5px' }}>
                       {likingRight ? 'MI PIACE' : 'PASSO'}
                     </span>
-                    {likingRight && overlayOpacity > 0.85 && (
+                    {likingRight && overlayOpacity > 0.96 && (
                       <span style={{
                         position: 'absolute',
                         animation: 'floatHeart .8s ease-out forwards',
@@ -369,7 +459,8 @@ export default function SwipeCard({
                 </div>
               </div>
             </div>
-          </div>
+            </div>
+      </div>
         </div>
       </div>
 

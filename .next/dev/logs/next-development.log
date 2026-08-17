@@ -1,5 +1,4 @@
-{"timestamp":"00:00:02.119","source":"Server","level":"WARN","message":"⚠ The \"middleware\" file convention is deprecated. Please use \"proxy\" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy"}
-{"timestamp":"00:00:02.344","source":"Server","level":"LOG","message":""}
-{"timestamp":"00:00:07.087","source":"Server","level":"LOG","message":"○ Compiling / ..."}
-{"timestamp":"00:00:56.633","source":"Server","level":"LOG","message":"○ Compiling /crea-stanza ..."}
-{"timestamp":"00:01:10.240","source":"Server","level":"LOG","message":"○ Compiling /stanza ..."}
+{"timestamp":"00:00:02.022","source":"Server","level":"WARN","message":"⚠ The \"middleware\" file convention is deprecated. Please use \"proxy\" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy"}
+{"timestamp":"00:00:02.235","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:07.678","source":"Server","level":"LOG","message":"○ Compiling / ..."}
+{"timestamp":"00:01:29.673","source":"Server","level":"INFO","message":"[OAuth callback] {}"}

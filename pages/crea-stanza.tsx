@@ -24,6 +24,22 @@ import {
   TiktokLogo,
   XLogo,
   Heart,
+  Fire,          // per il badge "Hot"
+  // Icone per i generi
+  Bomb,
+  MapTrifold,
+  PaintBrush,
+  Smiley,
+  PoliceCar,
+  MaskSad,
+  MagicWand,
+  Ghost,
+  Rocket,
+  Eye,
+  MusicNote,
+  Calendar,
+  CaretDown,
+  Gear,         // per il badge "Personalizzato"
 } from '@phosphor-icons/react';
 
 // ─── Palette dark "cinema elegante" ──────────────────────────────────────
@@ -79,21 +95,39 @@ const convertHexToRgb = (hex: string) => {
   return `${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}`;
 };
 
+// Mappatura id genere → icona Phosphor
+const genreIconMap: Record<number, React.ReactNode> = {
+  28: <Bomb size={16} weight="duotone" />,
+  12: <MapTrifold size={16} weight="duotone" />,
+  16: <PaintBrush size={16} weight="duotone" />,
+  35: <Smiley size={16} weight="duotone" />,
+  80: <PoliceCar size={16} weight="duotone" />,
+  18: <MaskSad size={16} weight="duotone" />,
+  10751: <Users size={16} weight="duotone" />,
+  14: <MagicWand size={16} weight="duotone" />,
+  27: <Ghost size={16} weight="duotone" />,
+  10749: <Heart size={16} weight="duotone" />,
+  878: <Rocket size={16} weight="duotone" />,
+  53: <Eye size={16} weight="duotone" />,
+  99: <FilmSlate size={16} weight="duotone" />,
+  10402: <MusicNote size={16} weight="duotone" />,
+};
+
 const GENRES = [
-  { id: 28, label: 'Azione', emoji: '💥' },
-  { id: 12, label: 'Avventura', emoji: '🗺️' },
-  { id: 16, label: 'Animazione', emoji: '🎨' },
-  { id: 35, label: 'Commedia', emoji: '😂' },
-  { id: 80, label: 'Crime', emoji: '🔫' },
-  { id: 18, label: 'Dramma', emoji: '🎭' },
-  { id: 10751, label: 'Famiglia', emoji: '👨‍👩‍👧' },
-  { id: 14, label: 'Fantasy', emoji: '🧙' },
-  { id: 27, label: 'Horror', emoji: '👻' },
-  { id: 10749, label: 'Romantico', emoji: '❤️' },
-  { id: 878, label: 'Fantascienza', emoji: '🚀' },
-  { id: 53, label: 'Thriller', emoji: '😰' },
-  { id: 99, label: 'Documentario', emoji: '📽️' },
-  { id: 10402, label: 'Musica', emoji: '🎵' },
+  { id: 28, label: 'Azione' },
+  { id: 12, label: 'Avventura' },
+  { id: 16, label: 'Animazione' },
+  { id: 35, label: 'Commedia' },
+  { id: 80, label: 'Crime' },
+  { id: 18, label: 'Dramma' },
+  { id: 10751, label: 'Famiglia' },
+  { id: 14, label: 'Fantasy' },
+  { id: 27, label: 'Horror' },
+  { id: 10749, label: 'Romantico' },
+  { id: 878, label: 'Fantascienza' },
+  { id: 53, label: 'Thriller' },
+  { id: 99, label: 'Documentario' },
+  { id: 10402, label: 'Musica' },
 ];
 
 type Mode = 'trending' | 'cinema' | 'streaming' | 'discover';
@@ -108,10 +142,8 @@ export default function CreaStanzaPage() {
   const [mounted, setMounted] = useState(false);
   const currentYear = new Date().getFullYear();
 
-  // ─── Tab principale: crea vs entra ───────────────────────────────────────
   const [tab, setTab] = useState<Tab>('create');
 
-  // ─── Legge ?tab=join dalla URL ───────────────────────────────────────────
   useEffect(() => {
     if (!router.isReady) return;
     const requestedTab = router.query.tab;
@@ -122,11 +154,9 @@ export default function CreaStanzaPage() {
     }
   }, [router.isReady, router.query.tab]);
 
-  // ─── Join by code ─────────────────────────────────────────────────────────
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
 
-  // ─── Crea stanza ──────────────────────────────────────────────────────────
   const [step, setStep] = useState<Step>(1);
   const [mode, setMode] = useState<Mode | null>(null);
   const [selectedGenres, setSelectedGenres] = useState<number[]>([]);
@@ -138,17 +168,15 @@ export default function CreaStanzaPage() {
   const yearFrom = parseInt(yearFromStr) || 1900;
   const yearTo = parseInt(yearToStr) || currentYear;
 
+  const yearOptions = Array.from({ length: currentYear + 2 - 1900 }, (_, i) => 1900 + i);
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const validateYears = (): boolean => {
-    if (yearFromStr.length !== 4 || yearToStr.length !== 4) {
-      setYearError('Inserisci anni a 4 cifre');
-      return false;
-    }
     if (yearFrom < 1900 || yearFrom > currentYear + 1) {
-      setYearError(`Anno "dal" deve essere tra 1900 e ${currentYear}`);
+      setYearError(`Anno "dal" deve essere tra 1900 e ${currentYear + 1}`);
       return false;
     }
     if (yearTo < 1900 || yearTo > currentYear + 1) {
@@ -225,11 +253,56 @@ export default function CreaStanzaPage() {
     handleCreate();
   };
 
+  // Badge con icone al posto delle emoji
   const modeCards = [
-    { id: 'trending' as Mode, icon: <TrendUp size={26} color={P.pink} weight="duotone" />, title: 'In tendenza', desc: 'I più popolari questa settimana.', badge: '🔥 Hot', color: P.pink },
-    { id: 'cinema' as Mode, icon: <Ticket size={26} color={P.gold} weight="duotone" />, title: 'Al cinema', desc: 'Nelle sale italiane adesso.', badge: '🎟️ Ora al cinema', color: P.gold },
-    { id: 'streaming' as Mode, icon: <Television size={26} color={P.success} weight="duotone" />, title: 'In streaming', desc: 'Su Netflix, Prime, Disney+ e altri.', badge: '📺 Subito disponibile', color: P.success },
-    { id: 'discover' as Mode, icon: <Funnel size={26} color={P.purple} weight="duotone" />, title: 'Filtri personalizzati', desc: 'Scegli genere, anno e molto altro.', badge: '⚙️ Personalizzato', color: P.purple },
+    {
+      id: 'trending' as Mode,
+      icon: <TrendUp size={26} color={P.pink} weight="duotone" />,
+      title: 'In tendenza',
+      desc: 'I più popolari questa settimana.',
+      badge: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Fire size={14} weight="fill" color={P.pink} /> Hot
+        </span>
+      ),
+      color: P.pink,
+    },
+    {
+      id: 'cinema' as Mode,
+      icon: <Ticket size={26} color={P.gold} weight="duotone" />,
+      title: 'Al cinema',
+      desc: 'Nelle sale italiane adesso.',
+      badge: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Ticket size={14} weight="fill" color={P.gold} /> Ora al cinema
+        </span>
+      ),
+      color: P.gold,
+    },
+    {
+      id: 'streaming' as Mode,
+      icon: <Television size={26} color={P.success} weight="duotone" />,
+      title: 'In streaming',
+      desc: 'Su Netflix, Prime, Disney+ e altri.',
+      badge: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Television size={14} weight="fill" color={P.success} /> Subito disponibile
+        </span>
+      ),
+      color: P.success,
+    },
+    {
+      id: 'discover' as Mode,
+      icon: <Funnel size={26} color={P.purple} weight="duotone" />,
+      title: 'Filtri personalizzati',
+      desc: 'Scegli genere, anno e molto altro.',
+      badge: (
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Gear size={14} weight="fill" color={P.purple} /> Personalizzato
+        </span>
+      ),
+      color: P.purple,
+    },
   ];
 
   const pageThemeVars: CSSProperties = {
@@ -274,7 +347,8 @@ export default function CreaStanzaPage() {
           box-sizing: border-box;
         }
         .crea-stanza-page button,
-        .crea-stanza-page input {
+        .crea-stanza-page input,
+        .crea-stanza-page select {
           border-radius: 0 !important;
           font-family: var(--home-font);
         }
@@ -283,7 +357,6 @@ export default function CreaStanzaPage() {
           color: #fff;
         }
 
-        /* Layout principale */
         .main-container {
           max-width: 1200px;
           margin: 0 auto;
@@ -293,7 +366,6 @@ export default function CreaStanzaPage() {
           .main-container { padding: 16px; }
         }
 
-        /* Header */
         .page-title {
           font-family: var(--home-font-display);
           font-size: 32px;
@@ -302,7 +374,6 @@ export default function CreaStanzaPage() {
           letter-spacing: -0.02em;
         }
 
-        /* Ticket card base */
         .ticket-card {
           background: var(--home-card);
           border: 1px solid var(--home-border);
@@ -341,7 +412,6 @@ export default function CreaStanzaPage() {
           opacity: 0.6;
         }
 
-        /* Tab switcher */
         .tab-switcher {
           display: flex;
           align-items: center;
@@ -369,7 +439,6 @@ export default function CreaStanzaPage() {
           color: var(--home-bg);
         }
 
-        /* Feature columns */
         .feature-grid {
           display: grid;
           grid-template-columns: 1fr 1fr 1fr;
@@ -383,7 +452,6 @@ export default function CreaStanzaPage() {
           gap: 16px;
         }
 
-        /* Cards grid */
         .cards-grid {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
@@ -442,7 +510,6 @@ export default function CreaStanzaPage() {
           z-index: 3;
         }
 
-        /* Banner */
         .banner-container {
           background: linear-gradient(130deg, var(--home-pink-deep) 0%, var(--home-bg) 80%);
           border: 1px solid rgba(var(--home-pink-rgb), 0.3);
@@ -485,7 +552,6 @@ export default function CreaStanzaPage() {
           cursor: not-allowed;
         }
 
-        /* Forms */
         .join-wrapper {
           display: flex;
           justify-content: center;
@@ -520,23 +586,85 @@ export default function CreaStanzaPage() {
         .code-input:focus {
           border-color: var(--home-gold);
         }
-        .year-input {
-          padding: 12px 14px;
-          border: 1px solid var(--home-border);
-          font-size: 15px;
-          font-family: var(--home-font-mono);
-          color: var(--home-text);
-          background: var(--home-bg-soft);
-          outline: none;
+
+        /* ---- Stile per i select anni personalizzati ---- */
+        .year-select-wrapper {
+          position: relative;
           width: 100%;
+        }
+        .year-select-wrapper .year-input {
+          appearance: none;
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          padding: 14px 18px;
+          padding-right: 44px;
+          border: 1px solid var(--home-border);
+          background: var(--home-bg-soft);
+          color: var(--home-text);
+          font-size: 16px;
+          font-weight: 600;
+          font-family: var(--home-font-mono);
+          letter-spacing: 1px;
+          width: 100%;
+          cursor: pointer;
+          transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+          outline: none;
           text-align: center;
-          letter-spacing: 2px;
-          font-weight: 700;
-          transition: border-color 0.15s;
         }
-        .year-input:focus {
+        .year-select-wrapper .year-input:hover {
           border-color: var(--home-gold);
+          background: var(--home-card-hover);
         }
+        .year-select-wrapper .year-input:focus {
+          border-color: var(--home-gold);
+          box-shadow: 0 0 0 3px rgba(var(--home-gold-rgb), 0.15);
+          background: var(--home-card);
+        }
+        .year-select-wrapper .year-icon {
+          position: absolute;
+          right: 14px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--home-text-faint);
+          pointer-events: none;
+          transition: transform 0.25s ease, color 0.2s;
+        }
+        .year-select-wrapper .year-input:focus + .year-icon,
+        .year-select-wrapper .year-input:hover + .year-icon {
+          color: var(--home-gold);
+          transform: translateY(-50%) rotate(180deg);
+        }
+        .year-select-wrapper .year-input option {
+          background: var(--home-card);
+          color: var(--home-text);
+          padding: 8px;
+          font-family: var(--home-font);
+        }
+
+        .year-grid {
+          display: grid;
+          grid-template-columns: 1fr auto 1fr;
+          gap: 16px 20px;
+          align-items: center;
+        }
+        .year-grid .year-arrow {
+          font-size: 22px;
+          color: var(--home-gold);
+          padding-top: 16px;
+          opacity: 0.7;
+          font-weight: 300;
+          text-align: center;
+        }
+        .year-label {
+          font-size: 12px;
+          color: var(--home-text-muted);
+          text-align: center;
+          margin-bottom: 4px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+        }
+
         .genre-chip {
           display: inline-flex;
           align-items: center;
@@ -585,7 +713,6 @@ export default function CreaStanzaPage() {
           opacity: 0.9;
         }
 
-        /* Footer */
         .footer-cine {
           border-top: 1px solid rgba(var(--home-border-rgb), 0.38);
           padding: 36px 20px 24px;
@@ -666,6 +793,8 @@ export default function CreaStanzaPage() {
           .banner-left { flex-direction: row; }
           .banner-btn { width: 100%; justify-content: center; }
           .join-form, .step2-container { padding: 24px; }
+          .year-grid { grid-template-columns: 1fr auto 1fr; gap: 12px; }
+          .year-grid .year-arrow { padding-top: 12px; font-size: 18px; }
         }
         @media (max-width: 480px) {
           .main-container { padding: 16px; }
@@ -673,6 +802,8 @@ export default function CreaStanzaPage() {
           .join-form, .step2-container { padding: 20px; }
           .tab-switch-btn { padding: 8px 12px; font-size: 13px; }
           .footer-grid { grid-template-columns: 1fr; gap: 24px; }
+          .year-grid { grid-template-columns: 1fr; gap: 8px; }
+          .year-grid .year-arrow { padding-top: 0; transform: rotate(90deg); }
         }
       `}</style>
 
@@ -770,7 +901,6 @@ export default function CreaStanzaPage() {
             {/* TAB: CREA STANZA — STEP 1 */}
             {tab === 'create' && step === 1 && (
               <>
-                {/* Feature Columns */}
                 <div className="feature-grid">
                   <div className="feature-col" style={{ paddingRight: '24px', borderRight: `1px solid ${P.border}` }}>
                     <div style={{ color: P.pink }}>
@@ -801,7 +931,6 @@ export default function CreaStanzaPage() {
                   </div>
                 </div>
 
-                {/* 2x2 Cards Grid */}
                 <div className="cards-grid">
                   {modeCards.map((card) => {
                     const themeColor = card.color;
@@ -823,7 +952,9 @@ export default function CreaStanzaPage() {
                           <div style={{ color: themeColor, marginBottom: '12px' }}>{card.icon}</div>
                           <div style={{ fontSize: '18px', fontWeight: 'bold', color: P.text }}>{card.title}</div>
                           <div style={{ fontSize: '14px', color: P.textMuted, marginTop: '8px', lineHeight: '1.5' }}>{card.desc}</div>
-                          <div style={{ marginTop: '16px', fontSize: '13px', fontWeight: '600', color: themeColor }}>{card.badge}</div>
+                          <div style={{ marginTop: '16px', fontSize: '13px', fontWeight: '600', color: themeColor }}>
+                            {card.badge}
+                          </div>
                         </div>
                         {mode === card.id && (
                           <div className="card-check" style={{ background: themeColor }}>
@@ -835,7 +966,6 @@ export default function CreaStanzaPage() {
                   })}
                 </div>
 
-                {/* Bottom Banner */}
                 <div className="banner-container">
                   <div className="banner-left">
                     <div className="banner-icon-wrap">
@@ -882,7 +1012,9 @@ export default function CreaStanzaPage() {
                         className={`genre-chip${selectedGenres.includes(g.id) ? ' selected' : ''}`}
                         onClick={() => toggleGenre(g.id)}
                       >
-                        <span>{g.emoji}</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                          {genreIconMap[g.id]}
+                        </span>
                         {g.label}
                       </button>
                     ))}
@@ -891,36 +1023,64 @@ export default function CreaStanzaPage() {
 
                 {/* Anni */}
                 <div style={{ marginBottom: '24px' }}>
-                  <div style={{ fontSize: '16px', fontWeight: '700', color: P.text, marginBottom: '12px' }}>
+                  <div style={{ fontSize: '16px', fontWeight: '700', color: P.text, marginBottom: '16px' }}>
                     Periodo di uscita
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: '12px', alignItems: 'center' }}>
+                  <div className="year-grid">
                     <div>
-                      <div style={{ fontSize: '12px', color: P.textMuted, marginBottom: '6px', textAlign: 'center' }}>Dal</div>
-                      <input
-                        type="number"
-                        className="year-input"
-                        value={yearFromStr}
-                        onChange={(e) => { setYearFromStr(e.target.value); setYearError(''); }}
-                        onBlur={validateYears}
-                        min={1900}
-                        max={currentYear}
-                        placeholder="2000"
-                      />
+                      <div className="year-label">Dal</div>
+                      <div className="year-select-wrapper">
+                        <select
+                          className="year-input"
+                          value={yearFromStr}
+                          onChange={(e) => {
+                            setYearFromStr(e.target.value);
+                            setYearError('');
+                            const from = parseInt(e.target.value);
+                            const to = parseInt(yearToStr);
+                            if (from > to) {
+                              setYearToStr(e.target.value);
+                            }
+                          }}
+                          onBlur={validateYears}
+                        >
+                          {yearOptions.map((year) => (
+                            <option key={year} value={year}>
+                              {year}
+                            </option>
+                          ))}
+                        </select>
+                        <CaretDown size={18} className="year-icon" weight="bold" />
+                      </div>
                     </div>
-                    <div style={{ fontSize: '16px', color: P.textMuted, paddingTop: '16px', textAlign: 'center' }}>→</div>
+
+                    <div className="year-arrow">→</div>
+
                     <div>
-                      <div style={{ fontSize: '12px', color: P.textMuted, marginBottom: '6px', textAlign: 'center' }}>Al</div>
-                      <input
-                        type="number"
-                        className="year-input"
-                        value={yearToStr}
-                        onChange={(e) => { setYearToStr(e.target.value); setYearError(''); if (parseInt(e.target.value) < yearFrom) setYearError('L\'anno "al" non può essere minore dell\'anno "dal"'); }}
-                        onBlur={validateYears}
-                        min={yearFrom}
-                        max={currentYear + 1}
-                        placeholder={String(currentYear)}
-                      />
+                      <div className="year-label">Al</div>
+                      <div className="year-select-wrapper">
+                        <select
+                          className="year-input"
+                          value={yearToStr}
+                          onChange={(e) => {
+                            setYearToStr(e.target.value);
+                            setYearError('');
+                            const from = parseInt(yearFromStr);
+                            const to = parseInt(e.target.value);
+                            if (to < from) {
+                              setYearFromStr(e.target.value);
+                            }
+                          }}
+                          onBlur={validateYears}
+                        >
+                          {yearOptions.map((year) => (
+                            <option key={year} value={year}>
+                              {year}
+                            </option>
+                          ))}
+                        </select>
+                        <CaretDown size={18} className="year-icon" weight="bold" />
+                      </div>
                     </div>
                   </div>
                   {yearError && (
@@ -937,10 +1097,14 @@ export default function CreaStanzaPage() {
                     <FilmSlate size={18} color={P.gold} weight="duotone" />
                     Riepilogo stanza
                   </div>
-                  <div>
-                    🎬 {selectedGenres.length === 0 ? 'Tutti i generi' : selectedGenres.map(id => { const g = GENRES.find(g => g.id === id); return `${g?.emoji} ${g?.label}`; }).join(', ')}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <FilmSlate size={16} color={P.gold} weight="duotone" />
+                    {selectedGenres.length === 0 ? 'Tutti i generi' : selectedGenres.map(id => { const g = GENRES.find(g => g.id === id); return `${g?.label}`; }).join(', ')}
                   </div>
-                  <div>📅 Dal {yearFrom} al {yearTo}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Calendar size={16} color={P.gold} weight="duotone" />
+                    Dal {yearFrom} al {yearTo}
+                  </div>
                 </div>
 
                 <button

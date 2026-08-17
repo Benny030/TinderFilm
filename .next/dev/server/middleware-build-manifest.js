@@ -12,6 +12,11 @@ globalThis.__BUILD_MANIFEST = {
   "rootMainFiles": [],
   "rootMainFilesTree": {},
   "pages": {
+    "/": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/index.js"
+    ],
     "/_app": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
@@ -22,15 +27,40 @@ globalThis.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
-    "/cinema": [
+    "/admin/sospensioni": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/cinema.js"
+      "static/chunks/pages/admin/sospensioni.js"
+    ],
+    "/auth": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/auth.js"
+    ],
+    "/auth/callback": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/auth/callback.js"
     ],
     "/crea-stanza": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
       "static/chunks/pages/crea-stanza.js"
+    ],
+    "/home": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/home.js"
+    ],
+    "/profilo": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/profilo.js"
+    ],
+    "/recensioni": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/recensioni.js"
     ]
   }
 };

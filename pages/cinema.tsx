@@ -451,7 +451,10 @@ export default function CinemaPage() {
           cursor: pointer;
           text-decoration: none;
           transition: all 0.15s;
-          min-width: 80px;
+          flex: 0 0 96px;      /* larghezza fissa */
+          width: 96px;         /* larghezza fissa */
+          min-width: 96px;     /* sicurezza */
+          max-width: 96px;     /* sicurezza */
           border-radius: 0;
         }
         .session-btn:hover { background: var(--home-gold-soft); transform: translateY(-1px); }
@@ -461,6 +464,7 @@ export default function CinemaPage() {
           color: var(--home-bg);
           font-family: var(--home-font);
           letter-spacing: 0.2px;
+          font-variant-numeric: tabular-nums;
         }
         .session-tag {
           font-size: 10px;
