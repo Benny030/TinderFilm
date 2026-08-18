@@ -91,11 +91,7 @@ export default function UsernamePage() {
         const {
           data: { user },
           error: userError,
-        } = await withTimeout(
-          supabase.auth.getUser(),
-          5000,
-          'Controllo sessione'
-        );
+        } = await supabase.auth.getUser();
 
         if (userError || !user) {
           router.replace('/auth');
