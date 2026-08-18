@@ -14,6 +14,7 @@ import {
   Gavel,
   ShieldCheck,
   WarningCircle,
+  UserCircle,
 } from '@phosphor-icons/react';
 
 const D = {
@@ -293,6 +294,17 @@ export default function AdminDashboardPage() {
       secondary: 0,
       secondaryLabel: 'audit',
     },
+    {
+      title: 'Utenti',
+      description: 'Cerca account e gestisci l’eliminazione definitiva.',
+      path: '/admin/utenti',
+      Icon: UserCircle,
+      accent: P.gold,
+      primary: 0,
+      primaryLabel: 'account',
+      secondary: 0,
+      secondaryLabel: 'gestione',
+    },
   ];
 
   return (
@@ -482,7 +494,7 @@ export default function AdminDashboardPage() {
                       {section.description}
                     </p>
 
-                    {section.path === '/admin/audit' ? (
+                    {(section.path === '/admin/audit' || section.path === '/admin/utenti') ? (
                       <div
                         style={{
                           marginTop: 'auto',

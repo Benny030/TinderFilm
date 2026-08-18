@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useState, useRef, useMemo, type CSSProperties, type FormEvent } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '@/hooks/useAuth';
 import { createBrowserClient } from '@/utils/supabase/browser';
@@ -124,6 +124,43 @@ export default function LandingPage() {
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
 
+  // Generati una sola volta: in questo modo particelle e stelle non cambiano
+  // posizione/durata a ogni render del componente.
+  const particles = useMemo(() => {
+    return [...Array(16)].map((_, i) => {
+      const angle = (i / 16) * 360 + Math.random() * 20;
+      const distance = 80 + Math.random() * 80;
+
+      return {
+        tx: Math.cos(angle * Math.PI / 180) * distance,
+        ty: Math.sin(angle * Math.PI / 180) * distance,
+        size: 4 + Math.random() * 10,
+        delay: 0.7 + Math.random() * 0.4,
+        round: Math.random() > 0.5,
+      };
+    });
+  }, []);
+
+  const stars = useMemo(() => {
+    return [...Array(8)].map((_, i) => {
+      const angle = (i / 8) * 360;
+      const orbit = 120 + Math.sin(i * 1.5) * 30;
+      const sx = Math.cos(angle * Math.PI / 180) * orbit;
+      const sy = Math.sin(angle * Math.PI / 180) * orbit;
+
+      return {
+        sx,
+        sy,
+        targetX: sx + (Math.random() - 0.5) * 40,
+        targetY: sy + (Math.random() - 0.5) * 40,
+        delay: i * 0.4,
+        duration: 3 + Math.random() * 2,
+        size: 3 + Math.random() * 5,
+        opacity: 0.1 + Math.random() * 0.3,
+      };
+    });
+  }, []);
+
   const homeThemeVars: CSSProperties = {
     ['--home-bg' as any]: P.bg,
     ['--home-bg-soft' as any]: P.bgSoft,
@@ -155,11 +192,12 @@ export default function LandingPage() {
   }, [isLoading]);
 
   useEffect(() => {
-    if (isLoading) return;
+    if (isLoading || !router.isReady) return;
+
     if (currentUser || isGuest) {
-      router.replace('/');
+      router.replace('/home');
     }
-  }, [currentUser, isGuest, isLoading, router]);
+  }, [currentUser, isGuest, isLoading, router.isReady]);
 
   // Sequenza di animazione del biglietto
   useEffect(() => {
@@ -658,10 +696,6 @@ export default function LandingPage() {
           animation: floatBreath 4s ease-in-out infinite;
           filter: drop-shadow(0 12px 48px rgba(0,0,0,0.3));
         }
-        .land-ticket-stage.floating .land-ticket-svg {
-          animation: floatBreath 4s ease-in-out infinite;
-        }
-
         .land-ticket-svg {
           width: 100%;
           height: auto;
@@ -1187,57 +1221,50 @@ export default function LandingPage() {
               {/* Particelle esplosive */}
               {ticketState === 'entering' && (
                 <div className="particle-container">
-                  {[...Array(16)].map((_, i) => {
-                    const angle = (i / 16) * 360 + Math.random() * 20;
-                    const distance = 80 + Math.random() * 80;
-                    const tx = Math.cos(angle * Math.PI / 180) * distance;
-                    const ty = Math.sin(angle * Math.PI / 180) * distance;
-                    return (
-                      <div
-                        key={i}
-                        className="particle"
-                        style={{
-                          '--tx': tx + 'px',
-                          '--ty': ty + 'px',
-                          background: i % 3 === 0 ? 'var(--home-gold)' : i % 3 === 1 ? 'var(--home-pink)' : 'var(--home-gold-soft)',
-                          width: 4 + Math.random() * 10 + 'px',
-                          height: 4 + Math.random() * 10 + 'px',
-                          animationDelay: 0.7 + Math.random() * 0.4 + 's',
-                          borderRadius: Math.random() > 0.5 ? '50%' : '2px',
-                        } as React.CSSProperties}
-                      />
-                    );
-                  })}
+                  {particles.map((particle, i) => (
+                    <div
+                      key={i}
+                      className="particle"
+                      style={{
+                        '--tx': `${particle.tx}px`,
+                        '--ty': `${particle.ty}px`,
+                        background:
+                          i % 3 === 0
+                            ? 'var(--home-gold)'
+                            : i % 3 === 1
+                              ? 'var(--home-pink)'
+                              : 'var(--home-gold-soft)',
+                        width: `${particle.size}px`,
+                        height: `${particle.size}px`,
+                        animationDelay: `${particle.delay}s`,
+                        borderRadius: particle.round ? '50%' : '2px',
+                      } as React.CSSProperties}
+                    />
+                  ))}
                 </div>
               )}
 
               {/* Stelle persistenti che orbitano (solo dopo l'entrata) */}
               {ticketState !== 'hidden' && (
                 <div className="star-container">
-                  {[...Array(8)].map((_, i) => {
-                    const angle = (i / 8) * 360;
-                    const orbit = 120 + Math.sin(i * 1.5) * 30;
-                    const sx = Math.cos(angle * Math.PI / 180) * orbit;
-                    const sy = Math.sin(angle * Math.PI / 180) * orbit;
-                    return (
-                      <div
-                        key={i}
-                        className="star"
-                        style={{
-                          top: '50%',
-                          left: '50%',
-                          transform: `translate(calc(-50% + ${sx}px), calc(-50% + ${sy}px))`,
-                          '--sx': (sx + (Math.random() - 0.5) * 40) + 'px',
-                          '--sy': (sy + (Math.random() - 0.5) * 40) + 'px',
-                          animationDelay: (i * 0.4) + 's',
-                          animationDuration: (3 + Math.random() * 2) + 's',
-                          width: 3 + Math.random() * 5 + 'px',
-                          height: 3 + Math.random() * 5 + 'px',
-                          opacity: 0.1 + Math.random() * 0.3,
-                        } as React.CSSProperties}
-                      />
-                    );
-                  })}
+                  {stars.map((star, i) => (
+                    <div
+                      key={i}
+                      className="star"
+                      style={{
+                        top: '50%',
+                        left: '50%',
+                        transform: `translate(calc(-50% + ${star.sx}px), calc(-50% + ${star.sy}px))`,
+                        '--sx': `${star.targetX}px`,
+                        '--sy': `${star.targetY}px`,
+                        animationDelay: `${star.delay}s`,
+                        animationDuration: `${star.duration}s`,
+                        width: `${star.size}px`,
+                        height: `${star.size}px`,
+                        opacity: star.opacity,
+                      } as React.CSSProperties}
+                    />
+                  ))}
                 </div>
               )}
 

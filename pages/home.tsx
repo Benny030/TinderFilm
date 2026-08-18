@@ -111,6 +111,7 @@ export default function HomePage() {
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [fallbackUsername, setFallbackUsername] = useState('');
+  const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   const [codeInput, setCodeInput] = useState('');
@@ -190,27 +191,59 @@ export default function HomePage() {
   }, [currentUser, isGuest, isLoading, router]);
 
   useEffect(() => {
-    if (!currentUser || currentUser.isGuest) return;
-    if (currentUser.username) { setFallbackUsername(''); return; }
+    if (!currentUser || currentUser.isGuest) {
+      setProfileAvatarUrl(null);
+      return;
+    }
 
     const retry = async () => {
-      const { data: byId } = await supabase
-        .from('users').select('username').eq('id', currentUser.id).maybeSingle();
-      if (byId?.username) { setFallbackUsername(byId.username); return; }
+      const { data: byId, error: byIdError } = await supabase
+        .from('users')
+        .select('username,avatar_url')
+        .eq('id', currentUser.id)
+        .maybeSingle();
+
+      if (byIdError) {
+        console.error('Profile header load failed:', byIdError);
+      }
+
+      if (byId) {
+        setProfileAvatarUrl(byId.avatar_url ?? null);
+
+        if (byId.username) {
+          setFallbackUsername(
+            currentUser.username ? '' : byId.username
+          );
+          return;
+        }
+      }
 
       const { data: byEmail } = await supabase
-        .from('users').select('username').eq('email', currentUser.email).maybeSingle();
-      if (byEmail?.username) { setFallbackUsername(byEmail.username); return; }
+        .from('users')
+        .select('username,avatar_url')
+        .eq('email', currentUser.email)
+        .maybeSingle();
+
+      if (byEmail) {
+        setProfileAvatarUrl(byEmail.avatar_url ?? null);
+
+        if (byEmail.username) {
+          setFallbackUsername(
+            currentUser.username ? '' : byEmail.username
+          );
+          return;
+        }
+      }
 
       router.replace('/username');
     };
 
     const timer = setTimeout(() => {
       retry().catch((err) => {
-        console.error('Username retry failed:', err);
+        console.error('Profile header retry failed:', err);
         router.replace('/username');
       });
-    }, 500);
+    }, 100);
 
     return () => clearTimeout(timer);
   }, [currentUser, router, supabase]);
@@ -430,19 +463,44 @@ export default function HomePage() {
               <div
                 onClick={() => router.push('/profilo')}
                 style={{
-                  width: '38px', height: '38px',
+                  width: '38px',
+                  height: '38px',
                   background: P.pink + '22',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '15px', fontWeight: '700',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '15px',
+                  fontWeight: '700',
                   color: P.pink,
                   cursor: 'pointer',
                   border: `1px solid ${P.pink}30`,
                   transition: 'border-color 0.25s, transform 0.2s',
+                  overflow: 'hidden',
+                  borderRadius: '50%',
+                  flexShrink: 0,
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = P.pink; e.currentTarget.style.transform = 'scale(1.05)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = P.pink + '30'; e.currentTarget.style.transform = 'scale(1)'; }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = P.pink;
+                  e.currentTarget.style.transform = 'scale(1.05)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = P.pink + '30';
+                  e.currentTarget.style.transform = 'scale(1)';
+                }}
               >
-                {displayName.charAt(0).toUpperCase()}
+                {profileAvatarUrl ? (
+                  <img
+                    src={profileAvatarUrl}
+                    alt="Avatar profilo"
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                ) : (
+                  displayName.charAt(0).toUpperCase()
+                )}
               </div>
             </div>
           </div>

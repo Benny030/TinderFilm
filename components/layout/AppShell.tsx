@@ -1185,6 +1185,47 @@ export default function AppShell({ children, activeNav, hideNav = false }: Props
   );
 }
 
+function useCurrentProfileAvatar() {
+  const { currentUser } = useAuth();
+  const supabase = useRef(createBrowserClient()).current;
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.isGuest) {
+      setAvatarUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadAvatar = async () => {
+      const { data, error } = await supabase
+        .from('users')
+        .select('avatar_url')
+        .eq('id', currentUser.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      if (error) {
+        console.error('Profile avatar load failed:', error);
+        setAvatarUrl(null);
+        return;
+      }
+
+      setAvatarUrl(data?.avatar_url ?? null);
+    };
+
+    void loadAvatar();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, supabase]);
+
+  return avatarUrl;
+}
+
 // ─── Drawer mobile ───────────────
 function MobileDrawer({ open, onClose, activeNav }: { open: boolean; onClose: () => void; activeNav: string }) {
   const { theme } = useTheme();
@@ -1194,6 +1235,7 @@ function MobileDrawer({ open, onClose, activeNav }: { open: boolean; onClose: ()
   const router = useRouter();
   const { currentUser, isGuest, guestName, signOut } = useAuth();
   const displayName = currentUser && !currentUser.isGuest ? currentUser.username : guestName ?? 'Ospite';
+  const avatarUrl = useCurrentProfileAvatar();
   const unreadNotifications = useUnreadNotifications();
 
   return (
@@ -1326,8 +1368,35 @@ function MobileDrawer({ open, onClose, activeNav }: { open: boolean; onClose: ()
             fontFamily: FONT.sans,
           }}
         >
-          <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: P.pinkGlow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, color: P.pink, flexShrink: 0 }}>
-            {displayName?.charAt(0).toUpperCase()}
+          <div
+            style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '50%',
+              background: P.pinkGlow,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '14px',
+              fontWeight: 700,
+              color: P.pink,
+              flexShrink: 0,
+              overflow: 'hidden',
+            }}
+          >
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt="Avatar profilo"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+              />
+            ) : (
+              displayName?.charAt(0).toUpperCase()
+            )}
           </div>
           <div style={{ flex: 1, overflow: 'hidden' }}>
             <div style={{ fontSize: '13px', fontWeight: 600, color: P.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{displayName}</div>
@@ -1352,6 +1421,7 @@ function SidebarDesktop({ activeNav }: { activeNav: string }) {
   const router = useRouter();
   const { currentUser, isGuest, guestName, signOut } = useAuth();
   const displayName = currentUser && !currentUser.isGuest ? currentUser.username : guestName ?? 'Ospite';
+  const avatarUrl = useCurrentProfileAvatar();
   const unreadNotifications = useUnreadNotifications();
 
   return (
@@ -1491,8 +1561,35 @@ function SidebarDesktop({ activeNav }: { activeNav: string }) {
               fontFamily: 'inherit',
             }}
           >
-            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: P.pinkGlow, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: TEXT.base, fontWeight: '700', color: P.pink, flexShrink: 0 }}>
-              {displayName?.charAt(0).toUpperCase()}
+            <div
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                background: P.pinkGlow,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: TEXT.base,
+                fontWeight: '700',
+                color: P.pink,
+                flexShrink: 0,
+                overflow: 'hidden',
+              }}
+            >
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="Avatar profilo"
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                />
+              ) : (
+                displayName?.charAt(0).toUpperCase()
+              )}
             </div>
             <div style={{ overflow: 'hidden', flex: 1 }}>
               <div style={{ fontSize: TEXT.sm, fontWeight: '600', color: P.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{displayName}</div>

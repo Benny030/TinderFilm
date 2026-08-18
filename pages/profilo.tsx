@@ -30,6 +30,7 @@ import {
   ShieldCheck,
   WarningCircle,
   SignOut,
+  Trash,
   Star,
   User,
   Warning,
@@ -190,12 +191,17 @@ export default function ProfiloPage() {
   const [notifyReportUpdates, setNotifyReportUpdates] = useState(true);
   const [savingNotifications, setSavingNotifications] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [pendingModerationCount, setPendingModerationCount] = useState(0);
 
   const [movieEntries, setMovieEntries] = useState<MovieEntryRow[]>([]);
 
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
+  const [deleteAccountStep, setDeleteAccountStep] = useState<1 | 2>(1);
+  const [deleteAccountConfirmation, setDeleteAccountConfirmation] =
+    useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (isLoading) return;
@@ -341,39 +347,13 @@ export default function ProfiloPage() {
         if (adminError) {
           console.error('Admin check failed:', adminError);
           setIsAdmin(false);
-          setPendingModerationCount(0);
           return;
         }
 
-        const allowed = data === true;
-        setIsAdmin(allowed);
-
-        if (allowed) {
-          const {
-            data: pendingCountData,
-            error: pendingCountError,
-          } = await supabase.rpc(
-            'admin_get_pending_moderation_count'
-          );
-
-          if (pendingCountError) {
-            console.error(
-              'Pending moderation count failed:',
-              pendingCountError
-            );
-            setPendingModerationCount(0);
-          } else {
-            setPendingModerationCount(
-              Number(pendingCountData ?? 0)
-            );
-          }
-        } else {
-          setPendingModerationCount(0);
-        }
+        setIsAdmin(data === true);
       } catch (err) {
         console.error('Admin check failed:', err);
         setIsAdmin(false);
-        setPendingModerationCount(0);
       }
     };
 
@@ -670,6 +650,82 @@ export default function ProfiloPage() {
       );
     } finally {
       setSavingPrivacy(false);
+    }
+  };
+
+  const closeDeleteAccount = () => {
+    if (deletingAccount) return;
+
+    setDeleteAccountOpen(false);
+    setDeleteAccountStep(1);
+    setDeleteAccountConfirmation('');
+  };
+
+  const deleteAccountPermanently = async () => {
+    if (!currentUser || currentUser.isGuest || deletingAccount) return;
+
+    if (deleteAccountConfirmation.trim() !== username.trim()) {
+      setError(
+        'Per confermare devi scrivere esattamente il tuo username.'
+      );
+      return;
+    }
+
+    const finalConfirmed = window.confirm(
+      'ULTIMA CONFERMA: eliminare definitivamente il tuo account? Tutti i dati verranno persi e non potranno essere recuperati.'
+    );
+
+    if (!finalConfirmed) return;
+
+    setDeletingAccount(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) throw sessionError;
+
+      if (!session?.access_token) {
+        throw new Error(
+          'Sessione non valida. Accedi di nuovo e riprova.'
+        );
+      }
+
+      const response = await fetch('/api/account/delete', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      const result = (await response.json()) as {
+        success?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.error ||
+            'Impossibile eliminare definitivamente l’account.'
+        );
+      }
+
+      await signOut();
+      await router.replace('/auth');
+    } catch (err: unknown) {
+      console.error('Delete account failed:', err);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Impossibile eliminare definitivamente l’account.'
+      );
+
+      setDeletingAccount(false);
     }
   };
 
@@ -2239,37 +2295,7 @@ export default function ProfiloPage() {
                           color: P.text,
                         }}
                       >
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 7,
-                          }}
-                        >
-                          Dashboard moderazione
-
-                          {pendingModerationCount > 0 && (
-                            <span
-                              style={{
-                                minWidth: 20,
-                                height: 20,
-                                padding: '0 6px',
-                                borderRadius: 999,
-                                display: 'inline-grid',
-                                placeItems: 'center',
-                                background: P.error,
-                                color: '#fff',
-                                fontSize: 9,
-                                fontWeight: 900,
-                                lineHeight: 1,
-                              }}
-                            >
-                              {pendingModerationCount > 99
-                                ? '99+'
-                                : pendingModerationCount}
-                            </span>
-                          )}
-                        </span>
+                        Dashboard moderazione
                       </div>
 
                       <div
@@ -2536,6 +2562,114 @@ export default function ProfiloPage() {
               <section
                 style={{
                   background: P.card,
+                  border: `1px solid ${P.error}45`,
+                  padding: 22,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 9,
+                    marginBottom: 16,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 34,
+                      height: 34,
+                      display: 'grid',
+                      placeItems: 'center',
+                      background: 'rgba(239,68,68,.10)',
+                      color: P.error,
+                    }}
+                  >
+                    <Trash size={17} weight="fill" />
+                  </div>
+
+                  <div>
+                    <h2
+                      style={{
+                        margin: 0,
+                        color: P.text,
+                        fontFamily: FONT_DISPLAY,
+                        fontSize: 18,
+                      }}
+                    >
+                      Zona pericolosa
+                    </h2>
+
+                    <div
+                      style={{
+                        color: P.textFaint,
+                        fontSize: 10,
+                        marginTop: 2,
+                      }}
+                    >
+                      Azioni permanenti sul tuo account.
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    border: `1px solid ${P.error}35`,
+                    background: 'rgba(239,68,68,.06)',
+                    padding: 14,
+                  }}
+                >
+                  <div
+                    style={{
+                      color: P.text,
+                      fontSize: 12,
+                      fontWeight: 800,
+                    }}
+                  >
+                    Elimina account definitivamente
+                  </div>
+
+                  <p
+                    style={{
+                      margin: '5px 0 12px',
+                      color: P.textMuted,
+                      fontSize: 10,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Verranno eliminati definitivamente il tuo profilo,
+                    libreria, recensioni, voti, commenti, like, follow,
+                    blocchi, notifiche e gli altri dati collegati
+                    all'account. L'operazione non può essere annullata.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteAccountStep(1);
+                      setDeleteAccountConfirmation('');
+                      setDeleteAccountOpen(true);
+                      setError('');
+                      setMessage('');
+                    }}
+                    style={{
+                      border: `1px solid ${P.error}`,
+                      background: 'transparent',
+                      color: P.error,
+                      padding: '10px 13px',
+                      cursor: 'pointer',
+                      fontFamily: FONT_SANS,
+                      fontSize: 10,
+                      fontWeight: 900,
+                    }}
+                  >
+                    Elimina il mio account
+                  </button>
+                </div>
+              </section>
+
+              <section
+                style={{
+                  background: P.card,
                   border: `1px solid ${P.error}35`,
                   padding: 22,
                 }}
@@ -2623,6 +2757,256 @@ export default function ProfiloPage() {
             </div>
           )}
         </div>
+
+        {deleteAccountOpen && (
+          <div
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                closeDeleteAccount();
+              }
+            }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1000,
+              background: 'rgba(0,0,0,.72)',
+              display: 'grid',
+              placeItems: 'center',
+              padding: 18,
+            }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Elimina account"
+              style={{
+                width: 'min(500px,100%)',
+                border: `1px solid ${P.error}55`,
+                background: P.card,
+                color: P.text,
+                padding: 20,
+                boxShadow: '0 26px 80px rgba(0,0,0,.48)',
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  display: 'grid',
+                  placeItems: 'center',
+                  background: 'rgba(239,68,68,.10)',
+                  color: P.error,
+                  marginBottom: 12,
+                }}
+              >
+                <Trash size={23} weight="fill" />
+              </div>
+
+              {deleteAccountStep === 1 ? (
+                <>
+                  <div
+                    style={{
+                      color: P.error,
+                      fontSize: 9,
+                      fontWeight: 900,
+                      textTransform: 'uppercase',
+                      letterSpacing: '.08em',
+                    }}
+                  >
+                    Prima conferma
+                  </div>
+
+                  <h2
+                    style={{
+                      margin: '5px 0 8px',
+                      fontFamily: FONT_DISPLAY,
+                      fontSize: 23,
+                    }}
+                  >
+                    Vuoi davvero eliminare il tuo account?
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color: P.textMuted,
+                      fontSize: 11,
+                      lineHeight: 1.65,
+                    }}
+                  >
+                    Questa operazione è definitiva. Perderai profilo,
+                    libreria, Preferiti, Watchlist, Visti, recensioni,
+                    voti, commenti, like, follow e gli altri dati
+                    associati al tuo account.
+                  </p>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: 8,
+                      marginTop: 18,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={closeDeleteAccount}
+                      style={{
+                        border: `1px solid ${P.border}`,
+                        background: P.bgSoft,
+                        color: P.textMuted,
+                        padding: '11px 12px',
+                        cursor: 'pointer',
+                        fontFamily: FONT_SANS,
+                        fontWeight: 800,
+                      }}
+                    >
+                      Annulla
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDeleteAccountStep(2)}
+                      style={{
+                        border: `1px solid ${P.error}`,
+                        background: P.error,
+                        color: '#fff',
+                        padding: '11px 12px',
+                        cursor: 'pointer',
+                        fontFamily: FONT_SANS,
+                        fontWeight: 900,
+                      }}
+                    >
+                      Continua
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div
+                    style={{
+                      color: P.error,
+                      fontSize: 9,
+                      fontWeight: 900,
+                      textTransform: 'uppercase',
+                      letterSpacing: '.08em',
+                    }}
+                  >
+                    Conferma definitiva
+                  </div>
+
+                  <h2
+                    style={{
+                      margin: '5px 0 8px',
+                      fontFamily: FONT_DISPLAY,
+                      fontSize: 23,
+                    }}
+                  >
+                    Scrivi il tuo username
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color: P.textMuted,
+                      fontSize: 11,
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    Per continuare scrivi esattamente{' '}
+                    <strong style={{ color: P.text }}>
+                      {username}
+                    </strong>
+                    .
+                  </p>
+
+                  <input
+                    value={deleteAccountConfirmation}
+                    disabled={deletingAccount}
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(event) =>
+                      setDeleteAccountConfirmation(event.target.value)
+                    }
+                    placeholder={username}
+                    style={{
+                      ...inputStyle,
+                      marginTop: 13,
+                      borderColor:
+                        deleteAccountConfirmation &&
+                        deleteAccountConfirmation !== username
+                          ? P.error
+                          : P.border,
+                    }}
+                  />
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: 8,
+                      marginTop: 16,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      disabled={deletingAccount}
+                      onClick={() => {
+                        setDeleteAccountStep(1);
+                        setDeleteAccountConfirmation('');
+                      }}
+                      style={{
+                        border: `1px solid ${P.border}`,
+                        background: P.bgSoft,
+                        color: P.textMuted,
+                        padding: '11px 12px',
+                        cursor: deletingAccount ? 'wait' : 'pointer',
+                        opacity: deletingAccount ? 0.5 : 1,
+                        fontFamily: FONT_SANS,
+                        fontWeight: 800,
+                      }}
+                    >
+                      Indietro
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={
+                        deletingAccount ||
+                        deleteAccountConfirmation !== username
+                      }
+                      onClick={() =>
+                        void deleteAccountPermanently()
+                      }
+                      style={{
+                        border: `1px solid ${P.error}`,
+                        background: P.error,
+                        color: '#fff',
+                        padding: '11px 12px',
+                        cursor: deletingAccount
+                          ? 'wait'
+                          : deleteAccountConfirmation === username
+                          ? 'pointer'
+                          : 'not-allowed',
+                        opacity:
+                          deletingAccount ||
+                          deleteAccountConfirmation !== username
+                            ? 0.5
+                            : 1,
+                        fontFamily: FONT_SANS,
+                        fontWeight: 900,
+                      }}
+                    >
+                      {deletingAccount
+                        ? 'Eliminazione...'
+                        : 'Elimina definitivamente'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <style jsx global>{`
           @media (max-width: 720px) {

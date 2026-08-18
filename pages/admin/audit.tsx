@@ -65,6 +65,7 @@ const ACTION_LABELS: Record<string, string> = {
   suspension_lifted: 'Sospensione rimossa',
   appeal_accepted: 'Ricorso accettato',
   appeal_rejected: 'Ricorso rifiutato',
+  user_deleted: 'Account eliminato',
 };
 
 function formatDate(value: string) {
@@ -387,7 +388,55 @@ export default function AdminAuditPage() {
                     </span>
                   </div>
 
-                  {row.target_username && (
+                  {row.action === 'user_deleted' ? (
+                    <div
+                      style={{
+                        marginTop: 10,
+                        border: `1px solid ${P.border}`,
+                        background: P.bgSoft,
+                        padding: 10,
+                      }}
+                    >
+                      <div
+                        style={{
+                          color: P.textFaint,
+                          fontSize: 8,
+                          textTransform: 'uppercase',
+                          letterSpacing: '.06em',
+                          marginBottom: 5,
+                        }}
+                      >
+                        Account eliminato
+                      </div>
+
+                      <div
+                        style={{
+                          color: P.text,
+                          fontSize: 10,
+                          fontWeight: 800,
+                        }}
+                      >
+                        @
+                        {String(
+                          row.metadata?.deleted_username ??
+                            'utente_eliminato'
+                        )}
+                      </div>
+
+                      <div
+                        style={{
+                          color: P.textMuted,
+                          fontSize: 9,
+                          marginTop: 3,
+                        }}
+                      >
+                        {String(
+                          row.metadata?.deleted_email ??
+                            'Email non disponibile'
+                        )}
+                      </div>
+                    </div>
+                  ) : row.target_username ? (
                     <div
                       style={{
                         marginTop: 9,
@@ -418,9 +467,10 @@ export default function AdminAuditPage() {
                         @{row.target_username}
                       </button>
                     </div>
-                  )}
+                  ) : null}
 
-                  {row.metadata &&
+                  {row.action !== 'user_deleted' &&
+                    row.metadata &&
                     Object.keys(row.metadata).length > 0 && (
                       <pre
                         style={{
