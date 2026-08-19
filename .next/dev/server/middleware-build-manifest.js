@@ -32,15 +32,20 @@ globalThis.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/auth.js"
     ],
+    "/crea-stanza": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/crea-stanza.js"
+    ],
     "/home": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
       "static/chunks/pages/home.js"
     ],
-    "/profilo": [
+    "/stanza": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/profilo.js"
+      "static/chunks/pages/stanza.js"
     ]
   }
 };

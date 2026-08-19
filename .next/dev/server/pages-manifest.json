@@ -3,9 +3,9 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/home": "pages/home.js",
-  "/libreria": "pages/libreria.js",
-  "/": "pages/index.js",
+  "/crea-stanza": "pages/crea-stanza.js",
+  "/stanza": "pages/stanza.js",
   "/api/tmdb/trending": "pages/api/tmdb/trending.js",
-  "/profilo": "pages/profilo.js",
+  "/": "pages/index.js",
   "/auth": "pages/auth.js"
 }

@@ -112,6 +112,15 @@ type ApiRouteConfig = {
   type __Unused = __Check
 }
 
+// Validate ../../../pages/attore/[id].tsx
+{
+  type __IsExpected<Specific extends PagesPageConfig> = Specific
+  const handler = {} as typeof import("../../../pages/attore/[id].js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../../pages/auth.tsx
 {
   type __IsExpected<Specific extends PagesPageConfig> = Specific
@@ -265,10 +274,10 @@ type ApiRouteConfig = {
   type __Unused = __Check
 }
 
-// Validate ../../../pages/utente/connessioni.tsx
+// Validate ../../../pages/utente/[username]/connessioni.tsx
 {
   type __IsExpected<Specific extends PagesPageConfig> = Specific
-  const handler = {} as typeof import("../../../pages/utente/connessioni.js")
+  const handler = {} as typeof import("../../../pages/utente/[username]/connessioni.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check
@@ -386,6 +395,15 @@ type ApiRouteConfig = {
 {
   type __IsExpected<Specific extends ApiRouteConfig> = Specific
   const handler = {} as typeof import("../../../pages/api/tmdb/movie/movies.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../../pages/api/tmdb/person/[id].ts
+{
+  type __IsExpected<Specific extends ApiRouteConfig> = Specific
+  const handler = {} as typeof import("../../../pages/api/tmdb/person/[id].js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check
