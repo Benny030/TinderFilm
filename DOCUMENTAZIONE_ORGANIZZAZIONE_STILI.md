@@ -196,3 +196,4 @@ export default function HomePage() {
 ## Regola finale
 
 Quando un nuovo design viene richiesto, si modifica prima il token o lo stile della pagina, non la logica di business. In questo modo il codice resta ordinato e i prossimi aggiornamenti grafici diventano più prevedibili.
+ok le stanze non stanno funzionando benissimo, io direi difare cosi, alloraio faccio una stanza qualsiasi, e mi chiede privata o pubblica, in quella pubblica puo entrare chi vuole senza bisogno di essere accettato, nella privata l'host deve accettare il partecipante 

@@ -5,6 +5,7 @@ import { useRouter } from 'next/router';
 import AppShell from '@/components/layout/AppShell';
 import { generateRoomCode, normalizeRoomCode } from '@/utils/roomCode';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/hooks/useAuth';
 import {
   FilmSlate,
   Television,
@@ -39,7 +40,10 @@ import {
   MusicNote,
   Calendar,
   CaretDown,
+  MapPin,
+  Crosshair,
   Gear,         // per il badge "Personalizzato"
+  Star,
 } from '@phosphor-icons/react';
 
 // ─── Palette dark "cinema elegante" ──────────────────────────────────────
@@ -131,14 +135,41 @@ const GENRES = [
 ];
 
 type Mode = 'trending' | 'cinema' | 'streaming' | 'discover';
+type RoomKind = 'private' | 'group';
+type RoomVisibility = 'private' | 'public';
+type DiscoverFilter = 'for_you' | 'following' | 'followers' | 'local';
+type DiscoveredRoom = {
+  id: string;
+  room_type: 'cinema_pair' | 'cinema_group';
+  city: string | null;
+  province: string | null;
+  min_members: number;
+  max_members: number;
+  participant_count: number;
+  available_spots: number;
+  visibility: string;
+  requires_approval: boolean;
+  host_actor_id: string | null;
+  host_actor_type: 'user' | 'guest' | null;
+  host_name: string;
+  relation: 'mutual' | 'following' | 'follower' | 'local';
+  common_following_count: number;
+  distance_km: number | null;
+};
 type Tab = 'create' | 'join';
-type Step = 1 | 2;
+type Step = 1 | 2 | 3 | 4;
 
 export default function CreaStanzaPage() {
   const router = useRouter();
   const { theme } = useTheme();
+  const { currentUser, isGuest, guestId, guestName } = useAuth();
   const isDark = theme === 'dark';
   const P = isDark ? D : L;
+  const creatorId = currentUser?.id ?? guestId ?? null;
+  const creatorType: 'user' | 'guest' | null =
+    currentUser && !currentUser.isGuest ? 'user' : (isGuest && guestId ? 'guest' : null);
+  const creatorName =
+    currentUser && !currentUser.isGuest ? currentUser.username : (guestName ?? null);
   const [mounted, setMounted] = useState(false);
   const currentYear = new Date().getFullYear();
 
@@ -159,6 +190,22 @@ export default function CreaStanzaPage() {
 
   const [step, setStep] = useState<Step>(1);
   const [mode, setMode] = useState<Mode | null>(null);
+  const [roomKind, setRoomKind] = useState<RoomKind>('private');
+  const [minMembers, setMinMembers] = useState(2);
+  const [maxMembers, setMaxMembers] = useState(2);
+  const [city, setCity] = useState('');
+  const [province, setProvince] = useState('');
+  const [countryCode, setCountryCode] = useState('IT');
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [radiusKm, setRadiusKm] = useState(25);
+  const [roomVisibility, setRoomVisibility] = useState<RoomVisibility>('public');
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const [discoverFilter, setDiscoverFilter] = useState<DiscoverFilter>('for_you');
+  const [discoveredRooms, setDiscoveredRooms] = useState<DiscoveredRoom[]>([]);
+  const [discoverLoading, setDiscoverLoading] = useState(false);
+  const [discoverError, setDiscoverError] = useState('');
   const [selectedGenres, setSelectedGenres] = useState<number[]>([]);
   const [yearFromStr, setYearFromStr] = useState('2010');
   const [yearToStr, setYearToStr] = useState(String(currentYear));
@@ -208,32 +255,200 @@ export default function CreaStanzaPage() {
     router.push(`/stanza?room=${code}`);
   };
 
+  const detectLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError('La geolocalizzazione non è supportata dal browser.');
+      return;
+    }
+
+    setLocationLoading(true);
+    setLocationError('');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lon = position.coords.longitude;
+
+        try {
+          const response = await fetch(
+            `/api/location/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`
+          );
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Posizione non riconosciuta');
+          }
+
+          setCity(data.city || '');
+          setProvince(data.province || '');
+          setCountryCode(data.country_code || 'IT');
+          setLatitude(lat);
+          setLongitude(lon);
+        } catch (error) {
+          setLatitude(lat);
+          setLongitude(lon);
+          setLocationError(
+            error instanceof Error
+              ? `${error.message}. Puoi inserire la città manualmente.`
+              : 'Posizione non riconosciuta. Inserisci la città manualmente.'
+          );
+        } finally {
+          setLocationLoading(false);
+        }
+      },
+      (error) => {
+        setLocationLoading(false);
+        if (error.code === error.PERMISSION_DENIED) {
+          setLocationError('Permesso posizione negato. Inserisci la città manualmente.');
+        } else {
+          setLocationError('Non riesco a leggere la posizione. Inserisci la città manualmente.');
+        }
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60 * 1000 }
+    );
+  };
+
+  const searchCinemaRooms = async (filter: DiscoverFilter = discoverFilter) => {
+    if (!city.trim() && (latitude === null || longitude === null)) {
+      setDiscoverError('Inserisci una città oppure usa la tua posizione.');
+      return;
+    }
+
+    setDiscoverLoading(true);
+    setDiscoverError('');
+    setDiscoverFilter(filter);
+
+    try {
+      const params = new URLSearchParams({
+        city: city.trim(),
+        radiusKm: String(radiusKm),
+        filter,
+      });
+
+      if (creatorId) params.set('actorId', creatorId);
+      if (latitude !== null) params.set('lat', String(latitude));
+      if (longitude !== null) params.set('lon', String(longitude));
+
+      const response = await fetch(`/api/rooms/discover?${params.toString()}`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Ricerca stanze non riuscita');
+      }
+
+      setDiscoveredRooms(Array.isArray(data.rooms) ? data.rooms : []);
+    } catch (error) {
+      setDiscoverError(
+        error instanceof Error ? error.message : 'Ricerca stanze non riuscita'
+      );
+      setDiscoveredRooms([]);
+    } finally {
+      setDiscoverLoading(false);
+    }
+  };
+
   const handleCreate = async () => {
+    if (!mode) return;
     if (mode === 'discover' && !validateYears()) return;
+    if (mode === 'cinema' && !city.trim()) {
+      setLocationError('Inserisci una città oppure usa la tua posizione.');
+      return;
+    }
+    if (roomKind === 'group' && (minMembers < 2 || maxMembers < minMembers || maxMembers > 10)) return;
+
+    if (!creatorId || !creatorType) {
+      setCodeError('Sessione non valida. Accedi di nuovo o rientra come ospite.');
+      return;
+    }
+
     setIsCreating(true);
     const roomId = generateRoomCode();
+
     try {
-      await fetch('/api/rooms', {
+      let resolvedLatitude = latitude;
+      let resolvedLongitude = longitude;
+      let resolvedProvince = province;
+      let resolvedCountryCode = countryCode;
+
+      // Se la città è stata scritta a mano, trasformiamola in coordinate
+      // PRIMA di creare la stanza. Così "Parma" è davvero il centro
+      // geografico usato per cercare cinema e spettacoli.
+      if (
+        mode === 'cinema' &&
+        city.trim() &&
+        (resolvedLatitude === null || resolvedLongitude === null)
+      ) {
+        const geoRes = await fetch(
+          `/api/location/search?city=${encodeURIComponent(city.trim())}`
+        );
+
+        const geo = await geoRes.json().catch(() => ({}));
+
+        if (!geoRes.ok) {
+          throw new Error(
+            geo.error || 'Non riesco a localizzare la città inserita'
+          );
+        }
+
+        resolvedLatitude = Number(geo.latitude);
+        resolvedLongitude = Number(geo.longitude);
+
+        if (typeof geo.province === 'string' && geo.province.trim()) {
+          resolvedProvince = geo.province.trim();
+        }
+
+        if (typeof geo.country_code === 'string' && geo.country_code.trim()) {
+          resolvedCountryCode = geo.country_code.trim().toUpperCase();
+        }
+      }
+
+      const response = await fetch('/api/rooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: roomId,
-          mode: mode!,
+          mode,
           genres: selectedGenres.length > 0 ? selectedGenres.join(',') : null,
           year_from: mode === 'discover' ? yearFrom : null,
           year_to: mode === 'discover' ? yearTo : null,
+          room_type: roomKind === 'group'
+            ? (mode === 'cinema' ? 'cinema_group' : 'group')
+            : (mode === 'cinema' ? 'cinema_pair' : 'private'),
+          min_members: roomKind === 'group' ? minMembers : 2,
+          max_members: roomKind === 'group' ? maxMembers : 2,
+          match_threshold_percent: roomKind === 'group' ? 70 : 100,
+          visibility: roomVisibility,
+          requires_approval: roomVisibility === 'private',
+          host_actor_id: creatorId,
+          host_actor_type: creatorType,
+          host_display_name: creatorName,
+          city: mode === 'cinema' ? city.trim() : null,
+          province: mode === 'cinema' ? (resolvedProvince.trim() || null) : null,
+          country_code: mode === 'cinema' ? resolvedCountryCode : 'IT',
+          latitude: mode === 'cinema' ? resolvedLatitude : null,
+          longitude: mode === 'cinema' ? resolvedLongitude : null,
+          radius_km: mode === 'cinema' ? radiusKm : 25,
         }),
       });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Creazione stanza non riuscita');
+      }
+
+      const params = new URLSearchParams({ room: roomId, mode });
+      if (mode === 'discover') {
+        if (selectedGenres.length > 0) params.set('genres', selectedGenres.join(','));
+        params.set('year_from', yearFrom.toString());
+        params.set('year_to', yearTo.toString());
+      }
+
+      await router.push(`/stanza?${params.toString()}`);
     } catch (err) {
       console.error('Room configuration save failed:', err);
+      setCodeError(err instanceof Error ? err.message : 'Creazione stanza non riuscita');
+      setIsCreating(false);
     }
-    const params = new URLSearchParams({ room: roomId, mode: mode! });
-    if (mode === 'discover') {
-      if (selectedGenres.length > 0) params.set('genres', selectedGenres.join(','));
-      params.set('year_from', yearFrom.toString());
-      params.set('year_to', yearTo.toString());
-    }
-    router.push(`/stanza?${params.toString()}`);
   };
 
   const switchToCreate = () => {
@@ -246,11 +461,20 @@ export default function CreaStanzaPage() {
   };
   const handleCreateAction = () => {
     if (!mode) return;
-    if (mode === 'discover') {
-      setStep(2);
+    // Prima scegliamo se la stanza è per 2 persone o per un gruppo.
+    setStep(2);
+  };
+
+  const handleRoomKindContinue = () => {
+    setStep(3);
+  };
+
+  const handleVisibilityContinue = () => {
+    if (mode === 'cinema' || mode === 'discover') {
+      setStep(4);
       return;
     }
-    handleCreate();
+    void handleCreate();
   };
 
   // Badge con icone al posto delle emoji
@@ -849,21 +1073,30 @@ export default function CreaStanzaPage() {
                     <Plus size={18} weight={tab === 'create' ? 'fill' : 'duotone'} />
                     Crea
                   </button>
+
+                  <button
+                    onClick={() => void router.push('/stanze')}
+                    className="tab-switch-btn"
+                  >
+                    <Star size={18} weight="duotone" />
+                    Esplora
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* TAB: ENTRA CON CODICE */}
+            {/* TAB: ENTRA */}
             {tab === 'join' && (
-              <div className="join-wrapper">
+              <div className="join-wrapper" style={{ display: 'grid', gap: '18px' }}>
                 <form onSubmit={handleJoin} className="join-form ticket-card">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <Door size={28} color={P.gold} weight="duotone" />
                     <div>
                       <div style={{ fontSize: '20px', fontWeight: 'bold', color: P.text }}>Entra con codice</div>
-                      <div style={{ fontSize: '14px', color: P.textMuted }}>Inserisci il codice della stanza</div>
+                      <div style={{ fontSize: '14px', color: P.textMuted }}>Hai già un invito? Inserisci il codice della stanza.</div>
                     </div>
                   </div>
+
                   <input
                     className="code-input"
                     value={codeInput}
@@ -875,12 +1108,14 @@ export default function CreaStanzaPage() {
                     autoComplete="off"
                     spellCheck={false}
                   />
+
                   {codeError && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: P.pink }}>
                       <Warning size={16} color={P.pink} weight="fill" />
                       {codeError}
                     </div>
                   )}
+
                   <button
                     type="submit"
                     className="btn-primary"
@@ -890,11 +1125,41 @@ export default function CreaStanzaPage() {
                       color: codeInput.trim().length < 4 ? P.textFaint : P.bg,
                     }}
                   >
-                    <Door size={18} color={codeInput.trim().length < 4 ? P.textFaint : P.bg} weight="fill" />
+                    <Door size={18} weight="fill" />
                     Entra nella stanza
                   </button>
                   <div className="ticket-tear" style={{ background: P.bg }} />
                 </form>
+
+                <button
+                  type="button"
+                  onClick={() => router.push('/stanze')}
+                  className="ticket-card"
+                  style={{
+                    padding: '22px',
+                    border: `1px solid ${P.border}`,
+                    background: P.card,
+                    color: P.text,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    fontFamily: FONT,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '16px',
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: P.pink, fontWeight: 800, marginBottom: '5px' }}>
+                      <MapPin size={20} weight="fill" />
+                      Stanze per te
+                    </div>
+                    <div style={{ color: P.textMuted, fontSize: '13px', lineHeight: 1.5 }}>
+                      Trova persone e gruppi cinema nella tua zona e nella tua rete sociale.
+                    </div>
+                  </div>
+                  <ArrowRight size={22} color={P.gold} />
+                </button>
               </div>
             )}
 
@@ -990,8 +1255,280 @@ export default function CreaStanzaPage() {
               </>
             )}
 
-            {/* TAB: CREA STANZA — STEP 2 */}
+            {/* TAB: CREA STANZA — STEP 2: TIPO DI STANZA */}
             {tab === 'create' && step === 2 && (
+              <div className="step2-container ticket-card">
+                <button
+                  onClick={() => setStep(1)}
+                  style={{ background: 'none', border: 'none', color: P.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '18px', fontFamily: FONT }}
+                >
+                  <ArrowLeft size={17} /> Indietro
+                </button>
+
+                <div style={{ fontSize: '22px', fontWeight: 'bold', color: P.text, marginBottom: '6px' }}>
+                  Con quante persone vuoi scegliere?
+                </div>
+                <div style={{ color: P.textMuted, fontSize: '14px', marginBottom: '22px' }}>
+                  La stessa logica funziona sia per una coppia che per un gruppo.
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '24px' }}>
+                  <button
+                    type="button"
+                    onClick={() => { setRoomKind('private'); setMinMembers(2); setMaxMembers(2); }}
+                    style={{ textAlign: 'left', padding: '18px', borderRadius: '14px', cursor: 'pointer', background: roomKind === 'private' ? P.goldGlow : P.card, border: `1px solid ${roomKind === 'private' ? P.gold : P.border}`, color: P.text }}
+                  >
+                    <Users size={28} color={P.gold} weight="duotone" />
+                    <div style={{ fontWeight: 800, marginTop: '10px' }}>In 2</div>
+                    <div style={{ fontSize: '13px', color: P.textMuted, marginTop: '5px' }}>La stanza classica: il match richiede 2 like su 2.</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setRoomKind('group'); setMinMembers(3); setMaxMembers(6); }}
+                    style={{ textAlign: 'left', padding: '18px', borderRadius: '14px', cursor: 'pointer', background: roomKind === 'group' ? P.pinkGlow : P.card, border: `1px solid ${roomKind === 'group' ? P.pink : P.border}`, color: P.text }}
+                  >
+                    <Users size={28} color={P.pink} weight="fill" />
+                    <div style={{ fontWeight: 800, marginTop: '10px' }}>Gruppo</div>
+                    <div style={{ fontSize: '13px', color: P.textMuted, marginTop: '5px' }}>Da 3 a 10 persone. Il match viene calcolato automaticamente in base ai voti del gruppo.</div>
+                  </button>
+                </div>
+
+                {roomKind === 'group' && (
+                  <div style={{ display: 'grid', gap: '16px', marginBottom: '24px' }}>
+                    <label style={{ color: P.text, fontWeight: 700 }}>
+                      Minimo partecipanti: {minMembers}
+                      <input type="range" min={2} max={Math.min(10, maxMembers)} value={minMembers}
+                        onChange={(e) => setMinMembers(Number(e.target.value))}
+                        style={{ width: '100%', marginTop: '8px' }} />
+                    </label>
+                    <label style={{ color: P.text, fontWeight: 700 }}>
+                      Massimo partecipanti: {maxMembers}
+                      <input type="range" min={Math.max(3, minMembers)} max={10} value={maxMembers}
+                        onChange={(e) => setMaxMembers(Number(e.target.value))}
+                        style={{ width: '100%', marginTop: '8px' }} />
+                    </label>
+                  </div>
+                )}
+
+                <button className="btn-primary" disabled={isCreating} onClick={handleRoomKindContinue}
+                  style={{ background: isCreating ? P.border : P.gold, color: isCreating ? P.textFaint : P.bg }}>
+                  {isCreating ? '⏳ Creazione...' : (mode === 'discover' ? 'Continua' : 'Crea stanza')}
+                </button>
+                <div className="ticket-tear" style={{ background: P.bg }} />
+              </div>
+            )}
+
+            {/* TAB: CREA STANZA — STEP 3: PRIVACY */}
+            {tab === 'create' && step === 3 && (
+              <div className="step2-container ticket-card">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  style={{ background: 'none', border: 'none', color: P.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '18px', fontFamily: FONT }}
+                >
+                  <ArrowLeft size={17} /> Indietro
+                </button>
+
+                <div style={{ fontSize: '22px', fontWeight: 'bold', color: P.text, marginBottom: '6px' }}>
+                  Chi può entrare nella stanza?
+                </div>
+
+                <div style={{ color: P.textMuted, fontSize: '14px', lineHeight: 1.6, marginBottom: '22px' }}>
+                  Scegli come gestire l’ingresso dei partecipanti.
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '10px', marginBottom: '22px' }}>
+                  {[
+                    {
+                      id: 'public',
+                      label: 'Pubblica',
+                      desc: 'Chiunque può entrare subito finché c’è posto.',
+                    },
+                    {
+                      id: 'private',
+                      label: 'Privata',
+                      desc: 'Chi entra deve essere accettato dall’host.',
+                    },
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => setRoomVisibility(option.id as RoomVisibility)}
+                      style={{
+                        padding: '16px',
+                        textAlign: 'left',
+                        background: roomVisibility === option.id ? P.goldGlow : P.bg,
+                        border: `1px solid ${roomVisibility === option.id ? P.gold : P.border}`,
+                        color: P.text,
+                        cursor: 'pointer',
+                        fontFamily: FONT,
+                      }}
+                    >
+                      <div style={{ fontWeight: 800, fontSize: '15px' }}>{option.label}</div>
+                      <div style={{ color: P.textMuted, fontSize: '12px', marginTop: '5px', lineHeight: 1.45 }}>
+                        {option.desc}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  className="btn-primary"
+                  onClick={handleVisibilityContinue}
+                  disabled={isCreating}
+                  style={{
+                    background: P.gold,
+                    color: P.bg,
+                  }}
+                >
+                  {mode === 'cinema' || mode === 'discover' ? 'Continua' : (isCreating ? 'Creazione...' : 'Crea stanza')}
+                </button>
+
+                <div className="ticket-tear" style={{ background: P.bg }} />
+              </div>
+            )}
+
+            {/* TAB: CREA STANZA — STEP 3: POSIZIONE CINEMA */}
+            {tab === 'create' && step === 4 && mode === 'cinema' && (
+              <div className="step2-container ticket-card">
+                <button
+                  type="button"
+                  onClick={() => setStep(3)}
+                  style={{ background: 'none', border: 'none', color: P.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '18px', fontFamily: FONT }}
+                >
+                  <ArrowLeft size={17} /> Indietro
+                </button>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <MapPin size={24} color={P.gold} weight="fill" />
+                  <div style={{ fontSize: '22px', fontWeight: 'bold', color: P.text }}>
+                    Dove vuoi andare al cinema?
+                  </div>
+                </div>
+
+                <div style={{ color: P.textMuted, fontSize: '14px', lineHeight: 1.6, marginBottom: '22px' }}>
+                  Useremo la città per trovare persone e gruppi compatibili nella tua zona. Agli altri non mostreremo le tue coordinate precise.
+                </div>
+
+                <button
+                  type="button"
+                  onClick={detectLocation}
+                  disabled={locationLoading}
+                  style={{
+                    width: '100%',
+                    padding: '13px 16px',
+                    marginBottom: '16px',
+                    background: P.goldGlow,
+                    color: P.gold,
+                    border: `1px solid ${P.gold}`,
+                    cursor: locationLoading ? 'wait' : 'pointer',
+                    fontFamily: FONT,
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  <Crosshair size={18} weight="bold" />
+                  {locationLoading ? 'Rilevamento posizione...' : 'Usa la mia posizione'}
+                </button>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: P.text, marginBottom: '7px' }}>
+                    Città
+                  </label>
+                  <input
+                    value={city}
+                    onChange={(e) => {
+                      setCity(e.target.value);
+                      setLocationError('');
+                      // Se l'utente corregge manualmente la città, non fingiamo
+                      // che le vecchie coordinate rappresentino necessariamente quel comune.
+                      setLatitude(null);
+                      setLongitude(null);
+                    }}
+                    placeholder="Es. Parma"
+                    style={{
+                      width: '100%',
+                      padding: '13px 14px',
+                      background: P.bg,
+                      border: `1px solid ${P.border}`,
+                      color: P.text,
+                      fontFamily: FONT,
+                      fontSize: '15px',
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: P.text, marginBottom: '7px' }}>
+                    Distanza massima
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {[10, 25, 50].map((km) => (
+                      <button
+                        key={km}
+                        type="button"
+                        onClick={() => setRadiusKm(km)}
+                        style={{
+                          padding: '10px 16px',
+                          background: radiusKm === km ? P.gold : P.bg,
+                          color: radiusKm === km ? P.bg : P.text,
+                          border: `1px solid ${radiusKm === km ? P.gold : P.border}`,
+                          cursor: 'pointer',
+                          fontFamily: FONT,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {km} km
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {locationError && (
+                  <div style={{ color: P.pink, fontSize: '13px', marginBottom: '14px' }}>
+                    {locationError}
+                  </div>
+                )}
+
+                {city && (
+                  <div style={{
+                    padding: '12px 14px',
+                    background: P.bgSoft,
+                    border: `1px solid ${P.border}`,
+                    color: P.textMuted,
+                    fontSize: '13px',
+                    marginBottom: '18px',
+                  }}>
+                    <strong style={{ color: P.text }}>{city}</strong>
+                    {province ? ` · ${province}` : ''} · raggio {radiusKm} km
+                  </div>
+                )}
+
+                <button
+                  className="btn-primary"
+                  disabled={isCreating || !city.trim()}
+                  onClick={handleCreate}
+                  style={{
+                    background: isCreating || !city.trim() ? P.border : P.gold,
+                    color: isCreating || !city.trim() ? P.textFaint : P.bg,
+                  }}
+                >
+                  {isCreating ? '⏳ Creazione...' : 'Crea stanza cinema'}
+                </button>
+
+                <div style={{ color: P.textFaint, fontSize: '10px', marginTop: '12px', textAlign: 'center' }}>
+                  Geocodifica: © OpenStreetMap contributors
+                </div>
+                <div className="ticket-tear" style={{ background: P.bg }} />
+              </div>
+            )}
+
+            {/* TAB: CREA STANZA — STEP 3: FILTRI */}
+            {tab === 'create' && step === 4 && mode === 'discover' && (
               <div className="step2-container ticket-card">
                 <div style={{ fontSize: '20px', fontWeight: 'bold', color: P.text, marginBottom: '24px' }}>
                   Filtri avanzati

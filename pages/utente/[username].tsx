@@ -15,6 +15,7 @@ import {
   Heart,
   Prohibit,
   Star,
+  Sparkle,
   UserCircle,
   UserPlus,
   UserCheck,
@@ -74,6 +75,14 @@ type PublicPrivacy = {
   favorites_visibility: 'private' | 'public';
   watchlist_visibility: 'private' | 'public';
   watched_visibility: 'private' | 'public';
+};
+
+type Compatibility = {
+  shared_genres: string[];
+  shared_genres_count: number;
+  shared_favorites_count: number;
+  shared_high_ratings_count: number;
+  compatibility_score: number;
 };
 
 type PublicReview = {
@@ -139,6 +148,8 @@ export default function PublicUserPage() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [compatibility, setCompatibility] = useState<Compatibility | null>(null);
+
 
   useEffect(() => {
     if (isLoading) return;
@@ -207,6 +218,7 @@ export default function PublicUserPage() {
           setReviews([]);
           setPublicLibrary([]);
           setPrivacy(null);
+          setCompatibility(null);
 
           if (accessStatus === 'unavailable') {
             setUnavailable(true);
@@ -220,6 +232,46 @@ export default function PublicUserPage() {
         }
 
         setProfile(profileRow);
+
+        /*
+         * COMPATIBILITÀ CON IL PROFILO VISITATO
+         * Riutilizza get_people_suggestions v2 e prende solo questo utente.
+         */
+        if (currentUser.id !== profileRow.user_id) {
+          const { data: compatibilityRows, error: compatibilityError } =
+            await supabase.rpc('get_people_compatibilities', {
+              p_user_ids: [profileRow.user_id],
+            });
+
+          if (compatibilityError) {
+            console.error('Compatibility load failed:', compatibilityError);
+            setCompatibility(null);
+          } else {
+            const row = ((compatibilityRows ?? []) as Array<
+              Compatibility & { user_id: string; follows_you?: boolean }
+            >)[0];
+
+            setCompatibility(
+              row
+                ? {
+                    shared_genres: Array.isArray(row.shared_genres)
+                      ? row.shared_genres
+                      : [],
+                    shared_genres_count: Number(row.shared_genres_count ?? 0),
+                    shared_favorites_count: Number(
+                      row.shared_favorites_count ?? 0
+                    ),
+                    shared_high_ratings_count: Number(
+                      row.shared_high_ratings_count ?? 0
+                    ),
+                    compatibility_score: Number(row.compatibility_score ?? 0),
+                  }
+                : null
+            );
+          }
+        } else {
+          setCompatibility(null);
+        }
 
         /*
          * PRIVACY + LIBRERIA PUBBLICA
@@ -544,6 +596,24 @@ export default function PublicUserPage() {
           total + Number(review.likes_count ?? 0),
         0
       ),
+    [reviews]
+  );
+
+
+  const recentActivity = useMemo(
+    () =>
+      [...reviews]
+        .sort((a, b) => {
+          const aDate = new Date(
+            a.review_updated_at || a.created_at
+          ).getTime();
+          const bDate = new Date(
+            b.review_updated_at || b.created_at
+          ).getTime();
+
+          return bDate - aDate;
+        })
+        .slice(0, 3),
     [reviews]
   );
 
@@ -1082,6 +1152,283 @@ export default function PublicUserPage() {
                 </div>
               </section>
 
+              {!isBlocked &&
+                !blockedByOther &&
+                currentUser.id !== profile.user_id &&
+                compatibility &&
+                compatibility.compatibility_score > 0 && (
+                  <section
+                    style={{
+                      border: `1px solid ${P.border}`,
+                      background: P.card,
+                      padding: 16,
+                      marginBottom: 18,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 7,
+                        color: P.gold,
+                        fontSize: 10,
+                        fontWeight: 900,
+                        textTransform: 'uppercase',
+                        letterSpacing: '.09em',
+                        marginBottom: 10,
+                      }}
+                    >
+                      <Sparkle size={15} weight="fill" />
+                      Gusti in comune
+                    </div>
+
+                    <div
+                      className="compatibility-grid"
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(3,minmax(0,1fr))',
+                        gap: 8,
+                      }}
+                    >
+                      {[
+                        {
+                          value: compatibility.shared_favorites_count,
+                          label: 'Preferiti condivisi',
+                        },
+                        {
+                          value: compatibility.shared_high_ratings_count,
+                          label: 'Film amati da entrambi',
+                        },
+                        {
+                          value: compatibility.shared_genres_count,
+                          label: 'Generi in comune',
+                        },
+                      ].map((item) => (
+                        <div
+                          key={item.label}
+                          style={{
+                            border: `1px solid ${P.border}`,
+                            background: P.bgSoft,
+                            padding: 11,
+                          }}
+                        >
+                          <strong
+                            style={{
+                              display: 'block',
+                              color: P.text,
+                              fontSize: 18,
+                            }}
+                          >
+                            {item.value}
+                          </strong>
+                          <span
+                            style={{
+                              color: P.textFaint,
+                              fontSize: 9,
+                            }}
+                          >
+                            {item.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {compatibility.shared_genres.length > 0 && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 6,
+                          marginTop: 10,
+                        }}
+                      >
+                        {compatibility.shared_genres.slice(0, 5).map((genre) => (
+                          <span
+                            key={genre}
+                            style={{
+                              border: `1px solid ${P.gold}55`,
+                              background: `${P.gold}12`,
+                              color: P.gold,
+                              padding: '4px 7px',
+                              fontSize: 9,
+                              fontWeight: 800,
+                            }}
+                          >
+                            {genre}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                )}
+
+              {!isBlocked &&
+                !blockedByOther &&
+                recentActivity.length > 0 && (
+                  <section
+                    style={{
+                      border: `1px solid ${P.border}`,
+                      background: P.card,
+                      padding: 16,
+                      marginBottom: 18,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        marginBottom: 10,
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 7,
+                          color: P.gold,
+                          fontSize: 10,
+                          fontWeight: 900,
+                          textTransform: 'uppercase',
+                          letterSpacing: '.09em',
+                        }}
+                      >
+                        <ChatCircle size={15} weight="fill" />
+                        Attività recente
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push(
+                            `/recensioni?utente=${encodeURIComponent(
+                              profile.username
+                            )}`
+                          )
+                        }
+                        style={{
+                          border: 0,
+                          background: 'transparent',
+                          color: P.textFaint,
+                          cursor: 'pointer',
+                          fontFamily: FONT,
+                          fontSize: 9,
+                          fontWeight: 800,
+                          padding: 0,
+                        }}
+                      >
+                        Vedi recensioni
+                      </button>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gap: 8,
+                      }}
+                    >
+                      {recentActivity.map((review) => (
+                        <button
+                          key={`activity-${review.entry_id}`}
+                          type="button"
+                          onClick={() =>
+                            router.push(
+                              `/recensioni?review=${encodeURIComponent(
+                                review.entry_id
+                              )}`
+                            )
+                          }
+                          style={{
+                            width: '100%',
+                            border: `1px solid ${P.border}`,
+                            background: P.bgSoft,
+                            color: P.text,
+                            padding: 9,
+                            display: 'grid',
+                            gridTemplateColumns:
+                              '42px minmax(0,1fr) auto',
+                            gap: 9,
+                            alignItems: 'center',
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontFamily: FONT,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 42,
+                              aspectRatio: '2 / 3',
+                              background: P.card,
+                              overflow: 'hidden',
+                              display: 'grid',
+                              placeItems: 'center',
+                              color: P.textFaint,
+                            }}
+                          >
+                            {review.cover ? (
+                              <img
+                                src={review.cover}
+                                alt={review.title}
+                                style={{
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover',
+                                }}
+                              />
+                            ) : (
+                              <FilmSlate
+                                size={18}
+                                weight="duotone"
+                              />
+                            )}
+                          </div>
+
+                          <div style={{ minWidth: 0 }}>
+                            <div
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 850,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {review.title}
+                            </div>
+
+                            <div
+                              style={{
+                                color: P.textFaint,
+                                fontSize: 9,
+                                marginTop: 3,
+                                overflow: 'hidden',
+                                whiteSpace: 'nowrap',
+                                textOverflow: 'ellipsis',
+                              }}
+                            >
+                              {review.review_text}
+                            </div>
+                          </div>
+
+                          <div
+                            style={{
+                              color: P.textFaint,
+                              fontSize: 8,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {formatDate(
+                              review.review_updated_at ||
+                                review.created_at
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
               {!isBlocked && !blockedByOther && (
                 <>
                   {/* STATISTICHE */}
@@ -1372,7 +1719,7 @@ export default function PublicUserPage() {
                                               'center',
                                           }}
                                         >
-                                          🎬
+                                          <FilmSlate size={24} color={P.textFaint} weight="duotone" />
                                         </div>
                                       )}
                                     </div>
@@ -1519,7 +1866,7 @@ export default function PublicUserPage() {
                                     fontSize: 24,
                                   }}
                                 >
-                                  🎬
+                                  <FilmSlate size={24} color={P.textFaint} weight="duotone" />
                                 </span>
                               )}
                             </button>

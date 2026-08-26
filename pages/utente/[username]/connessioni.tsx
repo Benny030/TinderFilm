@@ -49,6 +49,12 @@ type PublicUser = {
   avatar_url: string | null;
   bio: string | null;
   is_following: boolean;
+  shared_genres?: string[];
+  shared_genres_count?: number;
+  shared_favorites_count?: number;
+  shared_high_ratings_count?: number;
+  compatibility_score?: number;
+  follows_you?: boolean;
 };
 
 export default function UserConnectionsPage() {
@@ -75,6 +81,7 @@ export default function UserConnectionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [sortByCompatibility, setSortByCompatibility] = useState(false);
 
   useEffect(() => {
     if (isLoading) return;
@@ -115,7 +122,53 @@ export default function UserConnectionsPage() {
 
       if (rpcError) throw rpcError;
 
-      setUsers((data ?? []) as PublicUser[]);
+      const baseUsers = (data ?? []) as PublicUser[];
+      const ids = baseUsers
+        .map((user) => user.user_id)
+        .filter((id) => id !== currentUser.id);
+
+      let compatibilityMap = new Map<string, Partial<PublicUser>>();
+
+      if (ids.length > 0) {
+        const { data: compatibilityRows, error: compatibilityError } =
+          await supabase.rpc('get_people_compatibilities', {
+            p_user_ids: ids,
+          });
+
+        if (compatibilityError) {
+          console.error(
+            'Connections compatibility load failed:',
+            compatibilityError
+          );
+        } else {
+          compatibilityMap = new Map(
+            ((compatibilityRows ?? []) as PublicUser[]).map((row) => [
+              row.user_id,
+              {
+                shared_genres: Array.isArray(row.shared_genres)
+                  ? row.shared_genres
+                  : [],
+                shared_genres_count: Number(row.shared_genres_count ?? 0),
+                shared_favorites_count: Number(
+                  row.shared_favorites_count ?? 0
+                ),
+                shared_high_ratings_count: Number(
+                  row.shared_high_ratings_count ?? 0
+                ),
+                compatibility_score: Number(row.compatibility_score ?? 0),
+                follows_you: Boolean(row.follows_you),
+              },
+            ])
+          );
+        }
+      }
+
+      setUsers(
+        baseUsers.map((user) => ({
+          ...user,
+          ...(compatibilityMap.get(user.user_id) ?? {}),
+        }))
+      );
     } catch (err: any) {
       console.error('Connections load failed:', err);
       setError(err.message ?? 'Impossibile caricare gli utenti.');
@@ -195,6 +248,14 @@ export default function UserConnectionsPage() {
       setBusyId(null);
     }
   };
+
+  const visibleUsers = sortByCompatibility
+    ? [...users].sort(
+        (a, b) =>
+          Number(b.compatibility_score ?? 0) -
+          Number(a.compatibility_score ?? 0)
+      )
+    : users;
 
   if (
     isLoading ||
@@ -335,6 +396,39 @@ export default function UserConnectionsPage() {
             </button>
           </div>
 
+          {users.length > 1 && (
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'flex-end',
+                marginBottom: 12,
+              }}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  setSortByCompatibility((current) => !current)
+                }
+                style={{
+                  border: `1px solid ${
+                    sortByCompatibility ? P.gold : P.border
+                  }`,
+                  background: sortByCompatibility ? `${P.gold}12` : P.card,
+                  color: sortByCompatibility ? P.gold : P.textMuted,
+                  padding: '7px 9px',
+                  cursor: 'pointer',
+                  fontFamily: FONT,
+                  fontSize: 9,
+                  fontWeight: 800,
+                }}
+              >
+                {sortByCompatibility
+                  ? 'Ordine originale'
+                  : 'Più compatibili'}
+              </button>
+            </div>
+          )}
+
           {error && (
             <div
               style={{
@@ -379,7 +473,7 @@ export default function UserConnectionsPage() {
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
-              {users.map((user) => {
+              {visibleUsers.map((user) => {
                 const isMe = currentUser.id === user.user_id;
                 const busy = busyId === user.user_id;
 
@@ -472,6 +566,45 @@ export default function UserConnectionsPage() {
                       >
                         {user.bio?.trim() || 'Nessuna bio.'}
                       </span>
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          gap: 5,
+                          flexWrap: 'wrap',
+                          marginTop: 6,
+                        }}
+                      >
+                        {(user.compatibility_score ?? 0) > 0 && (
+                          <span
+                            style={{
+                              border: `1px solid ${P.gold}55`,
+                              background: `${P.gold}12`,
+                              color: P.gold,
+                              padding: '3px 6px',
+                              fontSize: 8,
+                              fontWeight: 850,
+                            }}
+                          >
+                            Compatibilità {user.compatibility_score}
+                          </span>
+                        )}
+
+                        {user.follows_you && (
+                          <span
+                            style={{
+                              border: `1px solid ${P.pink}55`,
+                              background: `${P.pink}10`,
+                              color: P.pink,
+                              padding: '3px 6px',
+                              fontSize: 8,
+                              fontWeight: 850,
+                            }}
+                          >
+                            Ti segue
+                          </span>
+                        )}
+                      </div>
                     </button>
 
                     {!isMe && (

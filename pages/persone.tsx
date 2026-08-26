@@ -12,6 +12,7 @@ import {
   UserCheck,
   UserPlus,
   UsersThree,
+  Sparkle,
 } from '@phosphor-icons/react';
 
 const D = {
@@ -48,6 +49,11 @@ type PublicUser = {
   bio: string | null;
   followers_count: number;
   is_following: boolean;
+  shared_genres?: string[];
+  shared_genres_count?: number;
+  shared_favorites_count?: number;
+  shared_high_ratings_count?: number;
+  compatibility_score?: number;
 };
 
 export default function PersonePage() {
@@ -59,10 +65,11 @@ export default function PersonePage() {
 
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState<PublicUser[]>([]);
+  const [suggestedUsers, setSuggestedUsers] = useState<PublicUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (isLoading) return;
@@ -75,23 +82,50 @@ export default function PersonePage() {
   useEffect(() => {
     if (!currentUser || currentUser.isGuest) return;
 
-    const loadBlockedUsers = async () => {
-      const { data, error } = await supabase.rpc(
-        'get_my_blocked_relationship_user_ids'
-      );
+    let cancelled = false;
 
-      if (!error) {
-        setBlockedUserIds(
-          new Set(
-            ((data ?? []) as Array<{ user_id: string }>).map(
-              (row) => row.user_id
-            )
-          )
+    const loadSuggestions = async () => {
+      setLoadingSuggestions(true);
+
+      try {
+        const { data, error: rpcError } = await supabase.rpc(
+          'get_people_suggestions',
+          { p_limit: 12 }
         );
+
+        if (rpcError) throw rpcError;
+
+        if (!cancelled) {
+          setSuggestedUsers(
+            ((data ?? []) as PublicUser[])
+              .map((user) => ({
+                ...user,
+                followers_count: Number(user.followers_count ?? 0),
+                shared_genres_count: Number(user.shared_genres_count ?? 0),
+                shared_favorites_count: Number(user.shared_favorites_count ?? 0),
+                shared_high_ratings_count: Number(user.shared_high_ratings_count ?? 0),
+                compatibility_score: Number(user.compatibility_score ?? 0),
+                shared_genres: Array.isArray(user.shared_genres)
+                  ? user.shared_genres
+                  : [],
+              }))
+              .filter((user) => (user.compatibility_score ?? 0) > 0)
+              .slice(0, 6)
+          );
+        }
+      } catch (err) {
+        console.error('People suggestions load failed:', err);
+        if (!cancelled) setSuggestedUsers([]);
+      } finally {
+        if (!cancelled) setLoadingSuggestions(false);
       }
     };
 
-    void loadBlockedUsers();
+    void loadSuggestions();
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentUser, supabase]);
 
   useEffect(() => {
@@ -114,12 +148,10 @@ export default function PersonePage() {
         if (rpcError) throw rpcError;
 
         setUsers(
-          ((data ?? []) as PublicUser[])
-            .filter((user) => !blockedUserIds.has(user.user_id))
-            .map((user) => ({
-              ...user,
-              followers_count: Number(user.followers_count ?? 0),
-            }))
+          ((data ?? []) as PublicUser[]).map((user) => ({
+            ...user,
+            followers_count: Number(user.followers_count ?? 0),
+          }))
         );
       } catch (err: unknown) {
         console.error('User search failed:', err);
@@ -135,7 +167,7 @@ export default function PersonePage() {
     }, 250);
 
     return () => window.clearTimeout(timer);
-  }, [query, currentUser, supabase, blockedUserIds]);
+  }, [query, currentUser, supabase]);
 
   const toggleFollow = async (user: PublicUser) => {
     if (!currentUser || currentUser.isGuest) return;
@@ -163,7 +195,7 @@ export default function PersonePage() {
         if (insertError) throw insertError;
       }
 
-      setUsers((current) =>
+      const updateFollowState = (current: PublicUser[]) =>
         current.map((item) =>
           item.user_id === user.user_id
             ? {
@@ -175,8 +207,10 @@ export default function PersonePage() {
                 ),
               }
             : item
-        )
-      );
+        );
+
+      setUsers(updateFollowState);
+      setSuggestedUsers(updateFollowState);
     } catch (err: unknown) {
       console.error('Follow from people page failed:', err);
 
@@ -213,7 +247,7 @@ export default function PersonePage() {
   }
 
   return (
-    <AppShell activeNav="recensioni">
+    <AppShell activeNav="persone">
       <main
         style={{
           minHeight: '100vh',
@@ -288,6 +322,170 @@ export default function PersonePage() {
             </p>
           </header>
 
+          {!loadingSuggestions && suggestedUsers.length > 0 && (
+            <section
+              style={{
+                border: `1px solid ${P.border}`,
+                background: P.card,
+                padding: 16,
+                marginBottom: 16,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  color: P.gold,
+                  fontSize: 10,
+                  fontWeight: 900,
+                  textTransform: 'uppercase',
+                  letterSpacing: '.09em',
+                  marginBottom: 10,
+                }}
+              >
+                <Sparkle size={14} weight="fill" />
+                Compatibili con te
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))',
+                  gap: 10,
+                }}
+              >
+                {suggestedUsers.map((user) => (
+                  <div
+                    key={`suggested-${user.user_id}`}
+                    style={{
+                      border: `1px solid ${P.border}`,
+                      background: P.bgSoft,
+                      padding: 12,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(`/utente/${encodeURIComponent(user.username)}`)
+                      }
+                      style={{
+                        border: 0,
+                        background: 'transparent',
+                        padding: 0,
+                        cursor: 'pointer',
+                        minWidth: 0,
+                        flex: 1,
+                        textAlign: 'left',
+                        fontFamily: FONT,
+                      }}
+                    >
+                      <div
+                        style={{
+                          color: P.text,
+                          fontSize: 12,
+                          fontWeight: 850,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        @{user.username}
+                      </div>
+
+                      <div
+                        style={{
+                          color: P.textFaint,
+                          fontSize: 10,
+                          marginTop: 3,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {(user.shared_favorites_count ?? 0) > 0
+                          ? `${user.shared_favorites_count} preferiti in comune`
+                          : (user.shared_high_ratings_count ?? 0) > 0
+                          ? `${user.shared_high_ratings_count} film valutati bene da entrambi`
+                          : `${user.shared_genres_count ?? 0} gusti in comune`}
+                      </div>
+
+                      <div
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          marginTop: 7,
+                          border: `1px solid ${P.gold}55`,
+                          background: P.gold + '12',
+                          color: P.gold,
+                          padding: '3px 6px',
+                          fontSize: 9,
+                          fontWeight: 850,
+                        }}
+                      >
+                        Compatibilità {user.compatibility_score ?? 0}
+                      </div>
+
+                      {(user.shared_genres?.length ?? 0) > 0 && (
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: 5,
+                            flexWrap: 'wrap',
+                            marginTop: 7,
+                          }}
+                        >
+                          {user.shared_genres?.slice(0, 3).map((genre) => (
+                            <span
+                              key={`${user.user_id}-${genre}`}
+                              style={{
+                                border: `1px solid ${P.border}`,
+                                color: P.gold,
+                                background: P.card,
+                                padding: '3px 6px',
+                                fontSize: 9,
+                                fontWeight: 800,
+                              }}
+                            >
+                              {genre}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => void toggleFollow(user)}
+                      disabled={busyId === user.user_id}
+                      style={{
+                        width: 36,
+                        height: 36,
+                        border: `1px solid ${
+                          user.is_following ? P.gold : P.border
+                        }`,
+                        background: user.is_following ? P.gold + '18' : P.card,
+                        color: user.is_following ? P.gold : P.textMuted,
+                        display: 'grid',
+                        placeItems: 'center',
+                        cursor: busyId === user.user_id ? 'wait' : 'pointer',
+                        flexShrink: 0,
+                      }}
+                      title={user.is_following ? 'Non seguire più' : 'Segui'}
+                    >
+                      {user.is_following ? (
+                        <UserCheck size={16} weight="duotone" />
+                      ) : (
+                        <UserPlus size={16} weight="duotone" />
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           <div
             style={{
               height: 44,
@@ -303,7 +501,6 @@ export default function PersonePage() {
             <MagnifyingGlass size={17} />
 
             <input
-              autoFocus
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Cerca username o bio..."

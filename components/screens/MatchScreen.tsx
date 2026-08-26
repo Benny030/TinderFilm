@@ -2,7 +2,7 @@ import { useState, useEffect, type CSSProperties } from 'react';
 import { useTheme } from '@/context/ThemeContext';
 import {
   FilmSlate, Heart, ArrowRight, Trophy,
-  Play, TelevisionSimple, ArrowClockwise, Star,
+  Play, TelevisionSimple, ArrowClockwise, Star, Ticket, MapPin,
 } from '@phosphor-icons/react';
 import type { ExtendedMovie, StreamingSource, MatchEntry } from '@/types/stanza';
 import CinemaInSala from '@/components/cinema/CinemaInSala';
@@ -52,6 +52,10 @@ type Props = {
   onContinue: () => void;
   onReset: () => void;
   isLoggedIn: boolean;
+  isHost?: boolean;
+  selectedMovieId?: string | null;
+  onSelectWinner?: (movieId: string) => void;
+  selectingWinner?: boolean;
 };
 
 function PlatformRow({ s }: { s: StreamingSource }) {
@@ -81,7 +85,86 @@ function PlatformRow({ s }: { s: StreamingSource }) {
         e.currentTarget.style.boxShadow = 'none';
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <style>{`
+        .match-screen-root {
+          width: 100%;
+          min-height: 100%;
+        }
+
+        .match-screen-scroll {
+          width: 100%;
+          max-width: 980px;
+          margin: 0 auto;
+        }
+
+        .match-movie-card {
+          display: grid !important;
+          grid-template-columns: 96px minmax(0,1fr);
+          gap: 18px !important;
+        }
+
+        .match-movie-poster {
+          width: 96px !important;
+          height: 144px !important;
+        }
+
+        .match-actions {
+          width: 100%;
+        }
+
+        @media (min-width: 1024px) {
+          .match-screen-scroll {
+            max-width: 1080px;
+            padding: 24px 28px 28px !important;
+          }
+
+          .match-movie-card {
+            grid-template-columns: 128px minmax(0,1fr);
+            padding: 20px !important;
+          }
+
+          .match-movie-poster {
+            width: 128px !important;
+            height: 192px !important;
+          }
+
+          .match-actions {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 16px 28px 22px !important;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .match-screen-scroll {
+            padding: 12px !important;
+          }
+
+          .match-movie-card {
+            grid-template-columns: 74px minmax(0,1fr);
+            gap: 12px !important;
+            padding: 12px !important;
+          }
+
+          .match-movie-poster {
+            width: 74px !important;
+            height: 111px !important;
+          }
+
+          .match-ticket-wrap {
+            border-radius: 14px !important;
+          }
+
+          .match-ticket-head {
+            padding: 12px !important;
+          }
+
+          .match-actions {
+            padding: 12px !important;
+          }
+        }
+      `}</style>
+      <div className="match-screen-root" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         <div style={{
           width: '44px', height: '30px', borderRadius: 0,
           background: s.color ?? '#f0f0f0',
@@ -121,14 +204,23 @@ function PlatformRow({ s }: { s: StreamingSource }) {
   );
 }
 
-export default function MatchScreen({ match, allMatches, onContinue, onReset, isLoggedIn }: Props) {
+export default function MatchScreen({
+  match,
+  allMatches,
+  onContinue,
+  onReset,
+  isLoggedIn,
+  isHost = false,
+  selectedMovieId = null,
+  onSelectWinner,
+  selectingWinner = false,
+}: Props) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const P = isDark ? D : L;
 
   const [sources, setSources] = useState<StreamingSource[]>([]);
   const [loadingSources, setLoadingSources] = useState(false);
-  const [showMatches, setShowMatches] = useState(false);
 
   useEffect(() => {
     const tmdbId = match.tmdb_id;
@@ -146,11 +238,12 @@ export default function MatchScreen({ match, allMatches, onContinue, onReset, is
   const rentSources = sources.filter((s) => s.type === 'rent' || s.type === 'buy');
 
   return (
-    <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: P.bg, fontFamily: FONT_SANS }}>
+    <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: P.bg, fontFamily: FONT_SANS, position: 'relative' }}>
       {/* Header */}
       <div style={{
         background: `linear-gradient(135deg, ${P.pink} 0%, ${P.pinkDeep} 100%)`,
         padding: '24px 16px', textAlign: 'center', color: '#fff',
+        position: 'relative',
       }}>
         <div style={{ fontSize: '36px', marginBottom: '4px' }}>🎉</div>
         <div style={{ fontSize: '24px', fontWeight: '800', marginBottom: '4px', fontFamily: FONT_DISPLAY }}>È un match!</div>
@@ -164,14 +257,14 @@ export default function MatchScreen({ match, allMatches, onContinue, onReset, is
             padding: '5px 14px', marginTop: '8px', fontSize: '11px', fontWeight: '600',
           }}>
             <Trophy size={14} color="#fff" weight="fill" />
-            {allMatches.length} match in questa sessione
+            {allMatches.length} match totali
           </div>
         )}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+      <div className="match-screen-scroll" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
         {/* Film card */}
-        <div style={{
+        <div className="match-movie-card" style={{
           display: 'flex', gap: '16px', background: P.card,
           borderRadius: 0, padding: '16px', marginBottom: '16px',
           border: `1px solid ${P.border}`,
@@ -179,6 +272,7 @@ export default function MatchScreen({ match, allMatches, onContinue, onReset, is
           <img
             src={match.cover?.startsWith('http') ? match.cover : ''}
             alt={match.title}
+            className="match-movie-poster"
             style={{ width: '80px', height: '120px', objectFit: 'cover', borderRadius: 0, flexShrink: 0 }}
           />
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -219,8 +313,92 @@ export default function MatchScreen({ match, allMatches, onContinue, onReset, is
           </div>
         </div>
 
-        {/* ── Al cinema vicino a te ── */}
-        <CinemaInSala filmTitle={match.title} tmdbTitle={match.title} />
+        {/* ── Biglietti cinema ── */}
+        <section
+          className="match-ticket-wrap"
+          style={{
+            marginBottom: '18px',
+            border: `1px solid ${P.border}`,
+            background: P.card,
+            borderRadius: 16,
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            className="match-ticket-head"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              padding: '14px 15px 12px',
+              borderBottom: `1px solid ${P.border}`,
+              background: P.bgSoft,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 12,
+                  display: 'grid',
+                  placeItems: 'center',
+                  background: P.goldGlow,
+                  border: `1px solid ${P.gold}`,
+                  flexShrink: 0,
+                }}
+              >
+                <Ticket size={18} color={P.gold} weight="duotone" />
+              </div>
+
+              <div>
+                <div
+                  style={{
+                    fontSize: '14px',
+                    fontWeight: 850,
+                    color: P.text,
+                    lineHeight: 1.2,
+                  }}
+                >
+                  Biglietti al cinema
+                </div>
+                <div
+                  style={{
+                    marginTop: 3,
+                    fontSize: '11px',
+                    color: P.textMuted,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  <MapPin size={12} color={P.gold} />
+                  Proiezioni disponibili vicino a te
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: '5px 8px',
+                borderRadius: 999,
+                background: P.goldGlow,
+                color: P.gold,
+                fontSize: '10px',
+                fontWeight: 800,
+                border: `1px solid ${P.gold}`,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              In sala
+            </div>
+          </div>
+
+          <div style={{ padding: '12px' }}>
+            <CinemaInSala filmTitle={match.title} tmdbTitle={match.title} />
+          </div>
+        </section>
 
         {/* Dove guardarlo */}
         <div style={{ marginBottom: '16px' }}>
@@ -275,51 +453,59 @@ export default function MatchScreen({ match, allMatches, onContinue, onReset, is
           )}
         </div>
 
-        {/* Lista match sessione */}
-        {isLoggedIn && allMatches.length > 1 && (
-          <div style={{ marginBottom: '16px' }}>
-            <button
-              onClick={() => setShowMatches((v) => !v)}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center',
-                justifyContent: 'space-between', padding: '12px 16px',
-                background: P.card, border: `1px solid ${P.border}`,
-                borderRadius: 0, cursor: 'pointer', fontFamily: FONT_SANS,
-              }}
-            >
-              <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', color: P.text }}>
-                <Trophy size={16} color={P.pink} weight="fill" />
-                Tutti i match ({allMatches.length})
-              </span>
-              <ArrowRight size={16} color={P.textMuted} style={{ transform: showMatches ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
-            </button>
-            {showMatches && (
-              <div style={{ border: `1px solid ${P.border}`, borderTop: 'none', overflow: 'hidden', borderRadius: 0 }}>
-                {allMatches.map((entry, i) => (
-                  <div key={entry.movie.id} style={{
-                    display: 'flex', alignItems: 'center', gap: '8px',
-                    padding: '10px 16px',
-                    borderBottom: i < allMatches.length - 1 ? `1px solid ${P.border}` : 'none',
-                    background: entry.movie.id === match.id ? P.pinkGlow : P.bg,
-                  }}>
-                    <img src={entry.movie.cover?.startsWith('http') ? entry.movie.cover : ''} style={{ width: '36px', height: '54px', objectFit: 'cover', borderRadius: 0, flexShrink: 0 }} />
-                    <div>
-                      <div style={{ fontSize: '13px', fontWeight: '600', color: P.text }}>{entry.movie.title}</div>
-                      <div style={{ fontSize: '11px', color: P.textMuted }}>{entry.movie.year} · {entry.movie.genre}</div>
-                    </div>
-                    {entry.movie.id === match.id && (
-                      <div style={{ marginLeft: 'auto', fontSize: '11px', color: P.pink, fontWeight: '600' }}>Ultimo ❤️</div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+
       </div>
 
       {/* Azioni bottom */}
-      <div style={{ padding: '16px', borderTop: `1px solid ${P.border}`, display: 'flex', flexDirection: 'column', gap: '8px', background: P.bg }}>
+      <div className="match-actions" style={{ padding: '16px', borderTop: `1px solid ${P.border}`, display: 'flex', flexDirection: 'column', gap: '8px', background: P.bg }}>
+        {selectedMovieId === String(match.id) && (
+          <div style={{
+            padding: '13px',
+            background: P.goldGlow,
+            border: `1px solid ${P.gold}`,
+            color: P.gold,
+            fontSize: '13px',
+            fontWeight: 800,
+            textAlign: 'center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+          }}>
+            <Trophy size={18} weight="fill" />
+            <span>Film scelto dal gruppo</span>
+          </div>
+        )}
+
+        {isHost && !selectedMovieId && onSelectWinner && (
+          <button
+            type="button"
+            onClick={() => onSelectWinner(String(match.id))}
+            disabled={selectingWinner}
+            style={{
+              width: '100%',
+              minHeight: '48px',
+              padding: '15px',
+              background: P.gold,
+              color: P.bg,
+              border: 'none',
+              borderRadius: 0,
+              fontSize: '15px',
+              fontWeight: '800',
+              cursor: selectingWinner ? 'wait' : 'pointer',
+              fontFamily: FONT_SANS,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              opacity: selectingWinner ? 0.7 : 1,
+            }}
+          >
+            <Trophy size={18} weight="fill" />
+            <span>{selectingWinner ? 'Salvataggio...' : 'Conferma questo film'}</span>
+          </button>
+        )}
+
         <button
           onClick={onContinue}
           style={{

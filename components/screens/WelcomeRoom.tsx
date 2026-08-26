@@ -3,7 +3,7 @@
 import { type CSSProperties, type FormEvent, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import { useTheme } from '@/context/ThemeContext';
-import { FilmSlate, Users, Door, Copy, Share, Check, ArrowLeft } from '@phosphor-icons/react';
+import { FilmSlate, Users, Door, Copy, Share, Check, ArrowLeft, Lock, LockOpen, X } from '@phosphor-icons/react';
 import type { RoomUser } from '@/types';
 
 // ─── Palette dark "cinema elegante" ──────────────────────────────────────
@@ -72,6 +72,20 @@ type Props = {
   currentUserId: string;
   currentUserName: string;
   isRoomFull: boolean;
+  minMembers: number;
+  maxMembers: number;
+  hostActorId: string | null;
+  roomPhase: 'waiting' | 'voting' | 'matched' | 'planning' | 'finished';
+  isRoomLocked: boolean;
+  hostActionBusy: boolean;
+  hostActionError: string;
+  membershipStatus: 'pending' | 'active';
+  pendingRequests: RoomUser[];
+  onToggleLock: () => void;
+  onRemoveParticipant: (actorId: string) => void;
+  onApproveParticipant: (actorId: string) => void;
+  onRejectParticipant: (actorId: string) => void;
+  onFinishRoom: () => void;
   codeInput: string;
   setCodeInput: (v: string) => void;
   codeError: string;
@@ -86,6 +100,20 @@ export default function WelcomeRoom({
   currentUserId,
   currentUserName,
   isRoomFull,
+  minMembers,
+  maxMembers,
+  hostActorId,
+  roomPhase,
+  isRoomLocked,
+  hostActionBusy,
+  hostActionError,
+  membershipStatus,
+  pendingRequests,
+  onToggleLock,
+  onRemoveParticipant,
+  onApproveParticipant,
+  onRejectParticipant,
+  onFinishRoom,
   codeInput,
   setCodeInput,
   codeError,
@@ -100,6 +128,14 @@ export default function WelcomeRoom({
   const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
   const codeValid = codeInput.trim().length >= 4;
+  const participantCount = roomUsers.length;
+  const availableSpots = Math.max(0, maxMembers - participantCount);
+  const isGroup = maxMembers > 2;
+  const isGroupReady = participantCount >= minMembers;
+  const isHost = currentUserId === hostActorId;
+  const sessionStarted = roomPhase === 'voting' || roomPhase === 'matched' || roomPhase === 'planning';
+  const isPending = membershipStatus === 'pending';
+  const isFinished = roomPhase === 'finished';
 
   const userRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const prevUserIds = useRef<Set<string>>(new Set());
@@ -956,20 +992,125 @@ export default function WelcomeRoom({
           </div>
 
           <p className="wr-hint">
-            Condividi questo codice con il tuo partner
+            {sessionStarted
+              ? 'La votazione è iniziata · nuovi ingressi chiusi'
+              : isRoomLocked
+                ? `Ingressi chiusi · ${participantCount}/${maxMembers} partecipanti`
+                : isGroup
+                  ? `Condividi il codice con il gruppo · ${participantCount}/${maxMembers} partecipanti`
+                  : 'Condividi questo codice con il tuo partner'}
           </p>
 
           <button
             type="button"
             className="wr-enter-btn"
             onClick={onEnter}
-            disabled={isRoomFull}
+            disabled={
+              isPending ||
+              hostActionBusy ||
+              isFinished ||
+              (roomPhase === 'waiting' && !isHost)
+            }
           >
             <FilmSlate size={20} weight="fill" />
             <span>
-              {isRoomFull ? 'Stanza piena' : 'Entra nella stanza'}
+              {isPending
+                ? 'Richiesta inviata'
+                : hostActionBusy
+                  ? 'Operazione in corso...'
+                  : isFinished
+                    ? 'Stanza conclusa'
+                    : roomPhase === 'planning'
+                      ? 'Vedi il piano dell’uscita'
+                      : roomPhase === 'matched'
+                        ? 'Vedi il film scelto'
+                        : roomPhase === 'voting'
+                          ? 'Entra nella votazione'
+                          : isHost
+                            ? 'Avvia la votazione'
+                            : 'In attesa che l’host avvii la votazione'}
             </span>
           </button>
+
+          {isHost && roomPhase === 'waiting' && !isGroupReady && (
+            <div style={{
+              marginTop: '8px',
+              color: P.textMuted,
+              fontSize: '12px',
+              textAlign: 'center',
+              lineHeight: 1.45,
+            }}>
+              Il server controllerà i partecipanti al momento dell’avvio · {participantCount}/{minMembers} visibili ora
+            </div>
+          )}
+
+          {isPending && (
+            <div style={{
+              marginTop: '10px',
+              padding: '12px 14px',
+              border: `1px solid ${P.border}`,
+              background: P.bgSoft,
+              color: P.textMuted,
+              fontSize: '13px',
+              lineHeight: 1.55,
+              textAlign: 'center',
+            }}>
+              L’host deve accettare la tua richiesta prima che tu possa partecipare alla stanza.
+            </div>
+          )}
+
+          {isHost && roomPhase !== 'finished' && (
+            <button
+              type="button"
+              onClick={onFinishRoom}
+              disabled={hostActionBusy}
+              style={{
+                width: '100%',
+                marginTop: '10px',
+                padding: '11px 14px',
+                background: 'transparent',
+                color: P.textMuted,
+                border: `1px solid ${P.border}`,
+                cursor: hostActionBusy ? 'not-allowed' : 'pointer',
+                fontFamily: FONT_SANS,
+                fontWeight: 700,
+              }}
+            >
+              Chiudi stanza
+            </button>
+          )}
+
+          {hostActionError && (
+            <div style={{ color: P.pink, fontSize: '13px', textAlign: 'center' }}>
+              {hostActionError}
+            </div>
+          )}
+
+          {isHost && roomPhase === 'waiting' && (
+            <button
+              type="button"
+              onClick={onToggleLock}
+              disabled={hostActionBusy}
+              style={{
+                width: '100%',
+                marginTop: '10px',
+                padding: '12px 14px',
+                background: 'transparent',
+                color: isRoomLocked ? P.pink : P.textMuted,
+                border: `1px solid ${isRoomLocked ? P.pink : P.border}`,
+                cursor: hostActionBusy ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                fontFamily: FONT_SANS,
+                fontWeight: 700,
+              }}
+            >
+              {isRoomLocked ? <Lock size={17} /> : <LockOpen size={17} />}
+              {isRoomLocked ? 'Riapri ingressi' : 'Chiudi ingressi'}
+            </button>
+          )}
           <div className="ticket-tear" />
         </section>
 
@@ -978,6 +1119,10 @@ export default function WelcomeRoom({
             <div className="wr-users-label">
               <Users size={18} weight="fill" />
               Partecipanti
+            </div>
+
+            <div style={{ marginLeft: 'auto', marginRight: '10px', fontSize: '12px', fontWeight: 700, color: isGroupReady ? P.gold : P.textMuted }}>
+              {participantCount}/{maxMembers} · {isGroupReady ? 'Gruppo pronto' : `Minimo ${minMembers}`}
             </div>
 
             <button
@@ -1016,9 +1161,25 @@ export default function WelcomeRoom({
                     {u.name.charAt(0).toUpperCase()}
                   </div>
 
-                  <div>
-                    <div className="wr-user-name">
-                      @{u.name}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <div className="wr-user-name">
+                        @{u.name}
+                      </div>
+                      {u.id === hostActorId && (
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          letterSpacing: '0.08em',
+                          color: P.bg,
+                          background: P.gold,
+                          padding: '3px 6px',
+                          borderRadius: '999px',
+                          lineHeight: 1,
+                        }}>
+                          HOST
+                        </span>
+                      )}
                     </div>
 
                     {u.id === currentUserId && (
@@ -1027,24 +1188,126 @@ export default function WelcomeRoom({
                       </div>
                     )}
                   </div>
+
+                  {isHost && u.id !== currentUserId && u.id !== hostActorId && roomPhase === 'waiting' && (
+                    <button
+                      type="button"
+                      title={`Rimuovi @${u.name}`}
+                      onClick={() => {
+                        if (window.confirm(`Rimuovere @${u.name} dalla stanza?`)) {
+                          onRemoveParticipant(u.id);
+                        }
+                      }}
+                      disabled={hostActionBusy}
+                      style={{
+                        marginLeft: 'auto',
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        border: `1px solid ${P.border}`,
+                        background: 'transparent',
+                        color: P.textMuted,
+                        cursor: hostActionBusy ? 'not-allowed' : 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <X size={15} />
+                    </button>
+                  )}
                 </div>
               ))
             )}
 
-            {roomUsers.length === 1 && (
+            {availableSpots > 0 && (
               <div className="wr-waiting">
                 <div className="wr-waiting-avatar">
                   <div className="wr-waiting-dot" />
                 </div>
 
                 <div className="wr-waiting-text">
-                  In attesa del partner...
+                  {isGroup
+                    ? (isGroupReady
+                        ? `${availableSpots} ${availableSpots === 1 ? 'posto disponibile' : 'posti disponibili'}`
+                        : `In attesa di ${Math.max(0, minMembers - participantCount)} ${Math.max(0, minMembers - participantCount) === 1 ? 'persona' : 'persone'} per essere pronti...`)
+                    : 'In attesa del partner...'}
                 </div>
               </div>
             )}
           </div>
           <div className="ticket-tear" />
         </section>
+
+        {isHost && pendingRequests.length > 0 && roomPhase === 'waiting' && (
+          <section className="wr-card wr-card--users">
+            <div className="wr-users-header">
+              <div className="wr-users-label">
+                <Users size={18} weight="fill" />
+                Richieste di partecipazione
+              </div>
+              <div style={{ fontSize: '12px', color: P.pink, fontWeight: 800 }}>
+                {pendingRequests.length}
+              </div>
+            </div>
+
+            <div className="wr-user-list">
+              {pendingRequests.map((u) => (
+                <div key={u.id} className="wr-user">
+                  <div className="wr-avatar">
+                    {u.name.charAt(0).toUpperCase()}
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <div className="wr-user-name">@{u.name}</div>
+                    <div style={{ color: P.textFaint, fontSize: '11px', marginTop: '2px' }}>
+                      Vuole entrare nella stanza
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => onRejectParticipant(u.id)}
+                      disabled={hostActionBusy}
+                      style={{
+                        padding: '7px 10px',
+                        border: `1px solid ${P.border}`,
+                        background: 'transparent',
+                        color: P.textMuted,
+                        cursor: hostActionBusy ? 'not-allowed' : 'pointer',
+                        fontFamily: FONT_SANS,
+                        fontSize: '11px',
+                        fontWeight: 700,
+                      }}
+                    >
+                      Rifiuta
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => onApproveParticipant(u.id)}
+                      disabled={hostActionBusy}
+                      style={{
+                        padding: '7px 10px',
+                        border: `1px solid ${P.gold}`,
+                        background: P.gold,
+                        color: P.bg,
+                        cursor: hostActionBusy ? 'not-allowed' : 'pointer',
+                        fontFamily: FONT_SANS,
+                        fontSize: '11px',
+                        fontWeight: 800,
+                      }}
+                    >
+                      Accetta
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="ticket-tear" />
+          </section>
+        )}
 
         <div className="wr-divider">
           <span>oppure entra in un'altra stanza</span>

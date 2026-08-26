@@ -42,18 +42,44 @@ const navItems: NavItem[] = [
     label: 'Home',
     path: '/home',
     icon: (active, color, activeColor) => (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill={active ? activeColor : 'none'}
-        stroke={active ? activeColor : color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
+      <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? activeColor : 'none'} stroke={active ? activeColor : color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
         <polyline points="9,22 9,12 15,12 15,22" />
+      </svg>
+    ),
+  },
+  {
+    id: 'per-te',
+    label: 'Per te',
+    path: '/per-te',
+    icon: (active, color, activeColor) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? activeColor : 'none'} stroke={active ? activeColor : color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3l1.55 4.45L18 9l-4.45 1.55L12 15l-1.55-4.45L6 9l4.45-1.55L12 3z" />
+        <path d="M19 15l.85 2.15L22 18l-2.15.85L19 21l-.85-2.15L16 18l2.15-.85L19 15z" />
+      </svg>
+    ),
+  },
+  {
+    id: 'persone',
+    label: 'Persone',
+    path: '/persone',
+    icon: (active, color, activeColor) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? activeColor : 'none'} stroke={active ? activeColor : color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M22 21v-2a4 4 0 00-3-3.87" />
+        <path d="M16 3.13a4 4 0 010 7.75" />
+      </svg>
+    ),
+  },
+  {
+    id: 'recensioni',
+    label: 'Community',
+    path: '/recensioni',
+    icon: (active, color, activeColor) => (
+      <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? activeColor : 'none'} stroke={active ? activeColor : color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+        <path d="M8 9h8M8 13h5" />
       </svg>
     ),
   },
@@ -62,87 +88,11 @@ const navItems: NavItem[] = [
     label: 'Stanze',
     path: '/crea-stanza',
     icon: (active, color, activeColor) => (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={active ? activeColor : color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? activeColor : color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
         <circle cx="9" cy="7" r="4" />
         <path d="M23 21v-2a4 4 0 00-3-3.87" />
         <path d="M16 3.13a4 4 0 010 7.75" />
-      </svg>
-    ),
-  },
-  {
-    id: 'recensioni',
-    label: 'Recensioni',
-    path: '/recensioni',
-    icon: (active, color, activeColor) => (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={active ? activeColor : color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-      </svg>
-    ),
-  },
-  {
-    id: 'cinema',
-    label: 'Cinema',
-    path: '/cinema',
-    icon: (active, color, activeColor) => (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={active ? activeColor : color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-        <line x1="7" y1="2" x2="7" y2="22" />
-        <line x1="17" y1="2" x2="17" y2="22" />
-        <line x1="2" y1="12" x2="22" y2="12" />
-        <line x1="2" y1="7" x2="7" y2="7" />
-        <line x1="2" y1="17" x2="7" y2="17" />
-        <line x1="17" y1="17" x2="22" y2="17" />
-        <line x1="17" y1="7" x2="22" y2="7" />
-      </svg>
-    ),
-  },
-  {
-    id: 'libreria',
-    label: 'Libreria',
-    path: '/libreria',
-    icon: (active, color, activeColor) => (
-      <svg
-        width="22"
-        height="22"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={active ? activeColor : color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M4 19.5A2.5 2.5 0 016.5 17H20" />
-        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" />
-        <line x1="8" y1="6" x2="16" y2="6" />
-        <line x1="8" y1="10" x2="16" y2="10" />
       </svg>
     ),
   },
@@ -155,6 +105,7 @@ type Props = {
 export default function BottomNav({ activeId }: Props) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+  const P = isDark ? D : L;
 
   const router = useRouter();
 
@@ -172,20 +123,21 @@ export default function BottomNav({ activeId }: Props) {
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 3px;
+          gap: 4px;
           flex: 1;
-          padding: 8px 4px;
+          padding: 7px 2px 10px;
           cursor: pointer;
           border: none;
           background: none;
           font-family: ${FONT.sans};
           position: relative;
-          transition: opacity 0.15s ease, color 0.15s;
+          transition: transform 0.15s ease, opacity 0.15s ease, color 0.15s;
           -webkit-tap-highlight-color: transparent;
         }
 
         .nav-item:active {
-          opacity: 0.7;
+          opacity: 0.78;
+          transform: translateY(1px);
         }
 
         .nav-item.disabled {
@@ -260,8 +212,8 @@ export default function BottomNav({ activeId }: Props) {
 
               <span
                 style={{
-                  fontSize: TEXT.xs,
-                  fontWeight: isActive ? '600' : '400',
+                  fontSize: '10px',
+                  fontWeight: isActive ? '800' : '500',
                   color: isActive ? active : faint,
                   lineHeight: 1,
                 }}
@@ -273,10 +225,10 @@ export default function BottomNav({ activeId }: Props) {
                 <div
                   style={{
                     position: 'absolute',
-                    bottom: '6px',
-                    width: '4px',
-                    height: '4px',
-                    borderRadius: '50%',
+                    bottom: '4px',
+                    width: '16px',
+                    height: '3px',
+                    borderRadius: '999px',
                     background: active,
                   }}
                 />

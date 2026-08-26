@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '@/components/layout/AppShell';
-import ReportModal from '@/components/social/ReportModal';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import { createBrowserClient } from '@/utils/supabase/browser';
@@ -15,12 +14,13 @@ import {
   Check,
   PaperPlaneTilt,
   Trash,
-  Flag,
   Funnel,
   Heart,
+  FilmSlate,
   MagnifyingGlass,
   PencilSimple,
   Star,
+  UserCheck,
   UserPlus,
   X,
 } from '@phosphor-icons/react';
@@ -133,6 +133,14 @@ type SearchMovie = {
 
 type Tab = 'tutte' | 'seguiti' | 'film' | 'animazione' | 'serie';
 
+type AuthorSocial = {
+  compatibility_score: number;
+  shared_favorites_count: number;
+  shared_high_ratings_count: number;
+  shared_genres_count: number;
+  follows_you: boolean;
+};
+
 function getCatalogMovie(row: WatchlistRow) {
   if (Array.isArray(row.movie_catalog)) {
     return row.movie_catalog[0] ?? null;
@@ -211,7 +219,9 @@ export default function RecensioniPage() {
   const [followingReviews, setFollowingReviews] = useState<PublicReview[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistRow[]>([]);
   const [likedEntries, setLikedEntries] = useState<Set<string>>(new Set());
-  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
+  const [authorSocial, setAuthorSocial] = useState<Record<string, AuthorSocial>>({});
+  const [followingUserIds, setFollowingUserIds] = useState<Set<string>>(new Set());
+  const [followBusyUserId, setFollowBusyUserId] = useState<string | null>(null);
 
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [openCommentsEntry, setOpenCommentsEntry] = useState<string | null>(null);
@@ -221,12 +231,6 @@ export default function RecensioniPage() {
   const [commentSaving, setCommentSaving] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
-
-  const [reportTarget, setReportTarget] = useState<
-    | { type: 'review'; entryId: string; label: string }
-    | { type: 'comment'; commentId: string; label: string }
-    | null
-  >(null);
 
   const [loadingFeed, setLoadingFeed] = useState(true);
   const [feedError, setFeedError] = useState('');
@@ -265,7 +269,6 @@ export default function RecensioniPage() {
         followingReviewsResult,
         watchlistResult,
         likesResult,
-        blockedUsersResult,
       ] = await Promise.all([
         supabase.rpc('get_public_reviews', {
           p_limit: 50,
@@ -285,30 +288,71 @@ export default function RecensioniPage() {
           .order('updated_at', { ascending: false })
           .limit(8),
         supabase.rpc('get_my_review_likes'),
-        supabase.rpc('get_my_blocked_relationship_user_ids'),
       ]);
 
       if (reviewsResult.error) throw reviewsResult.error;
       if (followingReviewsResult.error) throw followingReviewsResult.error;
       if (watchlistResult.error) throw watchlistResult.error;
       if (likesResult.error) throw likesResult.error;
-      if (blockedUsersResult.error) throw blockedUsersResult.error;
 
-      setReviews(
+      const normalizedReviews =
         ((reviewsResult.data ?? []) as PublicReview[]).map((review) => ({
           ...review,
           likes_count: Number(review.likes_count ?? 0),
-        }))
-      );
+        }));
 
-      setFollowingReviews(
+      setReviews(normalizedReviews);
+
+      const normalizedFollowingReviews =
         ((followingReviewsResult.data ?? []) as PublicReview[]).map(
           (review) => ({
             ...review,
             likes_count: Number(review.likes_count ?? 0),
           })
+        );
+
+      setFollowingReviews(normalizedFollowingReviews);
+      setFollowingUserIds(
+        new Set(normalizedFollowingReviews.map((review) => review.user_id))
+      );
+
+      const authorIds = Array.from(
+        new Set(
+          normalizedReviews
+            .map((review) => review.user_id)
+            .filter((id) => id !== currentUser.id)
         )
       );
+
+      if (authorIds.length > 0) {
+        const { data: socialRows, error: socialError } =
+          await supabase.rpc('get_people_compatibilities', {
+            p_user_ids: authorIds,
+          });
+
+        if (socialError) {
+          console.error('Review author compatibility load failed:', socialError);
+          setAuthorSocial({});
+        } else {
+          const next: Record<string, AuthorSocial> = {};
+
+          for (const row of socialRows ?? []) {
+            if (typeof row.user_id !== 'string') continue;
+
+            next[row.user_id] = {
+              compatibility_score: Number(row.compatibility_score ?? 0),
+              shared_favorites_count: Number(row.shared_favorites_count ?? 0),
+              shared_high_ratings_count: Number(row.shared_high_ratings_count ?? 0),
+              shared_genres_count: Number(row.shared_genres_count ?? 0),
+              follows_you: Boolean(row.follows_you),
+            };
+          }
+
+          setAuthorSocial(next);
+        }
+      } else {
+        setAuthorSocial({});
+      }
 
       setWatchlist((watchlistResult.data ?? []) as WatchlistRow[]);
 
@@ -378,7 +422,6 @@ export default function RecensioniPage() {
     const source = tab === 'seguiti' ? followingReviews : reviews;
 
     return source.filter((review) => {
-      if (blockedUserIds.has(review.user_id)) return false;
       if (tab === 'serie') return false;
 
       if (
@@ -403,7 +446,7 @@ export default function RecensioniPage() {
 
       return true;
     });
-  }, [reviews, followingReviews, search, tab, blockedUserIds]);
+  }, [reviews, followingReviews, search, tab]);
 
   useEffect(() => {
     const ids = Array.from(
@@ -596,6 +639,9 @@ export default function RecensioniPage() {
 
     if (!targetEntry) return;
 
+    if (tab !== 'tutte') setTab('tutte');
+    if (search) setSearch('');
+
     if (!reviews.some((review) => review.entry_id === targetEntry)) {
       return;
     }
@@ -622,6 +668,8 @@ export default function RecensioniPage() {
     router.query.comments,
     reviews,
     commentsByEntry,
+    tab,
+    search,
   ]);
 
   const highlightedReviews = useMemo(
@@ -631,6 +679,54 @@ export default function RecensioniPage() {
         .slice(0, 3),
     [filteredReviews]
   );
+
+  const toggleFollowAuthor = async (review: PublicReview) => {
+    if (
+      !currentUser ||
+      currentUser.isGuest ||
+      currentUser.id === review.user_id
+    ) {
+      return;
+    }
+
+    setFollowBusyUserId(review.user_id);
+
+    try {
+      const alreadyFollowing = followingUserIds.has(review.user_id);
+
+      if (alreadyFollowing) {
+        const { error } = await supabase
+          .from('user_follows')
+          .delete()
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', review.user_id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('user_follows')
+          .insert({
+            follower_id: currentUser.id,
+            following_id: review.user_id,
+          });
+
+        if (error) throw error;
+      }
+
+      setFollowingUserIds((current) => {
+        const next = new Set(current);
+
+        if (alreadyFollowing) next.delete(review.user_id);
+        else next.add(review.user_id);
+
+        return next;
+      });
+    } catch (error) {
+      console.error('Review author follow failed:', error);
+    } finally {
+      setFollowBusyUserId(null);
+    }
+  };
 
   const toggleLike = async (review: PublicReview) => {
     if (!currentUser || currentUser.isGuest) return;
@@ -936,7 +1032,7 @@ export default function RecensioniPage() {
                           {review.cover ? (
                             <img src={review.cover} alt={review.title} />
                           ) : (
-                            <span>🎬</span>
+                            <FilmSlate size={22} color={P.textFaint} weight="duotone" />
                           )}
                         </div>
 
@@ -1035,7 +1131,7 @@ export default function RecensioniPage() {
                             {review.cover ? (
                               <img src={review.cover} alt={review.title} />
                             ) : (
-                              <span>🎬</span>
+                              <FilmSlate size={22} color={P.textFaint} weight="duotone" />
                             )}
                           </div>
 
@@ -1074,6 +1170,108 @@ export default function RecensioniPage() {
                               <span>@{review.username || 'utente'}</span>
                             </button>
 
+                            {currentUser?.id !== review.user_id && (
+                              <button
+                                type="button"
+                                onClick={() => void toggleFollowAuthor(review)}
+                                disabled={followBusyUserId === review.user_id}
+                                style={{
+                                  border: `1px solid ${
+                                    followingUserIds.has(review.user_id)
+                                      ? P.border
+                                      : P.pink
+                                  }`,
+                                  background: followingUserIds.has(review.user_id)
+                                    ? P.bgSoft
+                                    : P.pinkGlow,
+                                  color: followingUserIds.has(review.user_id)
+                                    ? P.textMuted
+                                    : P.pink,
+                                  padding: '4px 7px',
+                                  cursor:
+                                    followBusyUserId === review.user_id
+                                      ? 'wait'
+                                      : 'pointer',
+                                  fontFamily: FONT,
+                                  fontSize: 8,
+                                  fontWeight: 850,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                }}
+                              >
+                                {followingUserIds.has(review.user_id) ? (
+                                  <UserCheck size={10} weight="fill" />
+                                ) : (
+                                  <UserPlus size={10} weight="bold" />
+                                )}
+                                {followingUserIds.has(review.user_id)
+                                  ? 'Segui già'
+                                  : 'Segui'}
+                              </button>
+                            )}
+
+                            {currentUser?.id !== review.user_id && (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  gap: 5,
+                                  flexWrap: 'wrap',
+                                  alignItems: 'center',
+                                }}
+                              >
+                                {followingUserIds.has(review.user_id) && (
+                                  <span
+                                    style={{
+                                      border: `1px solid ${P.gold}55`,
+                                      background: P.goldGlow,
+                                      color: P.gold,
+                                      padding: '3px 6px',
+                                      fontSize: 8,
+                                      fontWeight: 850,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 3,
+                                    }}
+                                  >
+                                    <UserCheck size={10} weight="fill" />
+                                    Segui
+                                  </span>
+                                )}
+
+                                {authorSocial[review.user_id]?.follows_you && (
+                                  <span
+                                    style={{
+                                      border: `1px solid ${P.pink}55`,
+                                      background: P.pinkGlow,
+                                      color: P.pink,
+                                      padding: '3px 6px',
+                                      fontSize: 8,
+                                      fontWeight: 850,
+                                    }}
+                                  >
+                                    Ti segue
+                                  </span>
+                                )}
+
+                                {(authorSocial[review.user_id]?.compatibility_score ?? 0) > 0 && (
+                                  <span
+                                    title={`${authorSocial[review.user_id]?.shared_favorites_count ?? 0} preferiti, ${authorSocial[review.user_id]?.shared_high_ratings_count ?? 0} voti alti e ${authorSocial[review.user_id]?.shared_genres_count ?? 0} generi in comune`}
+                                    style={{
+                                      border: `1px solid ${P.border}`,
+                                      background: P.bgSoft,
+                                      color: P.textMuted,
+                                      padding: '3px 6px',
+                                      fontSize: 8,
+                                      fontWeight: 800,
+                                    }}
+                                  >
+                                    Affinità {authorSocial[review.user_id]?.compatibility_score}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
                             <span className="time">
                               {formatRelativeDate(
                                 review.review_updated_at ||
@@ -1082,23 +1280,6 @@ export default function RecensioniPage() {
                             </span>
 
                             <div className="review-social-actions">
-                              {currentUser?.id !== review.user_id && (
-                                <button
-                                  type="button"
-                                  className="report-btn"
-                                  onClick={() =>
-                                    setReportTarget({
-                                      type: 'review',
-                                      entryId: review.entry_id,
-                                      label: `Recensione di @${review.username || 'utente'} su ${review.title}`,
-                                    })
-                                  }
-                                  aria-label="Segnala recensione"
-                                  title="Segnala recensione"
-                                >
-                                  <Flag size={14} />
-                                </button>
-                              )}
                               <button
                                 className={`comment-btn ${
                                   openCommentsEntry === review.entry_id
@@ -1261,25 +1442,6 @@ export default function RecensioniPage() {
                                                 <p>{comment.text}</p>
                                               )}
 
-                                              {!isMine && !isEditing && (
-                                                <div className="comment-own-actions">
-                                                  <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                      setReportTarget({
-                                                        type: 'comment',
-                                                        commentId:
-                                                          comment.comment_id,
-                                                        label: `Commento di @${comment.username || 'utente'}`,
-                                                      })
-                                                    }
-                                                  >
-                                                    <Flag size={11} weight="bold" />
-                                                    Segnala
-                                                  </button>
-                                                </div>
-                                              )}
-
                                               {isMine && !isEditing && (
                                                 <div className="comment-own-actions">
                                                   <button
@@ -1402,7 +1564,7 @@ export default function RecensioniPage() {
                             {movie.cover ? (
                               <img src={movie.cover} alt={movie.title} />
                             ) : (
-                              <span>🎬</span>
+                              <FilmSlate size={22} color={P.textFaint} weight="duotone" />
                             )}
                           </div>
 
@@ -1450,12 +1612,6 @@ export default function RecensioniPage() {
           </div>
         </main>
       </AppShell>
-
-      <ReportModal
-        open={Boolean(reportTarget)}
-        target={reportTarget}
-        onClose={() => setReportTarget(null)}
-      />
 
       {modalOpen && (
         <div className="modal-backdrop" onMouseDown={closeModal}>
@@ -1529,7 +1685,7 @@ export default function RecensioniPage() {
                         {movie.cover ? (
                           <img src={movie.cover} alt={movie.title} />
                         ) : (
-                          <span>🎬</span>
+                          <FilmSlate size={22} color={P.textFaint} weight="duotone" />
                         )}
                       </div>
                       <div>
@@ -1558,7 +1714,7 @@ export default function RecensioniPage() {
                         alt={selectedMovie.title}
                       />
                     ) : (
-                      <span>🎬</span>
+                      <FilmSlate size={22} color={P.textFaint} weight="duotone" />
                     )}
                   </div>
                   <div>
@@ -2061,21 +2217,6 @@ export default function RecensioniPage() {
           display: flex;
           align-items: center;
           gap: 5px;
-        }
-
-        .report-btn {
-          border: 0;
-          background: transparent;
-          color: var(--r-faint);
-          padding: 4px 5px;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-        }
-
-        .report-btn:hover {
-          color: var(--r-danger);
         }
 
         .comment-btn {

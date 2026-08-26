@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '@/components/layout/AppShell';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,6 +12,10 @@ import {
   Check,
   Heart,
   UserPlus,
+  UserCheck,
+  ChatCircle,
+  Flag,
+  UsersThree,
 } from '@phosphor-icons/react';
 
 const D = {
@@ -45,10 +49,9 @@ type NotificationRow = {
   id: string;
   user_id: string;
   actor_user_id: string | null;
-  type: 'new_follower' | 'review_like' | 'review_comment' | 'report_resolved' | 'report_dismissed' | 'appeal_accepted' | 'appeal_rejected';
+  type: 'new_follower' | 'review_like' | 'review_comment' | 'report_resolved' | 'report_dismissed';
   review_entry_id: string | null;
   report_id: string | null;
-  appeal_id: string | null;
   is_read: boolean;
   created_at: string;
 };
@@ -70,6 +73,8 @@ type DisplayNotification = NotificationRow & {
   actor: Actor | null;
   review: ReviewTarget | null;
 };
+
+type NotificationFilter = 'tutte' | 'non_lette' | 'social' | 'sistema';
 
 function relativeDate(value: string) {
   const date = new Date(value);
@@ -103,6 +108,9 @@ export default function NotifichePage() {
   const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
   const [error, setError] = useState('');
+  const [filter, setFilter] = useState<NotificationFilter>('tutte');
+  const [followingActorIds, setFollowingActorIds] = useState<Set<string>>(new Set());
+  const [followBusyActorId, setFollowBusyActorId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isLoading) return;
@@ -124,7 +132,7 @@ export default function NotifichePage() {
       try {
         const { data: rows, error: notificationsError } = await supabase
           .from('notifications')
-          .select('id,user_id,actor_user_id,type,review_entry_id,is_read,created_at')
+          .select('id,user_id,actor_user_id,type,review_entry_id,report_id,is_read,created_at')
           .eq('user_id', currentUser.id)
           .order('created_at', { ascending: false })
           .limit(100);
@@ -173,6 +181,26 @@ export default function NotifichePage() {
         }
 
         const actorMap = new Map(actors.map((actor) => [actor.id, actor]));
+
+        if (actorIds.length > 0) {
+          const { data: followingRows, error: followingError } = await supabase
+            .from('user_follows')
+            .select('following_id')
+            .eq('follower_id', currentUser.id)
+            .in('following_id', actorIds);
+
+          if (!followingError) {
+            setFollowingActorIds(
+              new Set(
+                (followingRows ?? [])
+                  .map((row) => row.following_id)
+                  .filter((id): id is string => typeof id === 'string')
+              )
+            );
+          }
+        } else {
+          setFollowingActorIds(new Set());
+        }
         const reviewMap = new Map(
           reviewTargets.map((review) => [review.entry_id, review])
         );
@@ -265,14 +293,6 @@ export default function NotifichePage() {
     }
 
     if (
-      notification.type === 'appeal_accepted' ||
-      notification.type === 'appeal_rejected'
-    ) {
-      void router.push('/profilo?tab=impostazioni');
-      return;
-    }
-
-    if (
       notification.type === 'review_like' &&
       notification.review_entry_id
     ) {
@@ -293,6 +313,54 @@ export default function NotifichePage() {
           notification.review_entry_id
         )}&comments=1`
       );
+    }
+  };
+
+  const toggleFollowBack = async (
+    actorUserId: string,
+    notificationId: string,
+  ) => {
+    if (!currentUser || currentUser.isGuest) return;
+
+    setFollowBusyActorId(actorUserId);
+
+    try {
+      const alreadyFollowing = followingActorIds.has(actorUserId);
+
+      if (alreadyFollowing) {
+        const { error } = await supabase
+          .from('user_follows')
+          .delete()
+          .eq('follower_id', currentUser.id)
+          .eq('following_id', actorUserId);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('user_follows')
+          .insert({
+            follower_id: currentUser.id,
+            following_id: actorUserId,
+          });
+
+        if (error) throw error;
+      }
+
+      setFollowingActorIds((current) => {
+        const next = new Set(current);
+
+        if (alreadyFollowing) next.delete(actorUserId);
+        else next.add(actorUserId);
+
+        return next;
+      });
+
+      const target = notifications.find((item) => item.id === notificationId);
+      if (target) await markRead(target);
+    } catch (error) {
+      console.error('Follow back failed:', error);
+    } finally {
+      setFollowBusyActorId(null);
     }
   };
 
@@ -329,6 +397,34 @@ export default function NotifichePage() {
   };
 
   const unreadCount = notifications.filter((item) => !item.is_read).length;
+
+  const socialCount = notifications.filter((item) =>
+    ['new_follower', 'review_like', 'review_comment'].includes(item.type)
+  ).length;
+
+  const systemCount = notifications.filter((item) =>
+    ['report_resolved', 'report_dismissed'].includes(item.type)
+  ).length;
+
+  const visibleNotifications = useMemo(() => {
+    if (filter === 'non_lette') {
+      return notifications.filter((item) => !item.is_read);
+    }
+
+    if (filter === 'social') {
+      return notifications.filter((item) =>
+        ['new_follower', 'review_like', 'review_comment'].includes(item.type)
+      );
+    }
+
+    if (filter === 'sistema') {
+      return notifications.filter((item) =>
+        ['report_resolved', 'report_dismissed'].includes(item.type)
+      );
+    }
+
+    return notifications;
+  }, [filter, notifications]);
 
   if (
     isLoading ||
@@ -464,6 +560,94 @@ export default function NotifichePage() {
             )}
           </header>
 
+          <div
+            style={{
+              display: 'flex',
+              gap: 7,
+              overflowX: 'auto',
+              paddingBottom: 4,
+              marginBottom: 14,
+              scrollbarWidth: 'none',
+            }}
+          >
+            {[
+              {
+                id: 'tutte',
+                label: 'Tutte',
+                count: notifications.length,
+                icon: Bell,
+                color: P.textMuted,
+              },
+              {
+                id: 'non_lette',
+                label: 'Non lette',
+                count: unreadCount,
+                icon: Check,
+                color: P.pink,
+              },
+              {
+                id: 'social',
+                label: 'Social',
+                count: socialCount,
+                icon: UsersThree,
+                color: P.gold,
+              },
+              {
+                id: 'sistema',
+                label: 'Sistema',
+                count: systemCount,
+                icon: Flag,
+                color: P.textFaint,
+              },
+            ].map((item) => {
+              const active = filter === item.id;
+              const Icon = item.icon;
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() =>
+                    setFilter(item.id as NotificationFilter)
+                  }
+                  style={{
+                    border: `1px solid ${
+                      active ? item.color : P.border
+                    }`,
+                    background: active ? P.bgSoft : P.card,
+                    color: active ? item.color : P.textMuted,
+                    padding: '8px 10px',
+                    cursor: 'pointer',
+                    fontFamily: FONT,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <Icon size={13} weight={active ? 'fill' : 'regular'} />
+                  {item.label}
+                  <span
+                    style={{
+                      minWidth: 18,
+                      height: 18,
+                      padding: '0 4px',
+                      display: 'grid',
+                      placeItems: 'center',
+                      background: active ? P.card : P.bgSoft,
+                      color: active ? item.color : P.textFaint,
+                      fontSize: 8,
+                    }}
+                  >
+                    {item.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           {error && (
             <div
               style={{
@@ -491,7 +675,7 @@ export default function NotifichePage() {
             >
               Caricamento notifiche...
             </div>
-          ) : notifications.length === 0 ? (
+          ) : visibleNotifications.length === 0 ? (
             <div
               style={{
                 border: `1px dashed ${P.border}`,
@@ -503,11 +687,19 @@ export default function NotifichePage() {
               }}
             >
               <Bell size={30} style={{ marginBottom: 8 }} />
-              <div>Non hai ancora notifiche.</div>
+              <div>
+                {filter === 'non_lette'
+                  ? 'Non hai notifiche non lette.'
+                  : filter === 'social'
+                  ? 'Non hai ancora attività social.'
+                  : filter === 'sistema'
+                  ? 'Non hai aggiornamenti di sistema.'
+                  : 'Non hai ancora notifiche.'}
+              </div>
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
-              {notifications.map((notification) => {
+              {visibleNotifications.map((notification) => {
                 const actorName =
                   notification.actor?.username || 'Un utente';
 
@@ -526,23 +718,18 @@ export default function NotifichePage() {
                 const isReportResult =
                   isReportResolved || isReportDismissed;
 
-                const isAppealAccepted =
-                  notification.type === 'appeal_accepted';
-
-                const isAppealRejected =
-                  notification.type === 'appeal_rejected';
-
-                const isAppealResult =
-                  isAppealAccepted || isAppealRejected;
-
-                const isSystemNotification =
-                  isReportResult || isAppealResult;
-
                 return (
-                  <button
-                    type="button"
+                  <article
                     key={notification.id}
                     onClick={() => void openNotification(notification)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        void openNotification(notification);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                     style={{
                       width: '100%',
                       border: `1px solid ${
@@ -600,11 +787,7 @@ export default function NotifichePage() {
                         }}
                       >
                         <strong>@{actorName}</strong>{' '}
-                        {isAppealAccepted ? (
-                          'Il tuo ricorso è stato accettato.'
-                        ) : isAppealRejected ? (
-                          'Il tuo ricorso è stato rifiutato.'
-                        ) : isReportResolved ? (
+                        {isReportResolved ? (
                           'La tua segnalazione è stata risolta.'
                         ) : isReportDismissed ? (
                           'La tua segnalazione è stata archiviata.'
@@ -638,6 +821,68 @@ export default function NotifichePage() {
                       </div>
                     </div>
 
+                    {isFollow &&
+                      notification.actor_user_id &&
+                      currentUser.id !== notification.actor_user_id && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void toggleFollowBack(
+                              notification.actor_user_id as string,
+                              notification.id
+                            );
+                          }}
+                          disabled={
+                            followBusyActorId === notification.actor_user_id
+                          }
+                          style={{
+                            border: `1px solid ${
+                              followingActorIds.has(
+                                notification.actor_user_id
+                              )
+                                ? P.border
+                                : P.pink
+                            }`,
+                            background: followingActorIds.has(
+                              notification.actor_user_id
+                            )
+                              ? P.bgSoft
+                              : 'rgba(237,61,115,.08)',
+                            color: followingActorIds.has(
+                              notification.actor_user_id
+                            )
+                              ? P.textMuted
+                              : P.pink,
+                            padding: '6px 8px',
+                            cursor:
+                              followBusyActorId ===
+                              notification.actor_user_id
+                                ? 'wait'
+                                : 'pointer',
+                            fontFamily: FONT,
+                            fontSize: 8,
+                            fontWeight: 850,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          {followingActorIds.has(
+                            notification.actor_user_id
+                          ) ? (
+                            <UserCheck size={11} weight="fill" />
+                          ) : (
+                            <UserPlus size={11} weight="bold" />
+                          )}
+                          {followingActorIds.has(
+                            notification.actor_user_id
+                          )
+                            ? 'Segui già'
+                            : 'Ricambia'}
+                        </button>
+                      )}
+
                     <div
                       style={{
                         width: 30,
@@ -650,7 +895,7 @@ export default function NotifichePage() {
                         color: isFollow ? P.pink : P.gold,
                       }}
                     >
-                      {isSystemNotification ? (
+                      {isReportResult ? (
                         <Bell size={15} weight="fill" />
                       ) : isFollow ? (
                         <UserPlus size={15} weight="fill" />
@@ -660,7 +905,7 @@ export default function NotifichePage() {
                         <Heart size={15} weight="fill" />
                       )}
                     </div>
-                  </button>
+                  </article>
                 );
               })}
             </div>

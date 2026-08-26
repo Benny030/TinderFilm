@@ -4,7 +4,6 @@ import { useEffect, useState, useRef, type CSSProperties, type FormEvent } from 
 import { useRouter } from 'next/router';
 import { useAuth } from '@/hooks/useAuth';
 import { createBrowserClient } from '@/utils/supabase/browser';
-import { getRecentRooms, type RecentRoom } from '@/utils/recentRoom';
 import { normalizeRoomCode } from '@/utils/roomCode';
 import AppShell from '@/components/layout/AppShell';
 import { useTheme } from '@/context/ThemeContext';
@@ -16,6 +15,7 @@ import {
   InstagramLogo, TiktokLogo, XLogo,
   Sun, Moon, FilmStrip,
   Heart, Clock, HandWavingIcon, Medal,
+  ThumbsUp, ThumbsDown,
 } from '@phosphor-icons/react';
 
 // ─── Palette dark "cinema elegante" ──────────────────────────────────────
@@ -34,6 +34,8 @@ const D = {
   text: '#f0ebe6',
   textMuted: '#b5a89e',
   textFaint: '#7a6b60',
+  success: '#22c55e',
+  purple: '#8b5cf6',
 };
 
 // ─── Palette light "cinema elegante" ──────────────────────────────────────
@@ -52,6 +54,8 @@ const L = {
   text: '#1f1a16',
   textMuted: '#5c5248',
   textFaint: '#8a7c6e',
+  success: '#16a34a',
+  purple: '#7c3aed',
 };
 
 const FONT = "'Inter','Helvetica Neue',sans-serif";
@@ -85,17 +89,75 @@ type TmdbMovie = {
   trama_c: string | null;
 };
 
+
+type PublicRoom = {
+  id: string;
+  mode?: string | null;
+  room_type?: string | null;
+  city?: string | null;
+  province?: string | null;
+  min_members?: number | null;
+  max_members?: number | null;
+  participant_count?: number | null;
+  available_spots?: number | null;
+  host_name?: string | null;
+  created_at?: string | null;
+};
+
+type CommunityReview = {
+  entry_id: string;
+  provider: string;
+  provider_movie_id: string;
+  title: string;
+  year: number | null;
+  cover: string | null;
+  rating: number | null;
+  likes_count: number;
+};
+
+type SocialPerson = {
+  user_id: string;
+  username: string;
+  avatar_url: string | null;
+  bio: string | null;
+  followers_count: number;
+  is_following: boolean;
+  shared_genres?: string[];
+  shared_genres_count?: number;
+  shared_favorites_count?: number;
+  shared_high_ratings_count?: number;
+  compatibility_score?: number;
+};
+
+type RecommendationMovie = {
+  tmdb_id: number;
+  title: string;
+  year: number | null;
+  cover: string | null;
+  rating: number;
+  reason: string;
+  score: number;
+};
+
+
+type RecommendationCollections = {
+  from_favorites: RecommendationMovie[];
+  from_rooms: RecommendationMovie[];
+  cast_affinity: RecommendationMovie[];
+  profile_genres: RecommendationMovie[];
+};
+
 const FEATURES = [
-  { icon: UsersThree, title: 'Trova il tuo match', desc: 'Persone con i tuoi stessi gusti' },
-  { icon: FilmSlate,  title: 'Scopri cosa vedere', desc: 'Consigli su misura per te' },
-  { icon: Confetti,   title: 'Vivi il cinema',      desc: 'Insieme è meglio' },
+  { icon: UsersThree, title: 'Trova persone affini', desc: 'Scopri chi condivide davvero i tuoi gusti' },
+  { icon: FilmSlate,  title: 'Scopri cosa vedere',   desc: 'Consigli che imparano da preferiti, voti e match' },
+  { icon: Confetti,   title: 'Condividi il cinema',  desc: 'Stanze, recensioni, follow e notifiche in un solo posto' },
 ];
 
 const SUGGESTIONS = [
-  { icon: UsersThree, title: 'Film simili a quelli che ami', desc: 'Altri titoli che potrebbero piacerti' },
-  { icon: TrendUp,     title: 'Top del momento',              desc: 'I film più votati della community' },
-  { icon: Sparkle,     title: 'Scelte della community',       desc: 'I consigli più popolari degli utenti' },
-];
+  { key: 'similar', icon: UsersThree, title: 'Scopri altri film per te', desc: 'Apri il consiglio più adatto ai tuoi gusti' },
+  { key: 'top', icon: TrendUp, title: 'Top del momento', desc: 'I film più popolari adesso' },
+  { key: 'community', icon: Sparkle, title: 'Scelte della community', desc: 'I film più apprezzati dagli utenti' },
+] as const;
 
 export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
@@ -107,15 +169,33 @@ export default function HomePage() {
   const supabase = useRef(createBrowserClient()).current;
 
   const [trending, setTrending] = useState<TmdbMovie[]>([]);
-  const [recentRooms, setRecentRooms] = useState<RecentRoom[]>([]);
+  const [publicRooms, setPublicRooms] = useState<PublicRoom[]>([]);
+  const [loadingPublicRooms, setLoadingPublicRooms] = useState(true);
+  const [similarPick, setSimilarPick] = useState<RecommendationMovie | null>(null);
+  const [forYouMovies, setForYouMovies] = useState<RecommendationMovie[]>([]);
+  const [recommendationCollections, setRecommendationCollections] =
+    useState<RecommendationCollections>({
+      from_favorites: [],
+      from_rooms: [],
+      cast_affinity: [],
+      profile_genres: [],
+    });
+  const [communityPick, setCommunityPick] = useState<CommunityReview | null>(null);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [fallbackUsername, setFallbackUsername] = useState('');
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
   const [unreadNotifications, setUnreadNotifications] = useState(0);
+  const [socialPeople, setSocialPeople] = useState<SocialPerson[]>([]);
+  const [loadingSocialPeople, setLoadingSocialPeople] = useState(false);
 
   const [codeInput, setCodeInput] = useState('');
   const [codeError, setCodeError] = useState('');
+  const [recommendationFeedback, setRecommendationFeedback] = useState<
+    Record<number, 'more_like_this' | 'not_for_me'>
+  >({});
+  const [feedbackBusyId, setFeedbackBusyId] = useState<number | null>(null);
 
   const displayName = currentUser && !currentUser.isGuest
     ? currentUser.username || fallbackUsername || '...'
@@ -164,6 +244,54 @@ export default function HomePage() {
     return () => {
       cancelled = true;
       void supabase.removeChannel(channel);
+    };
+  }, [currentUser, supabase]);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.isGuest) {
+      setSocialPeople([]);
+      setLoadingSocialPeople(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSocialPeople = async () => {
+      setLoadingSocialPeople(true);
+
+      try {
+        const { data, error } = await supabase.rpc('get_people_suggestions', {
+          p_limit: 8,
+        });
+
+        if (error) throw error;
+
+        const people = ((data ?? []) as SocialPerson[])
+          .map((person) => ({
+            ...person,
+            followers_count: Number(person.followers_count ?? 0),
+            shared_genres_count: Number(person.shared_genres_count ?? 0),
+            shared_favorites_count: Number(person.shared_favorites_count ?? 0),
+            shared_high_ratings_count: Number(person.shared_high_ratings_count ?? 0),
+            compatibility_score: Number(person.compatibility_score ?? 0),
+            shared_genres: Array.isArray(person.shared_genres) ? person.shared_genres : [],
+          }))
+          .filter((person) => (person.compatibility_score ?? 0) > 0)
+          .slice(0, 4);
+
+        if (!cancelled) setSocialPeople(people);
+      } catch (error) {
+        console.error('Home social suggestions load failed:', error);
+        if (!cancelled) setSocialPeople([]);
+      } finally {
+        if (!cancelled) setLoadingSocialPeople(false);
+      }
+    };
+
+    void loadSocialPeople();
+
+    return () => {
+      cancelled = true;
     };
   }, [currentUser, supabase]);
 
@@ -250,7 +378,6 @@ export default function HomePage() {
 
   useEffect(() => {
     setMounted(true);
-    setRecentRooms(getRecentRooms());
   }, []);
 
   useEffect(() => {
@@ -270,9 +397,477 @@ export default function HomePage() {
     load();
   }, []);
 
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    let cancelled = false;
+
+    const loadPublicRooms = async () => {
+      setLoadingPublicRooms(true);
+
+      try {
+        const params = new URLSearchParams({ filter: 'for_you' });
+
+        if (currentUser && !currentUser.isGuest) {
+          params.set('actorId', currentUser.id);
+        }
+
+        const response = await fetch(`/api/rooms/discover?${params.toString()}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Impossibile caricare le stanze pubbliche');
+        }
+
+        if (!cancelled) {
+          setPublicRooms(Array.isArray(data.rooms) ? data.rooms.slice(0, 6) : []);
+        }
+      } catch (error) {
+        console.error('Public rooms load failed:', error);
+        if (!cancelled) setPublicRooms([]);
+      } finally {
+        if (!cancelled) setLoadingPublicRooms(false);
+      }
+    };
+
+    void loadPublicRooms();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, isLoading]);
+
+  useEffect(() => {
+    if (!currentUser || currentUser.isGuest) {
+      setSimilarPick(null);
+      setForYouMovies([]);
+      setRecommendationCollections({
+        from_favorites: [],
+        from_rooms: [],
+        cast_affinity: [],
+        profile_genres: [],
+      });
+      setCommunityPick(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadSuggestions = async () => {
+      setLoadingSuggestions(true);
+
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const token = session?.access_token ?? null;
+
+        const recommendationPromise = token
+          ? fetch('/api/recommendations/for-you', {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }).then(async (response) => {
+              const data = await response.json().catch(() => ({}));
+
+              if (!response.ok) {
+                throw new Error(
+                  data.error || 'Impossibile caricare i consigli personalizzati'
+                );
+              }
+
+              return data;
+            })
+          : Promise.resolve({ recommendations: [] });
+
+        const reviewsPromise = supabase.rpc('get_public_reviews', {
+          p_limit: 50,
+          p_offset: 0,
+        });
+
+        const [recommendationData, reviewsResult] = await Promise.all([
+          recommendationPromise,
+          reviewsPromise,
+        ]);
+
+        if (!cancelled) {
+          const recommendations = Array.isArray(recommendationData?.recommendations)
+            ? recommendationData.recommendations
+            : [];
+
+          setForYouMovies(recommendations.slice(0, 10));
+          setSimilarPick(recommendations[0] ?? null);
+
+          setRecommendationCollections({
+            from_favorites: Array.isArray(recommendationData?.collections?.from_favorites)
+              ? recommendationData.collections.from_favorites
+              : [],
+            from_rooms: Array.isArray(recommendationData?.collections?.from_rooms)
+              ? recommendationData.collections.from_rooms
+              : [],
+            cast_affinity: Array.isArray(recommendationData?.collections?.cast_affinity)
+              ? recommendationData.collections.cast_affinity
+              : [],
+            profile_genres: Array.isArray(recommendationData?.collections?.profile_genres)
+              ? recommendationData.collections.profile_genres
+              : [],
+          });
+
+          setRecommendationFeedback(
+            recommendationData?.feedback &&
+              typeof recommendationData.feedback === 'object'
+              ? recommendationData.feedback
+              : {}
+          );
+        }
+
+        if (!reviewsResult.error) {
+          const reviews = ((reviewsResult.data ?? []) as CommunityReview[])
+            .filter(
+              (review) =>
+                review.provider === 'tmdb' &&
+                !!review.provider_movie_id
+            )
+            .map((review) => ({
+              ...review,
+              likes_count: Number(review.likes_count ?? 0),
+            }))
+            .sort((a, b) => {
+              if (b.likes_count !== a.likes_count) {
+                return b.likes_count - a.likes_count;
+              }
+
+              return Number(b.rating ?? 0) - Number(a.rating ?? 0);
+            });
+
+          if (!cancelled) {
+            setCommunityPick(reviews[0] ?? null);
+          }
+        }
+      } catch (error) {
+        console.error('Home suggestions load failed:', error);
+
+        if (!cancelled) {
+          setSimilarPick(null);
+          setForYouMovies([]);
+          setRecommendationCollections({
+            from_favorites: [],
+            from_rooms: [],
+            cast_affinity: [],
+            profile_genres: [],
+          });
+          setCommunityPick(null);
+        }
+      } finally {
+        if (!cancelled) setLoadingSuggestions(false);
+      }
+    };
+
+    void loadSuggestions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, supabase]);
+
   const handleCreateRoom = () => router.push('/crea-stanza?tab=create');
   const handleJoinRoom = () => router.push('/crea-stanza?tab=join');
   const handleEnterRoom = (roomId: string) => router.push(`/stanza?room=${roomId}`);
+
+
+  const roomModeLabel = (room: PublicRoom) => {
+    if (room.mode === 'cinema') return 'Cinema';
+    if (room.mode === 'streaming') return 'Streaming';
+    if (room.mode === 'trending') return 'Tendenza';
+    if (room.mode === 'filter' || room.mode === 'discover') return 'Filtro';
+    return 'Stanza';
+  };
+
+  const roomModeColor = (room: PublicRoom) => {
+    if (room.mode === 'trending') return P.pink;
+    if (room.mode === 'cinema') return P.gold;
+    if (room.mode === 'streaming') return P.success;
+    if (room.mode === 'filter' || room.mode === 'discover') return P.purple;
+    return P.gold;
+  };
+
+  const favoriteDrivenMovies =
+    recommendationCollections.from_favorites.slice(0, 5);
+
+  const roomDrivenMovies =
+    recommendationCollections.from_rooms.slice(0, 5);
+
+  const actorDrivenMovies =
+    recommendationCollections.cast_affinity.slice(0, 5);
+
+  const profileGenreMovies =
+    recommendationCollections.profile_genres.slice(0, 5);
+
+  const renderMiniDiscoveryRow = (
+    title: string,
+    subtitle: string,
+    movies: RecommendationMovie[],
+    accent: string,
+  ) => {
+    if (movies.length === 0) return null;
+
+    return (
+      <section style={{ padding: '10px 20px 4px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            gap: 10,
+            marginBottom: 10,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                color: accent,
+                fontSize: 10,
+                fontWeight: 900,
+                textTransform: 'uppercase',
+                letterSpacing: '.1em',
+              }}
+            >
+              {title}
+            </div>
+            <div
+              style={{
+                color: P.textFaint,
+                fontSize: 11,
+                marginTop: 3,
+              }}
+            >
+              {subtitle}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => router.push('/per-te')}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: P.textFaint,
+              cursor: 'pointer',
+              fontFamily: FONT,
+              fontSize: 10,
+              fontWeight: 800,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: 0,
+            }}
+          >
+            Tutti
+            <ArrowRight size={10} weight="bold" />
+          </button>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            gap: 9,
+            overflowX: 'auto',
+            paddingBottom: 6,
+            scrollbarWidth: 'none',
+          }}
+        >
+          {movies.map((movie) => (
+            <button
+              key={`${title}-${movie.tmdb_id}`}
+              type="button"
+              onClick={() => router.push(`/film/${movie.tmdb_id}`)}
+              style={{
+                flex: '0 0 clamp(112px, 12vw, 136px)',
+                padding: 0,
+                border: `1px solid ${P.border}`,
+                background: P.card,
+                color: P.text,
+                textAlign: 'left',
+                cursor: 'pointer',
+                fontFamily: FONT,
+                overflow: 'hidden',
+              }}
+            >
+              {movie.cover ? (
+                <img
+                  src={movie.cover}
+                  alt={movie.title}
+                  style={{
+                    width: '100%',
+                    aspectRatio: '2 / 3',
+                    objectFit: 'cover',
+                    display: 'block',
+                    background: P.bgSoft,
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: '100%',
+                    aspectRatio: '2 / 3',
+                    background: P.bgSoft,
+                    display: 'grid',
+                    placeItems: 'center',
+                    color: P.textFaint,
+                  }}
+                >
+                  <FilmSlate size={24} weight="duotone" />
+                </div>
+              )}
+
+              <div style={{ padding: '8px 8px 9px' }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 850,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {movie.title}
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  };
+
+  const sendRecommendationFeedback = async (
+    movieId: number,
+    feedback: 'more_like_this' | 'not_for_me',
+  ) => {
+    if (!currentUser || currentUser.isGuest) return;
+
+    setFeedbackBusyId(movieId);
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const token = session?.access_token;
+      if (!token) throw new Error('Sessione non disponibile');
+
+      const isUndo = recommendationFeedback[movieId] === feedback;
+
+      const response = await fetch('/api/recommendations/feedback', {
+        method: isUndo ? 'DELETE' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(
+          isUndo
+            ? { tmdb_id: movieId }
+            : { tmdb_id: movieId, feedback },
+        ),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Impossibile salvare il feedback');
+      }
+
+      if (isUndo) {
+        setRecommendationFeedback((current) => {
+          const next = { ...current };
+          delete next[movieId];
+          return next;
+        });
+        return;
+      }
+
+      setRecommendationFeedback((current) => ({
+        ...current,
+        [movieId]: feedback,
+      }));
+
+      if (feedback === 'not_for_me') {
+        setForYouMovies((current) =>
+          current.filter((movie) => movie.tmdb_id !== movieId)
+        );
+
+        setRecommendationCollections((current) => ({
+          from_favorites: current.from_favorites.filter(
+            (movie) => movie.tmdb_id !== movieId
+          ),
+          from_rooms: current.from_rooms.filter(
+            (movie) => movie.tmdb_id !== movieId
+          ),
+          cast_affinity: current.cast_affinity.filter(
+            (movie) => movie.tmdb_id !== movieId
+          ),
+          profile_genres: current.profile_genres.filter(
+            (movie) => movie.tmdb_id !== movieId
+          ),
+        }));
+      }
+    } catch (error) {
+      console.error('Recommendation feedback failed:', error);
+    } finally {
+      setFeedbackBusyId(null);
+    }
+  };
+
+  const handleSuggestionClick = (key: typeof SUGGESTIONS[number]['key']) => {
+    if (key === 'similar') {
+      if (similarPick?.tmdb_id) {
+        router.push(`/film/${similarPick.tmdb_id}`);
+        return;
+      }
+
+      if (trending[0]?.tmdb_id) {
+        router.push(`/film/${trending[0].tmdb_id}`);
+        return;
+      }
+
+      router.push('/film');
+      return;
+    }
+
+    if (key === 'top') {
+      if (trending[0]?.tmdb_id) {
+        router.push(`/film/${trending[0].tmdb_id}`);
+        return;
+      }
+
+      router.push('/home#trending');
+      return;
+    }
+
+    if (communityPick?.provider_movie_id) {
+      router.push(`/film/${communityPick.provider_movie_id}`);
+      return;
+    }
+
+    router.push('/recensioni');
+  };
+
+  const suggestionHighlight = (key: typeof SUGGESTIONS[number]['key']) => {
+    if (loadingSuggestions && key !== 'top') return 'Caricamento…';
+
+    if (key === 'similar') {
+      if (!similarPick) return 'Scopri un film per te';
+      return similarPick.reason || similarPick.title;
+    }
+
+    if (key === 'top') {
+      return trending[0]?.title ?? 'Guarda la classifica';
+    }
+
+    return communityPick?.title ?? 'Vai alla community';
+  };
 
   const handleJoinByCode = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -319,7 +914,7 @@ export default function HomePage() {
 
           {/* ─── HERO HEADER ──────────────────────────────────────────── */}
           <div style={{
-            padding: '28px 20px 16px',
+            padding: '36px 20px 24px',
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'space-between',
@@ -354,12 +949,12 @@ export default function HomePage() {
 
               <div style={{
                 fontFamily: FONT_DISPLAY,
-                fontSize: '32px',
+                fontSize: '38px',
                 fontWeight: '800',
                 color: P.text,
                 lineHeight: 1.15,
-                marginBottom: '4px',
-                letterSpacing: '-0.02em',
+                marginBottom: '8px',
+                letterSpacing: '-0.035em',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
@@ -381,7 +976,7 @@ export default function HomePage() {
                 gap: '6px',
                 flexWrap: 'wrap',
               }}>
-                <span>Pronto per il tuo</span>
+                <span>La tua serata inizia da qui</span>
                 <span style={{
                   color: P.gold,
                   fontWeight: '700',
@@ -390,7 +985,7 @@ export default function HomePage() {
                   border: `1px solid ${P.gold}25`,
                   fontSize: '14px',
                 }}>
-                  film perfetto
+                  film, persone e serate su misura
                 </span> 
               </div>
             </div>
@@ -510,10 +1105,10 @@ export default function HomePage() {
 
               {/* ─── FEATURE PILLS (desktop) ───────────────────────────── */}
               <div className="desktop-only" style={{
-                padding: '8px 0 8px',
+                padding: '2px 0 18px',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '14px',
+                gap: '10px',
               }}>
                 {FEATURES.map((f, i) => {
                   const Icon = f.icon;
@@ -552,7 +1147,7 @@ export default function HomePage() {
                     border: '1px solid rgba(255,255,255,0.06)',
                     flexShrink: 0,
                   }}>
-                    🎬
+                    <FilmSlate size={26} color="#fff" weight="duotone" />
                   </div>
                   <div style={{ flex: 1, minWidth: '160px' }}>
                     <div style={{
@@ -594,15 +1189,625 @@ export default function HomePage() {
                 </div>
               </div>
 
+              {/* ─── CODICE STANZA (mobile) ───────────────────────────── */}
+              <div className="mobile-only" style={{ padding: '8px 20px 4px' }}>
+                <div className="ticket-card" style={{ padding: '18px 18px 20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                    <div className="how-icon"><Door size={18} color={P.pink} weight="fill" /></div>
+                    <div>
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: P.text }}>Hai un codice stanza?</div>
+                      <div style={{ fontSize: '12px', color: P.textFaint }}>Entra direttamente nella tua stanza</div>
+                    </div>
+                  </div>
+                  <form onSubmit={handleJoinByCode} style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      className="code-input"
+                      value={codeInput}
+                      onChange={(e) => { setCodeInput(e.target.value); setCodeError(''); }}
+                      placeholder="Inserisci il codice"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                    <button type="submit" className="code-submit">Entra</button>
+                  </form>
+                  {codeError && <div style={{ fontSize: '11.5px', color: P.pink, marginTop: '8px' }}>{codeError}</div>}
+                  <div className="ticket-tear" style={{ background: P.bg }} />
+                </div>
+              </div>
+
+              {/* ─── PER TE ──────────────────────────────────────────── */}
+              {!isGuest && (
+                <section style={{ padding: '22px 20px 18px', margin: '4px 0 0', background: `linear-gradient(180deg, ${P.goldGlow} 0%, transparent 100%)`, borderTop: `1px solid ${P.gold}22`, borderBottom: `1px solid ${P.border}80` }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      marginBottom: 12,
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          color: P.gold,
+                          fontSize: 10,
+                          fontWeight: 900,
+                          textTransform: 'uppercase',
+                          letterSpacing: '.12em',
+                        }}
+                      >
+                        Per te
+                      </div>
+
+                      <div
+                        style={{
+                          color: P.text,
+                          fontSize: 23,
+                          fontWeight: 900,
+                          letterSpacing: '-.02em',
+                          marginTop: 4,
+                        }}
+                      >
+                        Film scelti sui tuoi gusti
+                      </div>
+
+                      <div
+                        style={{
+                          color: P.textFaint,
+                          fontSize: 11.5,
+                          marginTop: 4,
+                        }}
+                      >
+                        Una selezione personale costruita da preferiti, voti, match e stanze.
+                      </div>
+                    </div>
+
+                    {forYouMovies.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => router.push('/per-te')}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          color: P.gold,
+                          fontSize: 10,
+                          fontWeight: 850,
+                          whiteSpace: 'nowrap',
+                          cursor: 'pointer',
+                          fontFamily: FONT,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          padding: 0,
+                        }}
+                      >
+                        Vedi tutti
+                        <ArrowRight size={11} weight="bold" />
+                      </button>
+                    )}
+                  </div>
+
+                  {loadingSuggestions ? (
+                    <div style={{ display: 'flex', gap: 12, overflowX: 'hidden' }}>
+                      {[1, 2, 3, 4, 5].map((item) => (
+                        <div
+                          key={item}
+                          className="skeleton"
+                          style={{ flex: '0 0 142px', height: 250 }}
+                        />
+                      ))}
+                    </div>
+                  ) : forYouMovies.length > 0 ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 12,
+                        overflowX: 'auto',
+                        paddingBottom: 8,
+                        scrollbarWidth: 'none',
+                        scrollSnapType: 'x proximity',
+                      }}
+                    >
+                      {forYouMovies.map((movie) => (
+                        <div
+                          key={movie.tmdb_id}
+                                                    onClick={() => router.push(`/film/${movie.tmdb_id}`)}
+                          style={{
+                            flex: '0 0 clamp(128px, 15vw, 158px)',
+                            scrollSnapAlign: 'start',
+                            padding: 0,
+                            border: `1px solid ${P.border}`,
+                            background: P.card,
+                            color: P.text,
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            fontFamily: FONT,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {movie.cover ? (
+                            <img
+                              src={movie.cover}
+                              alt={movie.title}
+                              style={{
+                                width: '100%',
+                                aspectRatio: '2 / 3',
+                                objectFit: 'cover',
+                                display: 'block',
+                                background: P.bgSoft,
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                width: '100%',
+                                aspectRatio: '2 / 3',
+                                display: 'grid',
+                                placeItems: 'center',
+                                color: P.textFaint,
+                                background: P.bgSoft,
+                              }}
+                            >
+                              <FilmSlate size={28} weight="duotone" />
+                            </div>
+                          )}
+
+                          <div style={{ padding: '10px 10px 11px' }}>
+                            <div
+                              style={{
+                                fontSize: 12,
+                                fontWeight: 850,
+                                lineHeight: 1.25,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {movie.title}
+                            </div>
+
+                            <div
+                              style={{
+                                color: P.textFaint,
+                                fontSize: 10,
+                                lineHeight: 1.35,
+                                marginTop: 5,
+                                minHeight: 27,
+                                overflow: 'hidden',
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                              }}
+                            >
+                              {movie.reason || 'Scelto per i tuoi gusti'}
+                            </div>
+
+                            <div
+                              style={{
+                                display: 'flex',
+                                gap: 6,
+                                marginTop: 8,
+                              }}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                aria-label="Più film così"
+                                title="Più film così"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void sendRecommendationFeedback(
+                                    movie.tmdb_id,
+                                    'more_like_this'
+                                  );
+                                }}
+                                disabled={feedbackBusyId === movie.tmdb_id}
+                                style={{
+                                  width: 28,
+                                  height: 26,
+                                  border: `1px solid ${
+                                    recommendationFeedback[movie.tmdb_id] ===
+                                    'more_like_this'
+                                      ? P.gold
+                                      : P.border
+                                  }`,
+                                  background:
+                                    recommendationFeedback[movie.tmdb_id] ===
+                                    'more_like_this'
+                                      ? P.goldGlow
+                                      : P.bgSoft,
+                                  color:
+                                    recommendationFeedback[movie.tmdb_id] ===
+                                    'more_like_this'
+                                      ? P.gold
+                                      : P.textFaint,
+                                  display: 'grid',
+                                  placeItems: 'center',
+                                  cursor:
+                                    feedbackBusyId === movie.tmdb_id
+                                      ? 'wait'
+                                      : 'pointer',
+                                }}
+                              >
+                                <ThumbsUp size={12} weight="duotone" />
+                              </button>
+
+                              <button
+                                type="button"
+                                aria-label="Non fa per me"
+                                title="Non fa per me"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void sendRecommendationFeedback(
+                                    movie.tmdb_id,
+                                    'not_for_me'
+                                  );
+                                }}
+                                disabled={feedbackBusyId === movie.tmdb_id}
+                                style={{
+                                  width: 28,
+                                  height: 26,
+                                  border: `1px solid ${P.border}`,
+                                  background: P.bgSoft,
+                                  color: P.textFaint,
+                                  display: 'grid',
+                                  placeItems: 'center',
+                                  cursor:
+                                    feedbackBusyId === movie.tmdb_id
+                                      ? 'wait'
+                                      : 'pointer',
+                                }}
+                              >
+                                <ThumbsDown size={12} weight="duotone" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        border: `1px dashed ${P.border}`,
+                        padding: '16px',
+                        color: P.textFaint,
+                        fontSize: 12,
+                        textAlign: 'center',
+                        background: P.bgSoft,
+                      }}
+                    >
+                      Aggiungi preferiti, vota film o fai swipe nelle stanze per ricevere consigli più personali.
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {!isGuest && !loadingSuggestions && (
+                <>
+                  {renderMiniDiscoveryRow(
+                    'Perché ti è piaciuto',
+                    'Titoli costruiti sui tuoi preferiti e sulle valutazioni più alte',
+                    favoriteDrivenMovies,
+                    P.pink,
+                  )}
+
+                  {renderMiniDiscoveryRow(
+                    'Dai tuoi match',
+                    'Film vicini a ciò che hai apprezzato durante le stanze',
+                    roomDrivenMovies,
+                    P.gold,
+                  )}
+
+                  {renderMiniDiscoveryRow(
+                    'Cast che torna nei tuoi gusti',
+                    'Titoli con attori ricorrenti nei film che ami',
+                    actorDrivenMovies,
+                    P.success,
+                  )}
+
+                  {renderMiniDiscoveryRow(
+                    'Dai generi che hai scelto',
+                    'Un punto di partenza mentre TinderFilm impara meglio i tuoi gusti',
+                    profileGenreMovies,
+                    P.purple,
+                  )}
+                </>
+              )}
+
+              {/* ─── PERSONE AFFINI / SOCIAL ───────────────────────── */}
+              {!isGuest && (
+                <section style={{ padding: '22px 20px 20px', margin: '12px 20px 4px', background: P.bgSoft, border: `1px solid ${P.border}`, boxShadow: `0 14px 36px rgba(0,0,0,${isDark ? 0.16 : 0.05})` }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      marginBottom: 12,
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 7,
+                          color: P.pink,
+                          fontSize: 10,
+                          fontWeight: 900,
+                          textTransform: 'uppercase',
+                          letterSpacing: '.12em',
+                        }}
+                      >
+                        <UsersThree size={14} weight="fill" />
+                        La tua community
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: FONT_DISPLAY,
+                          color: P.text,
+                          fontSize: 21,
+                          fontWeight: 800,
+                          marginTop: 3,
+                        }}
+                      >
+                        La tua cerchia CineDate
+                      </div>
+                      <div style={{ color: P.textFaint, fontSize: 12, marginTop: 3 }}>
+                        Compatibilità calcolata da preferiti, voti alti e generi che avete in comune.
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => router.push('/persone')}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: P.gold,
+                        fontFamily: FONT,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Vedi persone <ArrowRight size={12} weight="bold" />
+                    </button>
+                  </div>
+
+                  {loadingSocialPeople ? (
+                    <div
+                      style={{
+                        border: `1px dashed ${P.border}`,
+                        background: P.bgSoft,
+                        color: P.textFaint,
+                        padding: 18,
+                        fontSize: 12,
+                        textAlign: 'center',
+                      }}
+                    >
+                      Cerco persone con gusti simili ai tuoi…
+                    </div>
+                  ) : socialPeople.length > 0 ? (
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                        gap: 10,
+                      }}
+                    >
+                      {socialPeople.map((person) => {
+                        const commonSignal = (person.shared_favorites_count ?? 0) > 0
+                          ? `${person.shared_favorites_count} preferiti in comune`
+                          : (person.shared_high_ratings_count ?? 0) > 0
+                            ? `${person.shared_high_ratings_count} film amati da entrambi`
+                            : `${person.shared_genres_count ?? 0} gusti in comune`;
+
+                        return (
+                          <button
+                            key={person.user_id}
+                            type="button"
+                            onClick={() => router.push(`/utente/${encodeURIComponent(person.username)}`)}
+                            style={{
+                              border: `1px solid ${P.border}`,
+                              background: P.card,
+                              color: P.text,
+                              padding: 13,
+                              fontFamily: FONT,
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              gap: 11,
+                              minWidth: 0,
+                              transition: 'transform .2s ease, border-color .2s ease, background .2s ease',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.transform = 'translateY(-2px)';
+                              e.currentTarget.style.borderColor = `${P.pink}70`;
+                              e.currentTarget.style.background = P.cardHover;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'translateY(0)';
+                              e.currentTarget.style.borderColor = P.border;
+                              e.currentTarget.style.background = P.card;
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 42,
+                                height: 42,
+                                flexShrink: 0,
+                                borderRadius: '50%',
+                                overflow: 'hidden',
+                                border: `1px solid ${P.border}`,
+                                background: P.bgSoft,
+                                display: 'grid',
+                                placeItems: 'center',
+                                color: P.gold,
+                                fontWeight: 900,
+                              }}
+                            >
+                              {person.avatar_url ? (
+                                <img
+                                  src={person.avatar_url}
+                                  alt=""
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                person.username?.charAt(0).toUpperCase() || '?'
+                              )}
+                            </div>
+
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: 8,
+                                }}
+                              >
+                                <strong
+                                  style={{
+                                    fontSize: 13,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  @{person.username}
+                                </strong>
+                                <span
+                                  style={{
+                                    border: `1px solid ${P.gold}55`,
+                                    background: P.goldGlow,
+                                    color: P.gold,
+                                    padding: '3px 6px',
+                                    fontSize: 9,
+                                    fontWeight: 900,
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  {person.compatibility_score ?? 0}% affinità
+                                </span>
+                              </div>
+
+                              <div style={{ color: P.textFaint, fontSize: 10.5, marginTop: 4 }}>
+                                {commonSignal}
+                              </div>
+
+                              {(person.shared_genres?.length ?? 0) > 0 && (
+                                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 7 }}>
+                                  {person.shared_genres?.slice(0, 2).map((genre) => (
+                                    <span
+                                      key={`${person.user_id}-${genre}`}
+                                      style={{
+                                        border: `1px solid ${P.border}`,
+                                        background: P.bgSoft,
+                                        color: P.textMuted,
+                                        padding: '2px 5px',
+                                        fontSize: 8.5,
+                                        fontWeight: 750,
+                                      }}
+                                    >
+                                      {genre}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => router.push('/persone')}
+                      style={{
+                        width: '100%',
+                        border: `1px dashed ${P.border}`,
+                        background: P.bgSoft,
+                        color: P.textMuted,
+                        padding: 16,
+                        fontFamily: FONT,
+                        fontSize: 12,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Continua a votare film e aggiungere preferiti: useremo i tuoi gusti per trovare persone compatibili.
+                    </button>
+                  )}
+
+                  <div
+                    style={{
+                      marginTop: 10,
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                      gap: 10,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => router.push('/recensioni')}
+                      style={{
+                        border: `1px solid ${P.border}`,
+                        background: P.card,
+                        color: P.text,
+                        padding: '11px 12px',
+                        fontFamily: FONT,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <span>Recensioni della community</span>
+                      <Heart size={14} color={P.pink} weight="fill" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => router.push('/notifiche')}
+                      style={{
+                        border: `1px solid ${P.border}`,
+                        background: P.card,
+                        color: P.text,
+                        padding: '11px 12px',
+                        fontFamily: FONT,
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <span>{unreadNotifications > 0 ? `${unreadNotifications} notifiche da vedere` : 'Attività e notifiche'}</span>
+                      <Bell size={14} color={unreadNotifications > 0 ? P.pink : P.gold} weight={unreadNotifications > 0 ? 'fill' : 'regular'} />
+                    </button>
+                  </div>
+                </section>
+              )}
+
               {/* ─── TRENDING MOVIES ──────────────────────────────────── */}
-              <div style={{ padding: '18px 20px 6px' }}>
+              <div id="trending" style={{ padding: '26px 20px 8px' }}>
                 <div className="section-header">
                   <span className="section-title">
                     <span className="accent-line" />
                     <Star size={17} color={P.gold} weight="fill" />
-                    In tendenza questa settimana
+                    In tendenza adesso
                   </span>
-                  <button className="section-link">Vedi tutti <ArrowRight size={13} /></button>
+                  <button className="section-link" onClick={() => router.push('/esplora?tab=trending')}>Vedi tutti <ArrowRight size={13} /></button>
                 </div>
 
                 {loadingTrending ? (
@@ -692,44 +1897,18 @@ export default function HomePage() {
                 )}
               </div>
 
-              {/* ─── CODICE STANZA (mobile) ───────────────────────────── */}
-              <div className="mobile-only" style={{ padding: '8px 20px 4px' }}>
-                <div className="ticket-card" style={{ padding: '18px 18px 20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                    <div className="how-icon"><Door size={18} color={P.pink} weight="fill" /></div>
-                    <div>
-                      <div style={{ fontSize: '14px', fontWeight: '700', color: P.text }}>Hai un codice stanza?</div>
-                      <div style={{ fontSize: '12px', color: P.textFaint }}>Entra direttamente nella tua stanza</div>
-                    </div>
-                  </div>
-                  <form onSubmit={handleJoinByCode} style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      className="code-input"
-                      value={codeInput}
-                      onChange={(e) => { setCodeInput(e.target.value); setCodeError(''); }}
-                      placeholder="Inserisci il codice"
-                      autoCapitalize="characters"
-                      autoCorrect="off"
-                      spellCheck={false}
-                    />
-                    <button type="submit" className="code-submit">Entra</button>
-                  </form>
-                  {codeError && <div style={{ fontSize: '11.5px', color: P.pink, marginTop: '8px' }}>{codeError}</div>}
-                  <div className="ticket-tear" style={{ background: P.bg }} />
-                </div>
-              </div>
 
               {/* ─── SPUNTI PER TE ────────────────────────────────────── */}
-              <div style={{ padding: '16px 20px 4px' }}>
+              <div style={{ padding: '24px 20px 8px' }}>
                 <div className="section-header">
                   <div>
                     <span className="section-title">
                       <span className="accent-line" />
                       <Sparkle size={17} color={P.gold} weight="fill" />
-                      Spunti per te
+                      Esplora ancora
                     </span>
                     <div style={{ fontSize: '12.5px', color: P.textFaint, marginTop: '2px' }}>
-                      Scopri nuove idee in base ai tuoi gusti
+                      Quando vuoi esplorare oltre i tuoi consigli
                     </div>
                   </div> 
                 </div>
@@ -737,17 +1916,45 @@ export default function HomePage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '14px' }}>
                   {SUGGESTIONS.map((s, i) => {
                     const Icon = s.icon;
+                    const highlight = suggestionHighlight(s.key);
+
                     return (
-                      <div key={s.title} className={`suggestion-card animate-in animate-in-delay-${i + 1}`}>
-                        <div className="suggestion-icon"><Icon size={19} color={P.pink} weight="fill" /></div>
+                      <button
+                        key={s.title}
+                        type="button"
+                        className={`suggestion-card animate-in animate-in-delay-${i + 1}`}
+                        onClick={() => handleSuggestionClick(s.key)}
+                        style={{
+                          textAlign: 'left',
+                          fontFamily: FONT,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div className="suggestion-icon">
+                          <Icon size={19} color={P.pink} weight="fill" />
+                        </div>
                         <div>
                           <div className="suggestion-title">{s.title}</div>
                           <div className="suggestion-desc">{s.desc}</div>
+                          <div
+                            style={{
+                              color: P.gold,
+                              fontSize: '11.5px',
+                              fontWeight: 750,
+                              marginTop: '6px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              maxWidth: 260,
+                            }}
+                          >
+                            {highlight}
+                          </div>
                         </div>
                         <span className="suggestion-more">
-                          Scopri di più <ArrowRight size={12} weight="bold" />
+                          Apri <ArrowRight size={12} weight="bold" />
                         </span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -801,7 +2008,7 @@ export default function HomePage() {
                     flexShrink: 0,
                     border: '1px solid rgba(255,255,255,0.04)',
                   }}>
-                    🍿
+                    <FilmStrip size={26} color="#fff" weight="duotone" />
                   </div>
                   <div style={{ flex: 1, minWidth: '200px' }}>
                     <div style={{
@@ -812,7 +2019,7 @@ export default function HomePage() {
                       marginBottom: '4px',
                       letterSpacing: '-0.01em',
                     }}>
-                      Il cinema è meglio insieme
+                      Scegliete insieme
                     </div>
                     <div style={{
                       fontSize: '13px',
@@ -821,7 +2028,7 @@ export default function HomePage() {
                       marginBottom: '14px',
                       maxWidth: '460px',
                     }}>
-                      Crea una stanza, invita i tuoi amici e iniziate subito a guardare qualcosa di straordinario.
+                      Crea una stanza e trasforma i gusti in una serata da condividere.
                     </div>
                     <button
                       onClick={handleCreateRoom}
@@ -924,63 +2131,157 @@ export default function HomePage() {
               </button>
 
               <div className="ticket-card" style={{ padding: '16px' }}>
-                <div style={{
-                  fontSize: '13.5px',
-                  fontWeight: '700',
-                  color: P.text,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginBottom: '12px',
-                  letterSpacing: '-0.01em',
-                }}>
-                  <Clock size={16} color={P.gold} weight="fill" />
-                  Stanze recenti
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    marginBottom: '12px',
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: '13.5px',
+                      fontWeight: '700',
+                      color: P.text,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      letterSpacing: '-0.01em',
+                    }}
+                  >
+                    <UsersThree size={16} color={P.gold} weight="fill" />
+                    Stanze pubbliche
+                  </div>
+
+                  {!loadingPublicRooms && publicRooms.length > 0 && (
+                    <span
+                      style={{
+                        color: P.textFaint,
+                        fontSize: 10,
+                        fontWeight: 800,
+                      }}
+                    >
+                      {publicRooms.length} online
+                    </span>
+                  )}
                 </div>
 
-                {recentRooms.length === 0 ? (
-                  <div style={{
-                    fontSize: '12px',
-                    color: P.textFaint,
-                    textAlign: 'center',
-                    padding: '12px 0',
-                    fontStyle: 'italic',
-                  }}>
-                    Nessuna stanza recente
+                {loadingPublicRooms ? (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {[1, 2, 3].map((item) => (
+                      <div
+                        key={item}
+                        className="skeleton"
+                        style={{ height: 58, width: '100%' }}
+                      />
+                    ))}
+                  </div>
+                ) : publicRooms.length === 0 ? (
+                  <div
+                    style={{
+                      fontSize: '12px',
+                      color: P.textFaint,
+                      textAlign: 'center',
+                      padding: '14px 4px',
+                    }}
+                  >
+                    Nessuna stanza pubblica disponibile adesso
                   </div>
                 ) : (
                   <>
-                    {recentRooms.slice(0, 4).map((room) => (
-                      <div key={room.id} className="room-card" onClick={() => handleEnterRoom(room.id)}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <div style={{
-                            width: '28px',
-                            height: '28px',
-                            background: P.pink + '18',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}>
-                            <FilmSlate size={14} color={P.pink} weight="fill" />
+                    {publicRooms.slice(0, 4).map((room) => {
+                      const participants = Number(room.participant_count ?? 0);
+                      const maxMembers = Number(room.max_members ?? 2);
+                      const modeColor = roomModeColor(room);
+
+                      return (
+                        <div
+                          key={room.id}
+                          className="room-card"
+                          onClick={() => handleEnterRoom(room.id)}
+                        >
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 7,
+                                minWidth: 0,
+                              }}
+                            >
+                              <div
+                                style={{
+                                  width: 28,
+                                  height: 28,
+                                  background: `${modeColor}18`,
+                                  border: `1px solid ${modeColor}35`,
+                                  display: 'grid',
+                                  placeItems: 'center',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <UsersThree size={14} color={modeColor} weight="fill" />
+                              </div>
+
+                              <div style={{ minWidth: 0 }}>
+                                <div
+                                  style={{
+                                    fontSize: 11.5,
+                                    fontWeight: 800,
+                                    color: P.text,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  <span style={{ color: modeColor }}>
+                                    {roomModeLabel(room)}
+                                  </span>
+                                  <span style={{ color: P.textFaint }}> · </span>
+                                  <span>{room.host_name || 'Utente'}</span>
+                                </div>
+
+                                <div
+                                  style={{
+                                    color: P.textFaint,
+                                    fontSize: 10,
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  {participants}/{maxMembers} partecipanti
+                                  {room.city ? ` · ${room.city}` : ''}
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <span style={{
-                            fontSize: '12px',
-                            fontWeight: '700',
-                            fontFamily: FONT_MONO,
-                            letterSpacing: '1px',
-                            color: P.text,
-                          }}>
-                            {room.id}
-                          </span>
+
+                          <button
+                            type="button"
+                            className="btn-enter"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleEnterRoom(room.id);
+                            }}
+                          >
+                            Entra
+                          </button>
                         </div>
-                        <button className="btn-enter">Entra</button>
-                      </div>
-                    ))}
-                    <button className="section-link" style={{ marginTop: '6px', fontSize: '12px' }}>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      className="section-link"
+                      onClick={() => router.push('/stanze')}
+                      style={{ marginTop: '8px', fontSize: '12px' }}
+                    >
                       Vedi tutte le stanze <ArrowRight size={12} />
                     </button>
                   </>
                 )}
+
                 <div className="ticket-tear" style={{ background: P.bg }} />
               </div>
 
@@ -992,7 +2293,7 @@ export default function HomePage() {
                   color: '#fff',
                 }}>
                   <div style={{ fontSize: '15px', fontWeight: '800', fontFamily: FONT_DISPLAY, marginBottom: '4px' }}>
-                    Registrati 🚀
+                    Registrati
                   </div>
                   <div style={{ fontSize: '12px', opacity: 0.85, lineHeight: 1.5, marginBottom: '14px' }}>
                     Salva i match e scrivi recensioni.
@@ -1031,7 +2332,7 @@ export default function HomePage() {
                 color: '#fff',
               }}>
                 <div style={{ fontSize: '16px', fontWeight: '800', fontFamily: FONT_DISPLAY, marginBottom: '4px' }}>
-                  Registrati per fare di più 🚀
+                  Registrati per fare di più
                 </div>
                 <div style={{ fontSize: '13px', opacity: 0.85, lineHeight: 1.5, marginBottom: '14px' }}>
                   Salva i match, scrivi recensioni e accedi alle stanze recenti.

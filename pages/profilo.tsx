@@ -30,10 +30,12 @@ import {
   ShieldCheck,
   WarningCircle,
   SignOut,
-  Trash,
   Star,
   User,
   Warning,
+  Sparkle,
+  ArrowRight,
+  TrendUp,
 } from '@phosphor-icons/react';
 
 const D = {
@@ -107,6 +109,33 @@ type MovieEntryRow = {
   watched_on: string | null;
   updated_at: string;
   movie_catalog: CatalogMovie | CatalogMovie[] | null;
+};
+
+
+type TasteMeta = {
+  personalized: boolean;
+  seeds_used: number;
+  positive_signals: number;
+  excluded_movies: number;
+  negative_genres?: number;
+  taste_genres?: number;
+  taste_actors?: number;
+  top_genres?: Array<{
+    id: number;
+    name: string;
+    weight: number;
+  }>;
+  top_actors?: Array<{
+    id: number;
+    name: string;
+    weight: number;
+  }>;
+};
+
+type TasteRecommendation = {
+  tmdb_id: number;
+  title: string;
+  reason: string;
 };
 
 const GENRES = [
@@ -193,20 +222,80 @@ export default function ProfiloPage() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   const [movieEntries, setMovieEntries] = useState<MovieEntryRow[]>([]);
+  const [tasteMeta, setTasteMeta] = useState<TasteMeta | null>(null);
+  const [tastePreview, setTastePreview] = useState<TasteRecommendation[]>([]);
+  const [tasteLoading, setTasteLoading] = useState(true);
 
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-
-  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
-  const [deleteAccountStep, setDeleteAccountStep] = useState<1 | 2>(1);
-  const [deleteAccountConfirmation, setDeleteAccountConfirmation] =
-    useState('');
-  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (isLoading) return;
     if (!currentUser || isGuest) router.replace('/auth');
   }, [currentUser, isGuest, isLoading, router]);
+
+
+  useEffect(() => {
+    if (!currentUser || currentUser.isGuest) {
+      setTasteMeta(null);
+      setTastePreview([]);
+      setTasteLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadTasteProfile = async () => {
+      setTasteLoading(true);
+
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const token = session?.access_token;
+        if (!token) throw new Error('Sessione non disponibile');
+
+        const response = await fetch('/api/recommendations/for-you', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(
+            data.error || 'Impossibile caricare il profilo gusti'
+          );
+        }
+
+        if (!cancelled) {
+          setTasteMeta(data.meta ?? null);
+          setTastePreview(
+            Array.isArray(data.recommendations)
+              ? data.recommendations.slice(0, 3)
+              : []
+          );
+        }
+      } catch (err) {
+        console.error('Taste profile load failed:', err);
+
+        if (!cancelled) {
+          setTasteMeta(null);
+          setTastePreview([]);
+        }
+      } finally {
+        if (!cancelled) setTasteLoading(false);
+      }
+    };
+
+    void loadTasteProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, supabase]);
 
   useEffect(() => {
     if (!currentUser || currentUser.isGuest) return;
@@ -653,82 +742,6 @@ export default function ProfiloPage() {
     }
   };
 
-  const closeDeleteAccount = () => {
-    if (deletingAccount) return;
-
-    setDeleteAccountOpen(false);
-    setDeleteAccountStep(1);
-    setDeleteAccountConfirmation('');
-  };
-
-  const deleteAccountPermanently = async () => {
-    if (!currentUser || currentUser.isGuest || deletingAccount) return;
-
-    if (deleteAccountConfirmation.trim() !== username.trim()) {
-      setError(
-        'Per confermare devi scrivere esattamente il tuo username.'
-      );
-      return;
-    }
-
-    const finalConfirmed = window.confirm(
-      'ULTIMA CONFERMA: eliminare definitivamente il tuo account? Tutti i dati verranno persi e non potranno essere recuperati.'
-    );
-
-    if (!finalConfirmed) return;
-
-    setDeletingAccount(true);
-    setError('');
-    setMessage('');
-
-    try {
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
-
-      if (sessionError) throw sessionError;
-
-      if (!session?.access_token) {
-        throw new Error(
-          'Sessione non valida. Accedi di nuovo e riprova.'
-        );
-      }
-
-      const response = await fetch('/api/account/delete', {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      const result = (await response.json()) as {
-        success?: boolean;
-        error?: string;
-      };
-
-      if (!response.ok || !result.success) {
-        throw new Error(
-          result.error ||
-            'Impossibile eliminare definitivamente l’account.'
-        );
-      }
-
-      await signOut();
-      await router.replace('/auth');
-    } catch (err: unknown) {
-      console.error('Delete account failed:', err);
-
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Impossibile eliminare definitivamente l’account.'
-      );
-
-      setDeletingAccount(false);
-    }
-  };
-
   const handleLogout = async () => {
     await signOut();
   };
@@ -1002,6 +1015,366 @@ export default function ProfiloPage() {
 
           {activeTab === 'attivita' && (
             <div style={{ display: 'grid', gap: 16 }}>
+              <section
+                style={{
+                  background: P.card,
+                  border: `1px solid ${P.border}`,
+                  padding: 20,
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: 3,
+                    background: P.gold,
+                  }}
+                />
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    justifyContent: 'space-between',
+                    gap: 16,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div
+                      style={{
+                        color: P.gold,
+                        fontSize: 10,
+                        fontWeight: 900,
+                        textTransform: 'uppercase',
+                        letterSpacing: '.11em',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <Sparkle size={14} weight="fill" />
+                      I tuoi gusti
+                    </div>
+
+                    <div
+                      style={{
+                        color: P.text,
+                        fontFamily: FONT_DISPLAY,
+                        fontSize: 24,
+                        fontWeight: 800,
+                        marginTop: 6,
+                      }}
+                    >
+                      Il tuo profilo cinematografico
+                    </div>
+
+                    <div
+                      style={{
+                        color: P.textMuted,
+                        fontSize: 12,
+                        lineHeight: 1.5,
+                        marginTop: 6,
+                        maxWidth: 620,
+                      }}
+                    >
+                      TinderFilm usa preferiti, voti, match, swipe e film scelti nelle stanze per capire cosa proporti.
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => router.push('/per-te')}
+                    style={{
+                      border: `1px solid ${P.gold}`,
+                      background: P.goldGlow,
+                      color: P.gold,
+                      padding: '9px 11px',
+                      cursor: 'pointer',
+                      fontFamily: FONT_SANS,
+                      fontSize: 11,
+                      fontWeight: 850,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    Vedi il tuo Per te
+                    <ArrowRight size={13} weight="bold" />
+                  </button>
+                </div>
+
+                {tasteLoading ? (
+                  <div
+                    style={{
+                      marginTop: 16,
+                      color: P.textFaint,
+                      fontSize: 12,
+                    }}
+                  >
+                    Sto leggendo i tuoi gusti...
+                  </div>
+                ) : tasteMeta ? (
+                  <>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns:
+                          'repeat(auto-fit,minmax(130px,1fr))',
+                        gap: 8,
+                        marginTop: 16,
+                      }}
+                    >
+                      {[
+                        {
+                          label: 'Segnali forti',
+                          value: tasteMeta.seeds_used,
+                          color: P.pink,
+                        },
+                        {
+                          label: 'Generi capiti',
+                          value: tasteMeta.taste_genres ?? 0,
+                          color: P.gold,
+                        },
+                        {
+                          label: 'Attori ricorrenti',
+                          value: tasteMeta.taste_actors ?? 0,
+                          color: P.success,
+                        },
+                        {
+                          label: 'Film già considerati',
+                          value: tasteMeta.excluded_movies,
+                          color: P.textMuted,
+                        },
+                      ].map((item) => (
+                        <div
+                          key={item.label}
+                          style={{
+                            border: `1px solid ${P.border}`,
+                            background: P.bgSoft,
+                            padding: 12,
+                          }}
+                        >
+                          <div
+                            style={{
+                              color: item.color,
+                              fontFamily: FONT_MONO,
+                              fontSize: 20,
+                              fontWeight: 900,
+                            }}
+                          >
+                            {item.value}
+                          </div>
+                          <div
+                            style={{
+                              color: P.textFaint,
+                              fontSize: 10,
+                              marginTop: 4,
+                            }}
+                          >
+                            {item.label}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {((tasteMeta.top_genres?.length ?? 0) > 0 ||
+                      (tasteMeta.top_actors?.length ?? 0) > 0) && (
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns:
+                            'repeat(auto-fit,minmax(220px,1fr))',
+                          gap: 10,
+                          marginTop: 14,
+                        }}
+                      >
+                        {(tasteMeta.top_genres?.length ?? 0) > 0 && (
+                          <div
+                            style={{
+                              border: `1px solid ${P.border}`,
+                              background: P.bgSoft,
+                              padding: 12,
+                            }}
+                          >
+                            <div
+                              style={{
+                                color: P.textFaint,
+                                fontSize: 10,
+                                textTransform: 'uppercase',
+                                letterSpacing: '.08em',
+                                fontWeight: 850,
+                              }}
+                            >
+                              Generi che tornano di più
+                            </div>
+
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 6,
+                                marginTop: 9,
+                              }}
+                            >
+                              {tasteMeta.top_genres?.map((genre, index) => (
+                                <span
+                                  key={genre.id}
+                                  style={{
+                                    border: `1px solid ${
+                                      index === 0 ? P.gold : P.border
+                                    }`,
+                                    background:
+                                      index === 0 ? P.goldGlow : P.card,
+                                    color:
+                                      index === 0 ? P.gold : P.textMuted,
+                                    padding: '6px 8px',
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                  }}
+                                >
+                                  {genre.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {(tasteMeta.top_actors?.length ?? 0) > 0 && (
+                          <div
+                            style={{
+                              border: `1px solid ${P.border}`,
+                              background: P.bgSoft,
+                              padding: 12,
+                            }}
+                          >
+                            <div
+                              style={{
+                                color: P.textFaint,
+                                fontSize: 10,
+                                textTransform: 'uppercase',
+                                letterSpacing: '.08em',
+                                fontWeight: 850,
+                              }}
+                            >
+                              Attori ricorrenti
+                            </div>
+
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 6,
+                                marginTop: 9,
+                              }}
+                            >
+                              {tasteMeta.top_actors?.map((actor, index) => (
+                                <span
+                                  key={actor.id}
+                                  style={{
+                                    border: `1px solid ${
+                                      index === 0 ? P.pink : P.border
+                                    }`,
+                                    background:
+                                      index === 0 ? P.pinkGlow : P.card,
+                                    color:
+                                      index === 0 ? P.pink : P.textMuted,
+                                    padding: '6px 8px',
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                  }}
+                                >
+                                  {actor.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {tastePreview.length > 0 && (
+                      <div
+                        style={{
+                          marginTop: 14,
+                          borderTop: `1px solid ${P.border}`,
+                          paddingTop: 12,
+                        }}
+                      >
+                        <div
+                          style={{
+                            color: P.textFaint,
+                            fontSize: 10,
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            letterSpacing: '.08em',
+                            marginBottom: 8,
+                          }}
+                        >
+                          Alcuni consigli per te
+                        </div>
+
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: 8,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          {tastePreview.map((movie) => (
+                            <button
+                              key={movie.tmdb_id}
+                              type="button"
+                              onClick={() =>
+                                router.push(`/film/${movie.tmdb_id}`)
+                              }
+                              style={{
+                                border: `1px solid ${P.border}`,
+                                background: P.bgSoft,
+                                color: P.text,
+                                padding: '8px 10px',
+                                cursor: 'pointer',
+                                fontFamily: FONT_SANS,
+                                fontSize: 11,
+                                fontWeight: 750,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                              }}
+                              title={movie.reason}
+                            >
+                              <TrendUp
+                                size={13}
+                                color={P.gold}
+                                weight="duotone"
+                              />
+                              {movie.title}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div
+                    style={{
+                      marginTop: 16,
+                      border: `1px dashed ${P.border}`,
+                      background: P.bgSoft,
+                      padding: 14,
+                      color: P.textMuted,
+                      fontSize: 12,
+                    }}
+                  >
+                    Usa preferiti, voti e stanze per costruire il tuo profilo gusti.
+                  </div>
+                )}
+              </section>
+
               <div
                 style={{
                   display: 'grid',
@@ -2265,63 +2638,7 @@ export default function ProfiloPage() {
                     </div>
                   </div>
 
-                                    <button
-                    type="button"
-                    onClick={() =>
-                      router.push('/admin')
-                    }
-                    style={{
-                      width: '100%',
-                      border: `1px solid ${P.gold}`,
-                      background: P.goldGlow,
-                      color: P.text,
-                      padding: '14px 16px',
-                      marginBottom: 8,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      fontFamily: FONT_SANS,
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 800,
-                          marginBottom: 3,
-                          color: P.text,
-                        }}
-                      >
-                        Dashboard moderazione
-                      </div>
-
-                      <div
-                        style={{
-                          color: P.textMuted,
-                          fontSize: 10,
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        Panoramica di segnalazioni, ricorsi e sospensioni.
-                      </div>
-                    </div>
-
-                    <span
-                      style={{
-                        color: P.gold,
-                        fontSize: 20,
-                        lineHeight: 1,
-                        flexShrink: 0,
-                      }}
-                    >
-                      ›
-                    </span>
-                  </button>
-
-<button
+                  <button
                     type="button"
                     onClick={() =>
                       router.push('/admin/segnalazioni')
@@ -2562,114 +2879,6 @@ export default function ProfiloPage() {
               <section
                 style={{
                   background: P.card,
-                  border: `1px solid ${P.error}45`,
-                  padding: 22,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 9,
-                    marginBottom: 16,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 34,
-                      height: 34,
-                      display: 'grid',
-                      placeItems: 'center',
-                      background: 'rgba(239,68,68,.10)',
-                      color: P.error,
-                    }}
-                  >
-                    <Trash size={17} weight="fill" />
-                  </div>
-
-                  <div>
-                    <h2
-                      style={{
-                        margin: 0,
-                        color: P.text,
-                        fontFamily: FONT_DISPLAY,
-                        fontSize: 18,
-                      }}
-                    >
-                      Zona pericolosa
-                    </h2>
-
-                    <div
-                      style={{
-                        color: P.textFaint,
-                        fontSize: 10,
-                        marginTop: 2,
-                      }}
-                    >
-                      Azioni permanenti sul tuo account.
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    border: `1px solid ${P.error}35`,
-                    background: 'rgba(239,68,68,.06)',
-                    padding: 14,
-                  }}
-                >
-                  <div
-                    style={{
-                      color: P.text,
-                      fontSize: 12,
-                      fontWeight: 800,
-                    }}
-                  >
-                    Elimina account definitivamente
-                  </div>
-
-                  <p
-                    style={{
-                      margin: '5px 0 12px',
-                      color: P.textMuted,
-                      fontSize: 10,
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    Verranno eliminati definitivamente il tuo profilo,
-                    libreria, recensioni, voti, commenti, like, follow,
-                    blocchi, notifiche e gli altri dati collegati
-                    all'account. L'operazione non può essere annullata.
-                  </p>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDeleteAccountStep(1);
-                      setDeleteAccountConfirmation('');
-                      setDeleteAccountOpen(true);
-                      setError('');
-                      setMessage('');
-                    }}
-                    style={{
-                      border: `1px solid ${P.error}`,
-                      background: 'transparent',
-                      color: P.error,
-                      padding: '10px 13px',
-                      cursor: 'pointer',
-                      fontFamily: FONT_SANS,
-                      fontSize: 10,
-                      fontWeight: 900,
-                    }}
-                  >
-                    Elimina il mio account
-                  </button>
-                </div>
-              </section>
-
-              <section
-                style={{
-                  background: P.card,
                   border: `1px solid ${P.error}35`,
                   padding: 22,
                 }}
@@ -2757,256 +2966,6 @@ export default function ProfiloPage() {
             </div>
           )}
         </div>
-
-        {deleteAccountOpen && (
-          <div
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) {
-                closeDeleteAccount();
-              }
-            }}
-            style={{
-              position: 'fixed',
-              inset: 0,
-              zIndex: 1000,
-              background: 'rgba(0,0,0,.72)',
-              display: 'grid',
-              placeItems: 'center',
-              padding: 18,
-            }}
-          >
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-label="Elimina account"
-              style={{
-                width: 'min(500px,100%)',
-                border: `1px solid ${P.error}55`,
-                background: P.card,
-                color: P.text,
-                padding: 20,
-                boxShadow: '0 26px 80px rgba(0,0,0,.48)',
-              }}
-            >
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  display: 'grid',
-                  placeItems: 'center',
-                  background: 'rgba(239,68,68,.10)',
-                  color: P.error,
-                  marginBottom: 12,
-                }}
-              >
-                <Trash size={23} weight="fill" />
-              </div>
-
-              {deleteAccountStep === 1 ? (
-                <>
-                  <div
-                    style={{
-                      color: P.error,
-                      fontSize: 9,
-                      fontWeight: 900,
-                      textTransform: 'uppercase',
-                      letterSpacing: '.08em',
-                    }}
-                  >
-                    Prima conferma
-                  </div>
-
-                  <h2
-                    style={{
-                      margin: '5px 0 8px',
-                      fontFamily: FONT_DISPLAY,
-                      fontSize: 23,
-                    }}
-                  >
-                    Vuoi davvero eliminare il tuo account?
-                  </h2>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      color: P.textMuted,
-                      fontSize: 11,
-                      lineHeight: 1.65,
-                    }}
-                  >
-                    Questa operazione è definitiva. Perderai profilo,
-                    libreria, Preferiti, Watchlist, Visti, recensioni,
-                    voti, commenti, like, follow e gli altri dati
-                    associati al tuo account.
-                  </p>
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: 8,
-                      marginTop: 18,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      onClick={closeDeleteAccount}
-                      style={{
-                        border: `1px solid ${P.border}`,
-                        background: P.bgSoft,
-                        color: P.textMuted,
-                        padding: '11px 12px',
-                        cursor: 'pointer',
-                        fontFamily: FONT_SANS,
-                        fontWeight: 800,
-                      }}
-                    >
-                      Annulla
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setDeleteAccountStep(2)}
-                      style={{
-                        border: `1px solid ${P.error}`,
-                        background: P.error,
-                        color: '#fff',
-                        padding: '11px 12px',
-                        cursor: 'pointer',
-                        fontFamily: FONT_SANS,
-                        fontWeight: 900,
-                      }}
-                    >
-                      Continua
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div
-                    style={{
-                      color: P.error,
-                      fontSize: 9,
-                      fontWeight: 900,
-                      textTransform: 'uppercase',
-                      letterSpacing: '.08em',
-                    }}
-                  >
-                    Conferma definitiva
-                  </div>
-
-                  <h2
-                    style={{
-                      margin: '5px 0 8px',
-                      fontFamily: FONT_DISPLAY,
-                      fontSize: 23,
-                    }}
-                  >
-                    Scrivi il tuo username
-                  </h2>
-
-                  <p
-                    style={{
-                      margin: 0,
-                      color: P.textMuted,
-                      fontSize: 11,
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    Per continuare scrivi esattamente{' '}
-                    <strong style={{ color: P.text }}>
-                      {username}
-                    </strong>
-                    .
-                  </p>
-
-                  <input
-                    value={deleteAccountConfirmation}
-                    disabled={deletingAccount}
-                    autoComplete="off"
-                    spellCheck={false}
-                    onChange={(event) =>
-                      setDeleteAccountConfirmation(event.target.value)
-                    }
-                    placeholder={username}
-                    style={{
-                      ...inputStyle,
-                      marginTop: 13,
-                      borderColor:
-                        deleteAccountConfirmation &&
-                        deleteAccountConfirmation !== username
-                          ? P.error
-                          : P.border,
-                    }}
-                  />
-
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 1fr',
-                      gap: 8,
-                      marginTop: 16,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      disabled={deletingAccount}
-                      onClick={() => {
-                        setDeleteAccountStep(1);
-                        setDeleteAccountConfirmation('');
-                      }}
-                      style={{
-                        border: `1px solid ${P.border}`,
-                        background: P.bgSoft,
-                        color: P.textMuted,
-                        padding: '11px 12px',
-                        cursor: deletingAccount ? 'wait' : 'pointer',
-                        opacity: deletingAccount ? 0.5 : 1,
-                        fontFamily: FONT_SANS,
-                        fontWeight: 800,
-                      }}
-                    >
-                      Indietro
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={
-                        deletingAccount ||
-                        deleteAccountConfirmation !== username
-                      }
-                      onClick={() =>
-                        void deleteAccountPermanently()
-                      }
-                      style={{
-                        border: `1px solid ${P.error}`,
-                        background: P.error,
-                        color: '#fff',
-                        padding: '11px 12px',
-                        cursor: deletingAccount
-                          ? 'wait'
-                          : deleteAccountConfirmation === username
-                          ? 'pointer'
-                          : 'not-allowed',
-                        opacity:
-                          deletingAccount ||
-                          deleteAccountConfirmation !== username
-                            ? 0.5
-                            : 1,
-                        fontFamily: FONT_SANS,
-                        fontWeight: 900,
-                      }}
-                    >
-                      {deletingAccount
-                        ? 'Eliminazione...'
-                        : 'Elimina definitivamente'}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
 
         <style jsx global>{`
           @media (max-width: 720px) {
