@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import { normalizeRoomCode } from '@/utils/roomCode';
 import AppShell from '@/components/layout/AppShell';
+import GlobalSearchBox from '@/components/search/globalSearchBox';
 import { useTheme } from '@/context/ThemeContext';
 
 import {
@@ -13,9 +14,10 @@ import {
   Door, Star, Confetti,
   UsersThree, TrendUp, Sparkle,
   InstagramLogo, TiktokLogo, XLogo,
-  Sun, Moon, FilmStrip,
+  Sun, Moon, FilmStrip, MagnifyingGlass,
   Heart, Clock, HandWavingIcon, Medal,
   ThumbsUp, ThumbsDown,
+  MapPin,
 } from '@phosphor-icons/react';
 
 // ─── Palette dark "cinema elegante" ──────────────────────────────────────
@@ -147,6 +149,13 @@ type RecommendationCollections = {
   profile_genres: RecommendationMovie[];
 };
 
+type RecentFilm = {
+  tmdb_id: number;
+  title: string;
+  year: number | null;
+  cover: string | null;
+};
+
 const FEATURES = [
   { icon: UsersThree, title: 'Trova persone affini', desc: 'Scopri chi condivide davvero i tuoi gusti' },
   { icon: FilmSlate,  title: 'Scopri cosa vedere',   desc: 'Consigli che imparano da preferiti, voti e match' },
@@ -183,6 +192,7 @@ export default function HomePage() {
   const [communityPick, setCommunityPick] = useState<CommunityReview | null>(null);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [loadingTrending, setLoadingTrending] = useState(true);
+  const [recentFilms, setRecentFilms] = useState<RecentFilm[]>([]);
   const [mounted, setMounted] = useState(false);
   const [fallbackUsername, setFallbackUsername] = useState('');
   const [profileAvatarUrl, setProfileAvatarUrl] = useState<string | null>(null);
@@ -381,6 +391,18 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    if (!mounted) return;
+
+    try {
+      const raw = window.localStorage.getItem('cinedate_recent_films');
+      const parsed = raw ? JSON.parse(raw) : [];
+      setRecentFilms(Array.isArray(parsed) ? parsed.slice(0, 6) : []);
+    } catch {
+      setRecentFilms([]);
+    }
+  }, [mounted]);
+
+  useEffect(() => {
     const load = async () => {
       setLoadingTrending(true);
       try {
@@ -402,9 +424,10 @@ export default function HomePage() {
     if (isLoading) return;
 
     let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const loadPublicRooms = async () => {
-      setLoadingPublicRooms(true);
+    const loadPublicRooms = async (showLoader = false) => {
+      if (showLoader) setLoadingPublicRooms(true);
 
       try {
         const params = new URLSearchParams({ filter: 'for_you' });
@@ -413,7 +436,9 @@ export default function HomePage() {
           params.set('actorId', currentUser.id);
         }
 
-        const response = await fetch(`/api/rooms/discover?${params.toString()}`);
+        const response = await fetch(`/api/rooms/discover?${params.toString()}`, {
+          cache: 'no-store',
+        });
         const data = await response.json();
 
         if (!response.ok) {
@@ -425,18 +450,33 @@ export default function HomePage() {
         }
       } catch (error) {
         console.error('Public rooms load failed:', error);
-        if (!cancelled) setPublicRooms([]);
+        if (!cancelled && showLoader) setPublicRooms([]);
       } finally {
-        if (!cancelled) setLoadingPublicRooms(false);
+        if (!cancelled && showLoader) setLoadingPublicRooms(false);
       }
     };
 
-    void loadPublicRooms();
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        void loadPublicRooms(false);
+      }, 180);
+    };
+
+    void loadPublicRooms(true);
+
+    const channel = supabase
+      .channel('home-public-rooms-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, scheduleRefresh)
+      .subscribe();
 
     return () => {
       cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
     };
-  }, [currentUser, isLoading]);
+  }, [currentUser, isLoading, supabase]);
 
   useEffect(() => {
     if (!currentUser || currentUser.isGuest) {
@@ -869,6 +909,7 @@ export default function HomePage() {
     return communityPick?.title ?? 'Vai alla community';
   };
 
+
   const handleJoinByCode = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const code = normalizeRoomCode(codeInput);
@@ -906,6 +947,21 @@ export default function HomePage() {
       </div>
     );
   }
+
+  const removeRecentFilm = (tmdbId: number) => {
+    const next = recentFilms.filter((film) => film.tmdb_id !== tmdbId);
+    setRecentFilms(next);
+    try {
+      window.localStorage.setItem('cinedate_recent_films', JSON.stringify(next));
+    } catch {}
+  };
+
+  const clearRecentFilms = () => {
+    setRecentFilms([]);
+    try {
+      window.localStorage.removeItem('cinedate_recent_films');
+    } catch {}
+  };
 
   return (
     <>
@@ -1103,7 +1159,217 @@ export default function HomePage() {
           <div className="home-layout">
             <div className="home-main">
 
+              {/* ─── RICERCA GLOBALE ───────────────────────────────────── */}
+              <section
+                style={{
+                  padding: isGuest ? '8px 20px 18px' : '8px 20px 14px',
+                }}
+              >
+                <div
+                  style={{
+                    border: `1px solid ${isGuest ? `${P.gold}90` : P.border}`,
+                    background: isGuest ? P.bgSoft : P.card,
+                    padding: isGuest ? '18px' : '14px',
+                    boxShadow: isGuest
+                      ? `0 10px 28px rgba(0,0,0,${isDark ? 0.18 : 0.05})`
+                      : 'none',
+                  }}
+                >
+                  <div
+                    style={{
+                      color: isGuest ? P.gold : P.pink,
+                      fontSize: 9,
+                      fontWeight: 900,
+                      textTransform: 'uppercase',
+                      letterSpacing: '.12em',
+                      marginBottom: 5,
+                    }}
+                  >
+                    Cerca su CineDate
+                  </div>
+
+                  <div
+                    style={{
+                      fontFamily: FONT_DISPLAY,
+                      color: P.text,
+                      fontSize: isGuest ? 24 : 20,
+                      fontWeight: 800,
+                      letterSpacing: '-.02em',
+                    }}
+                  >
+                    Cosa vuoi vedere?
+                  </div>
+
+                  <div
+                    style={{
+                      color: P.textFaint,
+                      fontSize: 11,
+                      marginTop: 4,
+                      marginBottom: 11,
+                    }}
+                  >
+                    Cerca un film, un attore o un regista.
+                  </div>
+
+                  <GlobalSearchBox variant="hero" />
+
+                  <button
+                    type="button"
+                    onClick={() => router.push('/esplora')}
+                    style={{
+                      marginTop: 9,
+                      border: 0,
+                      background: 'transparent',
+                      color: P.textMuted,
+                      padding: 0,
+                      fontFamily: FONT,
+                      fontSize: 10,
+                      fontWeight: 750,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                    }}
+                  >
+                    Esplora tutto <ArrowRight size={11} weight="bold" />
+                  </button>
+                </div>
+              </section>
+
+
+              {isGuest && (
+                <section style={{ padding: '0 20px 18px' }}>
+                  <div
+                    style={{
+                      color: P.textFaint,
+                      fontSize: 9,
+                      fontWeight: 900,
+                      textTransform: 'uppercase',
+                      letterSpacing: '.12em',
+                      marginBottom: 8,
+                    }}
+                  >
+                    Inizia da qui
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                      gap: 8,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => router.push('/esplora?tab=trending')}
+                      style={{
+                        border: `1px solid ${P.border}`,
+                        background: P.card,
+                        color: P.text,
+                        padding: '14px 12px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontFamily: FONT,
+                      }}
+                    >
+                      <MagnifyingGlass size={18} color={P.gold} />
+                      <div style={{ fontSize: 12, fontWeight: 900, marginTop: 8 }}>
+                        Cerca un film
+                      </div>
+                      <div style={{ fontSize: 9.5, color: P.textFaint, marginTop: 3, lineHeight: 1.4 }}>
+                        Cerca titoli, attori e registi
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => router.push('/cinema')}
+                      style={{
+                        border: `1px solid ${P.border}`,
+                        background: P.card,
+                        color: P.text,
+                        padding: '14px 12px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontFamily: FONT,
+                      }}
+                    >
+                      <MapPin size={18} color={P.pink} weight="fill" />
+                      <div style={{ fontSize: 12, fontWeight: 900, marginTop: 8 }}>
+                        Trova un cinema
+                      </div>
+                      <div style={{ fontSize: 9.5, color: P.textFaint, marginTop: 3, lineHeight: 1.4 }}>
+                        Film, sale e proiezioni
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => router.push('/stanze')}
+                      style={{
+                        border: `1px solid ${P.border}`,
+                        background: P.card,
+                        color: P.text,
+                        padding: '14px 12px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        fontFamily: FONT,
+                      }}
+                    >
+                      <UsersThree size={18} color={P.success} weight="fill" />
+                      <div style={{ fontSize: 12, fontWeight: 900, marginTop: 8 }}>
+                        Entra in una stanza
+                      </div>
+                      <div style={{ fontSize: 9.5, color: P.textFaint, marginTop: 3, lineHeight: 1.4 }}>
+                        Entra e scegli insieme
+                      </div>
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {!isGuest && (
+                <section style={{ padding:'0 20px 16px' }}>
+                  <div style={{
+                    display:'grid',
+                    gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',
+                    gap:8,
+                  }}>
+                    {([
+                      { label:'Cerca', path:'/esplora', Icon:MagnifyingGlass, color:P.gold },
+                      { label:'Per te', path:'/per-te', Icon:Sparkle, color:P.pink },
+                      { label:'Stanze', path:'/stanze', Icon:UsersThree, color:P.success },
+                      { label:'Cinema', path:'/cinema', Icon:MapPin, color:P.gold },
+                    ]).map(({label,path,Icon,color})=>(
+                      <button
+                        key={String(label)}
+                        type="button"
+                        onClick={()=>router.push(path)}
+                        style={{
+                          border:`1px solid ${P.border}`,
+                          background:P.card,
+                          color:P.text,
+                          padding:'11px 12px',
+                          display:'flex',
+                          alignItems:'center',
+                          gap:8,
+                          cursor:'pointer',
+                          fontFamily:FONT,
+                          fontSize:10.5,
+                          fontWeight:850,
+                          textAlign:'left',
+                        }}
+                      >
+                        <Icon size={15} color={color} weight="fill" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {/* ─── FEATURE PILLS (desktop) ───────────────────────────── */}
+              {!isGuest && (
               <div className="desktop-only" style={{
                 padding: '2px 0 18px',
                 display: 'grid',
@@ -1123,6 +1389,7 @@ export default function HomePage() {
                   );
                 })}
               </div>
+              )}
 
               {/* ─── CTA MOBILE: "Crea la tua serata" ────────────────── */}
               <div className="mobile-only" style={{ padding: '10px 20px 6px' }}>
@@ -1799,6 +2066,237 @@ export default function HomePage() {
                 </section>
               )}
 
+
+              {isGuest && (
+                <section style={{ padding: '2px 20px 18px' }}>
+                  <div
+                    style={{
+                      border: `1px solid ${P.pink}55`,
+                      background: P.pinkGlow,
+                      padding: 16,
+                    }}
+                  >
+                    <div
+                      style={{
+                        color: P.pink,
+                        fontSize: 9,
+                        fontWeight: 900,
+                        textTransform: 'uppercase',
+                        letterSpacing: '.12em',
+                      }}
+                    >
+                      Community CineDate
+                    </div>
+
+                    <div
+                      style={{
+                        fontFamily: FONT_DISPLAY,
+                        color: P.text,
+                        fontSize: 19,
+                        fontWeight: 800,
+                        marginTop: 4,
+                      }}
+                    >
+                      Non è solo un catalogo di film
+                    </div>
+
+                    <div
+                      style={{
+                        color: P.textMuted,
+                        fontSize: 11,
+                        lineHeight: 1.55,
+                        marginTop: 5,
+                      }}
+                    >
+                      Leggi cosa ne pensa la community, scopri persone con gusti simili
+                      e scegli insieme cosa guardare.
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(145px, 1fr))',
+                        gap: 7,
+                        marginTop: 13,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => router.push('/recensioni')}
+                        style={{
+                          border: `1px solid ${P.border}`,
+                          background: P.card,
+                          color: P.text,
+                          padding: '10px 11px',
+                          cursor: 'pointer',
+                          fontFamily: FONT,
+                          textAlign: 'left',
+                        }}
+                      >
+                        <Heart size={15} color={P.pink} weight="fill" />
+                        <div style={{ fontSize: 10.5, fontWeight: 850, marginTop: 5 }}>
+                          Recensioni
+                        </div>
+                        <div style={{ fontSize: 9, color: P.textFaint, marginTop: 2 }}>
+                          Guarda cosa piace agli altri
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => router.push('/persone')}
+                        style={{
+                          border: `1px solid ${P.border}`,
+                          background: P.card,
+                          color: P.text,
+                          padding: '10px 11px',
+                          cursor: 'pointer',
+                          fontFamily: FONT,
+                          textAlign: 'left',
+                        }}
+                      >
+                        <UsersThree size={15} color={P.gold} weight="fill" />
+                        <div style={{ fontSize: 10.5, fontWeight: 850, marginTop: 5 }}>
+                          Persone
+                        </div>
+                        <div style={{ fontSize: 9, color: P.textFaint, marginTop: 2 }}>
+                          Trova utenti con gusti simili
+                        </div>
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => router.push('/auth')}
+                      style={{
+                        marginTop: 11,
+                        border: 0,
+                        background: 'transparent',
+                        color: P.pink,
+                        padding: 0,
+                        fontFamily: FONT,
+                        fontSize: 10,
+                        fontWeight: 900,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Crea un account per partecipare →
+                    </button>
+                  </div>
+                </section>
+              )}
+
+              {recentFilms.length > 0 && (
+                <section style={{ padding:'18px 20px 8px' }}>
+                  <div className="section-header">
+                    <span className="section-title">
+                      <span className="accent-line" />
+                      <FilmSlate size={17} color={P.gold} weight="fill" />
+                      Riprendi da qui
+                    </span>
+                    <div style={{display:'flex',alignItems:'center',gap:10}}>
+                      <button
+                        type="button"
+                        onClick={clearRecentFilms}
+                        style={{
+                          border:0,background:'transparent',color:P.textFaint,
+                          fontFamily:FONT,fontSize:9.5,fontWeight:800,cursor:'pointer',padding:0,
+                        }}
+                      >
+                        Cancella
+                      </button>
+                      <button className="section-link" onClick={() => router.push('/esplora')}>
+                        Esplora <ArrowRight size={13} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display:'grid',
+                      gridTemplateColumns:'repeat(auto-fill,minmax(120px,150px))',
+                      justifyContent:'start',
+                      gap:10,
+                    }}
+                  >
+                    {recentFilms.map((film) => (
+                      <button
+                        key={`recent-${film.tmdb_id}`}
+                        type="button"
+                        onClick={() => router.push(`/film/${film.tmdb_id}`)}
+                        style={{
+                          border:`1px solid ${P.border}`,
+                          background:P.card,
+                          color:P.text,
+                          padding:0,
+                          textAlign:'left',
+                          cursor:'pointer',
+                          fontFamily:FONT,
+                          minWidth:0,
+                          overflow:'hidden',
+                        }}
+                      >
+                        <div style={{
+                          aspectRatio:'2/3',
+                          background:P.bgSoft,
+                          overflow:'hidden',
+                        }}>
+                          {film.cover ? (
+                            <img
+                              src={film.cover}
+                              alt={film.title}
+                              style={{width:'100%',height:'100%',objectFit:'cover'}}
+                            />
+                          ) : (
+                            <div style={{height:'100%',display:'grid',placeItems:'center'}}>
+                              <FilmSlate size={26} color={P.textFaint}/>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{padding:'8px 9px 9px'}}>
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeRecentFilm(film.tmdb_id);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                removeRecentFilm(film.tmdb_id);
+                              }
+                            }}
+                            style={{
+                              color:P.textFaint,
+                              fontSize:8.5,
+                              fontWeight:800,
+                              marginBottom:4,
+                              cursor:'pointer',
+                            }}
+                          >
+                            Rimuovi
+                          </div>
+                          <div style={{
+                            fontSize:10.5,
+                            fontWeight:850,
+                            whiteSpace:'nowrap',
+                            overflow:'hidden',
+                            textOverflow:'ellipsis',
+                          }}>
+                            {film.title}
+                          </div>
+                          <div style={{fontSize:9,color:P.textFaint,marginTop:3}}>
+                            {film.year || 'Anno n/d'}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {/* ─── TRENDING MOVIES ──────────────────────────────────── */}
               <div id="trending" style={{ padding: '26px 20px 8px' }}>
                 <div className="section-header">
@@ -2152,7 +2650,7 @@ export default function HomePage() {
                     }}
                   >
                     <UsersThree size={16} color={P.gold} weight="fill" />
-                    Stanze pubbliche
+                    Entra in una stanza
                   </div>
 
                   {!loadingPublicRooms && publicRooms.length > 0 && (

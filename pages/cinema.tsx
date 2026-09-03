@@ -98,6 +98,10 @@ export default function CinemaPage() {
   const router = useRouter();
   const { isLoading, currentUser, isGuest } = useAuth();
   const { theme } = useTheme();
+  const targetMovieId =
+    typeof router.query.movie === 'string' && /^\d+$/.test(router.query.movie)
+      ? Number(router.query.movie)
+      : null;
   const isDark = theme === 'dark';
   const P = isDark ? D : L;
 
@@ -122,6 +126,8 @@ export default function CinemaPage() {
   const [showtimes, setShowtimes]         = useState<ShowtimeDay[]>([]);
   const [loadingShowtimes, setLoadingShowtimes] = useState(false);
   const [selectedDay, setSelectedDay]     = useState(0);
+  const [movieFocusLoading, setMovieFocusLoading] = useState(false);
+  const [movieFocusTitle, setMovieFocusTitle] = useState<string | null>(null);
   const [activeFormatFilter, setActiveFormatFilter] = useState('Tutti');
   const [expandedFilms, setExpandedFilms] = useState<Record<string, boolean>>({});
 
@@ -160,6 +166,67 @@ export default function CinemaPage() {
       .finally(() => setLoadingCinemas(false));
   }, [userLat, userLng, radius]);
 
+  // ─── Deep-link dalla scheda film ──────────────────────────────────────────
+  useEffect(() => {
+    if (!router.isReady || !targetMovieId || cinemas.length === 0) {
+      if (!targetMovieId) setMovieFocusTitle(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const focusMovie = async () => {
+      setMovieFocusLoading(true);
+
+      try {
+        const response = await fetch(`/api/tmdb/movie/${targetMovieId}/availability`, {
+          cache: 'no-store',
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) throw new Error(data.error || 'Disponibilità film non caricabile');
+
+        const availableCinemas = Array.isArray(data?.cinema?.cinemas)
+          ? data.cinema.cinemas
+          : [];
+
+        const nearbyIds = new Set(cinemas.map((cinema) => Number(cinema.id)));
+        const matchingNearby = availableCinemas.filter((cinema: any) =>
+          nearbyIds.has(Number(cinema.id))
+        );
+
+        if (cancelled) return;
+
+        if (matchingNearby.length === 0) {
+          setMovieFocusTitle(null);
+          return;
+        }
+
+        const nearestMatch = [...cinemas]
+          .filter((cinema) =>
+            matchingNearby.some((match: any) => Number(match.id) === Number(cinema.id))
+          )
+          .sort((a, b) => a.distanceKm - b.distanceKm)[0];
+
+        if (!nearestMatch) return;
+
+        setSelectedId(nearestMatch.id);
+        setView('list');
+      } catch (error) {
+        console.error('Movie cinema focus failed:', error);
+        if (!cancelled) setMovieFocusTitle(null);
+      } finally {
+        if (!cancelled) setMovieFocusLoading(false);
+      }
+    };
+
+    void focusMovie();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router.isReady, targetMovieId, cinemas]);
+
   // ─── Carica programmazione quando si seleziona un cinema ─────────────────
   useEffect(() => {
     if (!selectedId) return;
@@ -168,10 +235,33 @@ export default function CinemaPage() {
     setSelectedDay(0);
     fetch(`/api/cinema/showtimes?cinemaId=${selectedId}`)
       .then((r) => r.json())
-      .then((d) => setShowtimes(d.days ?? []))
-      .catch(() => setShowtimes([]))
+      .then((d) => {
+        const days = Array.isArray(d.days) ? d.days : [];
+        setShowtimes(days);
+
+        if (targetMovieId) {
+          const dayIndex = days.findIndex((day: any) =>
+            Array.isArray(day.films) &&
+            day.films.some((film: any) => Number(film.tmdb_id) === targetMovieId)
+          );
+
+          if (dayIndex >= 0) {
+            setSelectedDay(dayIndex);
+            const focused = days[dayIndex].films.find(
+              (film: any) => Number(film.tmdb_id) === targetMovieId
+            );
+            setMovieFocusTitle(focused?.title ?? 'Film selezionato');
+          } else {
+            setMovieFocusTitle(null);
+          }
+        }
+      })
+      .catch(() => {
+        setShowtimes([]);
+        if (targetMovieId) setMovieFocusTitle(null);
+      })
       .finally(() => setLoadingShowtimes(false));
-  }, [selectedId]);
+  }, [selectedId, targetMovieId]);
 
   // ─── Geocoding manuale (Nominatim) ───────────────────────────────────────
   const handleCitySearch = async () => {
@@ -224,6 +314,11 @@ export default function CinemaPage() {
           ),
     }))
     .filter((film) => film.sessions.length > 0);
+
+  const displayFilms = targetMovieId
+    ? filteredFilms.filter((film: any) => Number(film.tmdb_id) === targetMovieId)
+    : filteredFilms;
+
 
   const toggleFilmExpanded = (filmId: string | number) => {
     const key = String(filmId);
@@ -610,10 +705,10 @@ export default function CinemaPage() {
                   <MapPin size={13} color={P.gold} weight="fill" /> Cinema
                 </div>
                 <div className="cinema-header-title">
-                  Cinema vicino a te
+                  Cosa c'è al cinema?
                 </div>
-                <div style={{ fontSize: '15px', color: P.textMuted, marginTop: '4px' }}>
-                  The Space Cinema — programmazione settimanale
+                <div style={{ fontSize: '15px', color: P.textMuted, marginTop: '4px', lineHeight: 1.5 }}>
+                  Trova i cinema vicini, scegli il giorno e controlla subito film, orari e biglietti.
                 </div>
               </div>
 
@@ -698,9 +793,89 @@ export default function CinemaPage() {
                 </div>
               )}
 
+              {userLat && !loadingCinemas && cinemas.length > 0 && (
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                    gap: 8,
+                    marginBottom: 18,
+                  }}
+                >
+                  <div style={{ border: `1px solid ${P.border}`, background: P.card, padding: 14 }}>
+                    <div style={{ color: P.textFaint, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.1em' }}>
+                      Vicino a te
+                    </div>
+                    <div style={{ color: P.text, fontSize: 20, fontWeight: 900, marginTop: 4 }}>
+                      {cinemas.length} cinema
+                    </div>
+                    <div style={{ color: P.textMuted, fontSize: 10, marginTop: 3 }}>
+                      entro {radius} km
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const closest = [...cinemas].sort((a, b) => a.distanceKm - b.distanceKm)[0];
+                      if (closest) {
+                        setSelectedId(closest.id);
+                        setView('list');
+                      }
+                    }}
+                    style={{
+                      border: `1px solid ${P.gold}`,
+                      background: P.goldGlow,
+                      color: P.text,
+                      padding: 14,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontFamily: FONT,
+                    }}
+                  >
+                    <div style={{ color: P.gold, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.1em' }}>
+                      Più vicino
+                    </div>
+                    <div style={{ color: P.text, fontSize: 13, fontWeight: 900, marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {[...cinemas].sort((a, b) => a.distanceKm - b.distanceKm)[0]?.name}
+                    </div>
+                    <div style={{ color: P.textMuted, fontSize: 10, marginTop: 3 }}>
+                      {[...cinemas].sort((a, b) => a.distanceKm - b.distanceKm)[0]?.distanceKm} km · Vedi programmazione
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => router.push('/esplora?tab=now_playing')}
+                    style={{
+                      border: `1px solid ${P.pink}70`,
+                      background: P.pinkGlow,
+                      color: P.text,
+                      padding: 14,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontFamily: FONT,
+                    }}
+                  >
+                    <div style={{ color: P.pink, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: '.1em' }}>
+                      Film
+                    </div>
+                    <div style={{ color: P.text, fontSize: 13, fontWeight: 900, marginTop: 4 }}>
+                      Ora al cinema
+                    </div>
+                    <div style={{ color: P.textMuted, fontSize: 10, marginTop: 3 }}>
+                      Sfoglia le uscite attuali
+                    </div>
+                  </button>
+                </div>
+              )}
+
               {userLat && (
                 <>
                   {/* Filtri: raggio + vista */}
+                  <div style={{ fontSize: 10, color: P.textFaint, fontWeight: 850, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>
+                    Scegli distanza e vista
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       {RADIUS_OPTIONS.map((r) => (
@@ -773,8 +948,13 @@ export default function CinemaPage() {
                                 <div style={{ fontSize: '15px', fontWeight: '700', color: P.text }}>{c.name}</div>
                                 <div style={{ fontSize: '12px', color: P.textFaint, marginTop: '2px' }}>{c.address}</div>
                               </div>
-                              <div style={{ fontSize: '12px', fontWeight: '700', color: P.gold, flexShrink: 0, marginLeft: '8px' }}>
-                                {c.distanceKm} km
+                              <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '8px' }}>
+                                <div style={{ fontSize: '12px', fontWeight: '700', color: P.gold }}>
+                                  {c.distanceKm} km
+                                </div>
+                                <div style={{ fontSize: '9px', color: P.textFaint, marginTop: 3 }}>
+                                  Vedi orari
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -813,7 +993,7 @@ export default function CinemaPage() {
                       <div style={{ padding: '20px', borderBottom: `1px solid ${P.border}`, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
                         <div>
                           <div style={{ fontSize: '18px', fontWeight: '800', color: P.text, fontFamily: FONT_DISPLAY }}>{selectedCinema?.name}</div>
-                          <div style={{ fontSize: '12px', color: P.textMuted, marginTop: '4px' }}>Programmazione prossimi 7 giorni</div>
+                          <div style={{ fontSize: '12px', color: P.textMuted, marginTop: '4px' }}>Scegli il giorno e poi l'orario</div>
                         </div>
                         <button
                           onClick={() => { setSelectedId(null); setShowtimes([]); }}
@@ -830,6 +1010,59 @@ export default function CinemaPage() {
                         </div>
                       ) : (
                         <>
+                          {targetMovieId && (
+                            <div style={{ padding: '16px 20px 0' }}>
+                              <div style={{
+                                border: `1px solid ${movieFocusTitle ? P.gold : P.border}`,
+                                background: movieFocusTitle ? P.goldGlow : P.bgSoft,
+                                padding: '12px 13px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 10,
+                              }}>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{
+                                    color: movieFocusTitle ? P.gold : P.textFaint,
+                                    fontSize: 9,
+                                    fontWeight: 900,
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '.1em',
+                                  }}>
+                                    {movieFocusLoading ? 'Sto cercando…' : 'Film selezionato'}
+                                  </div>
+                                  <div style={{
+                                    color: P.text,
+                                    fontSize: 13,
+                                    fontWeight: 900,
+                                    marginTop: 3,
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                  }}>
+                                    {movieFocusTitle ?? 'Nessuna proiezione vicina trovata'}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => router.replace('/cinema', undefined, { shallow: true })}
+                                  style={{
+                                    border: 0,
+                                    background: 'transparent',
+                                    color: P.textMuted,
+                                    fontFamily: FONT,
+                                    fontSize: 10,
+                                    fontWeight: 800,
+                                    cursor: 'pointer',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  Mostra tutti
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Navigazione date */}
                           <div style={{ padding: '20px 20px 12px' }}>
                             <div className="day-nav-scroll">
@@ -892,12 +1125,14 @@ export default function CinemaPage() {
 
                           {/* Film del giorno */}
                           <div style={{ padding: '0 20px 20px' }}>
-                            {filteredFilms.length === 0 ? (
+                            {displayFilms.length === 0 ? (
                               <div style={{ textAlign: 'center', padding: '24px', color: P.textMuted, fontSize: '13px' }}>
-                                Nessuna programmazione per questo giorno
+                                {targetMovieId
+                                  ? 'Nessuna proiezione di questo film per il giorno selezionato'
+                                  : 'Nessuna programmazione per questo giorno'}
                               </div>
                             ) : (
-                              filteredFilms.map((film: ShowtimeFilm) => (
+                              displayFilms.map((film: ShowtimeFilm) => (
                                 <div key={film.id} className="film-row">
                                   {film.posterUrl ? (
                                     <img src={film.posterUrl} alt={film.title} className="film-poster" />
@@ -986,37 +1221,12 @@ export default function CinemaPage() {
                 <div className="sidebar-text">
                   Crea una stanza, invita i tuoi amici e inizia subito a guardare insieme.
                 </div>
-                <button className="sidebar-button">
+                <button className="sidebar-button" onClick={() => router.push('/crea-stanza?tab=create')}>
                   Crea una stanza →
                 </button>
                 <div className="ticket-tear" style={{ background: P.bg }} />
               </div>
 
-              <div className="ticket-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', fontWeight: '800', color: P.text, marginBottom: '8px' }}>
-                  <span style={{ color: P.gold }}>⭐</span> I tuoi cinema preferiti
-                </div>
-                <div className="sidebar-text">
-                  Salva i cinema che ami di più per trovarli subito!
-                </div>
-                <button className="sidebar-button-outline">
-                  Aggiungi un preferito
-                </button>
-                <div className="ticket-tear" style={{ background: P.bg }} />
-              </div>
-
-              <div className="ticket-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '18px', fontWeight: '800', color: P.text, marginBottom: '8px' }}>
-                  <span style={{ color: P.gold }}>📺</span> Cinema premium vicino a te
-                </div>
-                <div className="sidebar-text">
-                  Scopri offerte esclusive e sale premium per la tua serata.
-                </div>
-                <button className="sidebar-button-outline">
-                  Esplora cinema premium →
-                </button>
-                <div className="ticket-tear" style={{ background: P.bg }} />
-              </div>
             </div>
           </div>
         </div>

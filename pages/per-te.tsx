@@ -250,7 +250,7 @@ export default function PerTePage() {
   }
 
   return (
-    <AppShell activeNav="per-te">
+    <AppShell activeNav="home">
       <div
         style={{
           minHeight: '100vh',
@@ -600,8 +600,122 @@ export default function PerTePage() {
 
           </section>
 
+          {meta && !loading && !error && (
+            <section
+              style={{
+                border: `1px solid ${P.border}`,
+                background: P.card,
+                padding: 14,
+                marginBottom: 16,
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <div>
+                  <div
+                    style={{
+                      color: P.pink,
+                      fontSize: 9,
+                      fontWeight: 900,
+                      textTransform: 'uppercase',
+                      letterSpacing: '.11em',
+                    }}
+                  >
+                    Il tuo profilo gusti
+                  </div>
+                  <div style={{ color: P.text, fontSize: 16, fontWeight: 900, marginTop: 3 }}>
+                    {meta.personalized
+                      ? 'Consigli costruiti sui tuoi gusti'
+                      : 'Stiamo ancora imparando cosa ti piace'}
+                  </div>
+                  <div style={{ color: P.muted, fontSize: 10, marginTop: 4 }}>
+                    {meta.positive_signals ?? 0} segnali positivi · {meta.seeds_used ?? 0} film usati
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/libreria?tab=preferiti')}
+                    style={{
+                      border: `1px solid ${P.border}`,
+                      background: P.bgSoft,
+                      color: P.text,
+                      padding: '7px 9px',
+                      fontFamily: FONT,
+                      fontSize: 9.5,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Preferiti
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/profilo')}
+                    style={{
+                      border: `1px solid ${P.border}`,
+                      background: P.bgSoft,
+                      color: P.text,
+                      padding: '7px 9px',
+                      fontFamily: FONT,
+                      fontSize: 9.5,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Profilo gusti
+                  </button>
+                </div>
+              </div>
+
+              {meta.top_genres && meta.top_genres.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div
+                    style={{
+                      fontSize: 8.5,
+                      color: P.faint,
+                      fontWeight: 900,
+                      textTransform: 'uppercase',
+                      letterSpacing: '.09em',
+                      marginBottom: 6,
+                    }}
+                  >
+                    Generi che pesano di più
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {meta.top_genres.slice(0, 5).map((genre) => (
+                      <span
+                        key={genre.id}
+                        style={{
+                          border: `1px solid ${P.border}`,
+                          background: P.bgSoft,
+                          color: P.muted,
+                          padding: '5px 7px',
+                          fontSize: 9.5,
+                          fontWeight: 750,
+                        }}
+                      >
+                        {genre.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
           {loading ? (
-            <div className="fy-grid">
+  
+
+          <div className="fy-grid">
               {Array.from({ length: 10 }).map((_, index) => (
                 <div
                   key={index}

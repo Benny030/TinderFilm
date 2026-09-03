@@ -6,10 +6,11 @@ import { useAuth } from '@/hooks/useAuth';
 import BottomNav from './bottomNav';
 import AppFooter from './AppFooter';
 import { useTheme } from '@/context/ThemeContext';
+import GlobalSearchBox from '@/components/search/globalSearchBox';
 import { FONT, TEXT, S, R } from '@/styles/token';
 import type { Icon } from '@phosphor-icons/react';
 import {
-  House, FilmSlate, ChatCircle, MapPin, User, SignOut, List, X, Sparkle, UsersThree, Books,
+  House, FilmSlate, ChatCircle, MapPin, User, SignOut, List, X, Sparkle, UsersThree, Books, MagnifyingGlass,
 } from '@phosphor-icons/react';
 
 // ─── Palette dark "cinema elegante" (dalla home) ─────────────────────────
@@ -50,7 +51,7 @@ const L = {
 
 type Props = {
   children: React.ReactNode;
-  activeNav: 'home' | 'per-te' | 'persone' | 'stanze' | 'recensioni' | 'cinema' | 'libreria' | 'profilo';
+  activeNav: 'home' | 'esplora' | 'per-te' | 'persone' | 'stanze' | 'recensioni' | 'cinema' | 'libreria' | 'profilo';
   hideNav?: boolean;
 };
 
@@ -64,6 +65,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { id: 'home',       label: 'Home',       icon: House,       path: '/home' },
+  { id: 'esplora',    label: 'Esplora',    icon: MagnifyingGlass, path: '/esplora' },
   { id: 'per-te',     label: 'Per te',     icon: Sparkle,     path: '/per-te' },
   { id: 'persone',    label: 'Persone',    icon: UsersThree,  path: '/persone' },
   { id: 'recensioni', label: 'Community',  icon: ChatCircle,  path: '/recensioni' },
@@ -74,6 +76,7 @@ const navItems: NavItem[] = [
 ];
 
 export default function AppShell({ children, activeNav, hideNav = false }: Props) {
+  const router = useRouter();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const P = isDark ? D : L;
@@ -155,19 +158,37 @@ export default function AppShell({ children, activeNav, hideNav = false }: Props
               <span style={{ fontSize: '17px', fontWeight: 800, color: P.text, letterSpacing: '.3px' }}>
                 CINE<span style={{ color: P.pink }}>DATE</span>
               </span>
-              <button
-                onClick={() => setDrawerOpen(true)}
-                aria-label="Apri menu"
-                style={{
-                  width: '36px', height: '36px',
-                  background: P.card,
-                  border: `1px solid ${border}`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer',
-                }}
-              >
-                <List size={18} color={P.text} weight="bold" />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <button
+                  type="button"
+                  onClick={() => router.push('/esplora')}
+                  aria-label="Cerca film, attori o registi"
+                  title="Cerca"
+                  style={{
+                    width: '36px', height: '36px',
+                    background: P.card,
+                    border: `1px solid ${border}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <MagnifyingGlass size={18} color={P.gold} weight="bold" />
+                </button>
+
+                <button
+                  onClick={() => setDrawerOpen(true)}
+                  aria-label="Apri menu"
+                  style={{
+                    width: '36px', height: '36px',
+                    background: P.card,
+                    border: `1px solid ${border}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <List size={18} color={P.text} weight="bold" />
+                </button>
+              </div>
             </div>
 
             {children}
@@ -207,6 +228,10 @@ function MobileDrawer({ open, onClose, activeNav }: { open: boolean; onClose: ()
         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }}>
           <X size={20} color={P.textMuted} />
         </button>
+      </div>
+
+      <div style={{ margin: `0 ${S.sm} ${S.md}` }}>
+        <GlobalSearchBox variant="compact" />
       </div>
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>

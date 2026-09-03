@@ -45,7 +45,6 @@ export default function StanzaPage({ movies: initialMovies, roomId }: Props) {
   const userId      = currentUser?.id ?? guestId ?? '';
   const displayName = currentUser && !currentUser.isGuest ? currentUser.username : guestName ?? 'Ospite';
   const isLoggedIn  = !!currentUser && !currentUser.isGuest;
-  const isHistoryMode = router.query.history === '1';
 
   // ── Redirect ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -94,7 +93,7 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
   const [maxMembers, setMaxMembers] = useState(2);
   const [roomType, setRoomType] = useState<string>('private');
   const [hostActorId, setHostActorId] = useState<string | null>(null);
-  const [roomPhase, setRoomPhase] = useState<'waiting' | 'voting' | 'matched' | 'planning' | 'finished'>('waiting');
+  const [roomPhase, setRoomPhase] = useState<'waiting' | 'voting' | 'matched' | 'planning' | 'finished' | 'expired'>('waiting');
   const [selectedMovieId, setSelectedMovieId] = useState<string | null>(null);
   const [roomCity, setRoomCity] = useState<string | null>(null);
   const [selectedCinemaName, setSelectedCinemaName] = useState<string | null>(null);
@@ -127,7 +126,7 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
       setRoomType(typeof room.room_type === 'string' ? room.room_type : 'private');
       setHostActorId(typeof room.host_actor_id === 'string' ? room.host_actor_id : null);
       setRoomPhase(
-        ['waiting', 'voting', 'matched', 'planning', 'finished'].includes(room.room_phase)
+        ['waiting', 'voting', 'matched', 'planning', 'finished', 'expired'].includes(room.room_phase)
           ? room.room_phase
           : 'waiting'
       );
@@ -247,6 +246,50 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
     return () => { cancelled = true; };
   }, [isLoading, userId, displayName, roomId, actorType]);
 
+
+  // ── Presenza reale: heartbeat DB ───────────────────────────────────────────
+  // membership_status indica che l'utente fa parte della stanza; last_seen_at
+  // indica invece che la pagina della stanza è realmente aperta.
+  useEffect(() => {
+    if (isLoading || !roomId || !userId || membershipStatus !== 'active') return;
+
+    let stopped = false;
+
+    const sendHeartbeat = async () => {
+      if (stopped || document.visibilityState === 'hidden') return;
+
+      try {
+        await fetch('/api/room-participants', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId, actorId: userId }),
+          keepalive: true,
+        });
+      } catch {
+        // Il prossimo heartbeat ritenterà automaticamente.
+      }
+    };
+
+    void sendHeartbeat();
+    const timer = window.setInterval(() => {
+      void sendHeartbeat();
+    }, 15000);
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void sendHeartbeat();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [isLoading, roomId, userId, membershipStatus]);
+
   // ── Realtime: eventi veloci, DB come fonte di verità ────────────────────────
   useEffect(() => {
     if (!userId || !displayName) return;
@@ -331,6 +374,9 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
           ? prev
           : [...prev, { movie, timestamp: Date.now() }]
       );
+
+      // Reward immediato stile Tinder: mostriamo il match appena nasce.
+      // Dal dettaglio l'utente può tornare allo swipe oppure aprire la raccolta dal cuore.
       setScreen('match');
     });
 
@@ -443,28 +489,8 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
   }
 
   const handleEnterRoom = () => {
-    if (roomPhase === 'finished') {
-      if (
-        selectedMovieId &&
-        (roomType === 'cinema_pair' || roomType === 'cinema_group')
-      ) {
-        setScreen('plan');
-        return;
-      }
-
-      if (selectedMovieId) {
-        const winnerMovie = movies.find(
-          (movie) => String(movie.id) === String(selectedMovieId)
-        );
-
-        if (winnerMovie) {
-          setLastMatch(winnerMovie);
-          setScreen('match');
-          return;
-        }
-      }
-
-      setScreen('welcome');
+    if (roomPhase === 'expired') {
+      setHostActionError('Questa stanza non è più attiva.');
       return;
     }
 
@@ -491,33 +517,6 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
       void runHostAction('start_voting');
     }
   };
-
-  useEffect(() => {
-    if (!isHistoryMode || roomPhase !== 'finished' || !selectedMovieId) {
-      return;
-    }
-
-    if (roomType === 'cinema_pair' || roomType === 'cinema_group') {
-      setScreen('plan');
-      return;
-    }
-
-    const winnerMovie = movies.find(
-      (movie) => String(movie.id) === String(selectedMovieId)
-    );
-
-    if (winnerMovie) {
-      setLastMatch(winnerMovie);
-      setScreen('match');
-    }
-  }, [
-    isHistoryMode,
-    roomPhase,
-    selectedMovieId,
-    roomType,
-    movies,
-  ]);
-
 
   async function saveCinemaPlan(payload: {
     cinemaName: string;
@@ -608,7 +607,12 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
             ? prev
             : [...prev, { movie, timestamp: Date.now() }]
         );
-        channelRef.current?.send({ type: 'broadcast', event: 'match', payload: { movieId: key } });
+        channelRef.current?.send({
+          type: 'broadcast',
+          event: 'match',
+          payload: { movieId: key },
+        });
+
         setScreen('match');
       } else {
         setMatches((prev) => prev.filter((entry) => String(entry.movie.id) !== key));
@@ -673,6 +677,9 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
   }
 
   const roomUsersSorted = roomUsers.slice().sort((a) => (a.id === userId ? -1 : 1));
+  const hostDisplayName =
+    roomUsers.find((u) => u.id === hostActorId)?.name ??
+    (hostActorId === userId ? displayName : 'Host');
   const isRoomFull = roomUsers.length >= maxMembers && !roomUsers.find((u) => u.id === userId);
 
   return (
@@ -765,15 +772,7 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
             match={lastMatch}
             allMatches={matches}
             onContinue={() => {
-              if (roomPhase === 'finished') {
-                void router.push('/stanze');
-                return;
-              }
-
-              if (
-                selectedMovieId &&
-                (roomType === 'cinema_pair' || roomType === 'cinema_group')
-              ) {
+              if (selectedMovieId && (roomType === 'cinema_pair' || roomType === 'cinema_group')) {
                 setScreen('plan');
               } else {
                 setScreen('swipe');
@@ -804,6 +803,7 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
                 showtimeAt={selectedShowtimeAt}
                 bookingUrl={selectedBookingUrl}
                 isHost={userId === hostActorId}
+                hostName={hostDisplayName}
                 saving={planSaving}
                 error={planError}
                 onSave={(payload) => void saveCinemaPlan(payload)}

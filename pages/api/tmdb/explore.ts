@@ -10,12 +10,25 @@ function mapMovie(m: any) {
   return {
     tmdb_id: Number(m.id),
     title: String(m.title || m.original_title || 'Senza titolo'),
-    year: m.release_date ? Number(String(m.release_date).slice(0,4)) : null,
+    year: m.release_date ? Number(String(m.release_date).slice(0, 4)) : null,
     cover: m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : null,
     rating: Number(m.vote_average || 0),
     vote_count: Number(m.vote_count || 0),
-    genre: Array.isArray(m.genre_ids) ? m.genre_ids.slice(0,2).map((id:number)=>GENRES[id]).filter(Boolean).join(', ') : '',
+    genre: Array.isArray(m.genre_ids) ? m.genre_ids.slice(0, 2).map((id:number) => GENRES[id]).filter(Boolean).join(', ') : '',
     overview: m.overview || null,
+  };
+}
+
+function mapPerson(p: any) {
+  return {
+    tmdb_id: Number(p.id),
+    name: String(p.name || 'Senza nome'),
+    photo: p.profile_path ? `https://image.tmdb.org/t/p/w185${p.profile_path}` : null,
+    known_for_department: String(p.known_for_department || ''),
+    known_for: (Array.isArray(p.known_for) ? p.known_for : [])
+      .filter((x:any) => x?.media_type === 'movie' && x?.id && x?.title)
+      .slice(0, 4)
+      .map(mapMovie),
   };
 }
 
@@ -26,27 +39,67 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const q = String(req.query.q ?? '').trim();
   const mode = String(req.query.mode ?? 'trending');
+  const kind = ['all','movie','person'].includes(String(req.query.kind)) ? String(req.query.kind) : 'all';
   const page = Math.max(1, Math.min(500, Number(req.query.page ?? 1) || 1));
   const params = new URLSearchParams({ api_key: apiKey, language: 'it-IT', page: String(page) });
-  let path = '/trending/movie/week';
-
-  if (q) {
-    path = '/search/movie';
-    params.set('query', q);
-    params.set('include_adult', 'false');
-  } else if (mode === 'popular') path = '/movie/popular';
-  else if (mode === 'top_rated') path = '/movie/top_rated';
-  else if (mode === 'now_playing') { path = '/movie/now_playing'; params.set('region', 'IT'); }
 
   try {
-    const response = await fetch(`https://api.themoviedb.org/3${path}?${params.toString()}`);
+    if (q) {
+      params.set('query', q);
+      params.set('include_adult', 'false');
+      const path = kind === 'movie' ? '/search/movie' : kind === 'person' ? '/search/person' : '/search/multi';
+      const response = await fetch(`https://api.themoviedb.org/3${path}?${params}`);
+      if (!response.ok) throw new Error(`TMDB error: ${response.status}`);
+      const data = await response.json();
+      const results = Array.isArray(data.results) ? data.results : [];
+
+      const movies = kind === 'person' ? [] : results
+        .filter((x:any) => kind === 'movie' ? x?.id && x?.title : x?.media_type === 'movie' && x?.id && x?.title)
+        .map(mapMovie);
+      const people = kind === 'movie' ? [] : results
+        .filter((x:any) => kind === 'person' ? x?.id && x?.name : x?.media_type === 'person' && x?.id && x?.name)
+        .map(mapPerson);
+
+      return res.status(200).json({
+        movies, people,
+        page: Number(data.page || page),
+        total_pages: Math.min(500, Number(data.total_pages || 1)),
+      });
+    }
+
+    if (kind === 'person') {
+      const response = await fetch(`https://api.themoviedb.org/3/person/popular?${params}`);
+      if (!response.ok) throw new Error(`TMDB error: ${response.status}`);
+
+      const data = await response.json();
+
+      return res.status(200).json({
+        movies: [],
+        people: (Array.isArray(data.results) ? data.results : [])
+          .filter((person: any) => person?.id && person?.name)
+          .map(mapPerson),
+        page: Number(data.page || page),
+        total_pages: Math.min(500, Number(data.total_pages || 1)),
+      });
+    }
+
+    let path = '/trending/movie/week';
+    if (mode === 'popular') path = '/movie/popular';
+    else if (mode === 'top_rated') path = '/movie/top_rated';
+    else if (mode === 'now_playing') { path = '/movie/now_playing'; params.set('region', 'IT'); }
+    else if (mode === 'upcoming') { path = '/movie/upcoming'; params.set('region', 'IT'); }
+
+    const response = await fetch(`https://api.themoviedb.org/3${path}?${params}`);
     if (!response.ok) throw new Error(`TMDB error: ${response.status}`);
     const data = await response.json();
-    const movies = (Array.isArray(data.results) ? data.results : []).filter((m:any)=>m?.id && m?.title).map(mapMovie);
-    res.setHeader('Cache-Control', q ? 's-maxage=300, stale-while-revalidate=600' : 's-maxage=1800, stale-while-revalidate=3600');
-    return res.status(200).json({ movies, page: Number(data.page || page), total_pages: Math.min(500, Number(data.total_pages || 1)), total_results: Number(data.total_results || movies.length) });
-  } catch (error: any) {
-    console.error('TMDB explore error:', error);
+    return res.status(200).json({
+      movies: (data.results ?? []).filter((m:any) => m?.id && m?.title).map(mapMovie),
+      people: [],
+      page: Number(data.page || page),
+      total_pages: Math.min(500, Number(data.total_pages || 1)),
+    });
+  } catch (error:any) {
+    console.error('TMDB global search error:', error);
     return res.status(500).json({ error: error?.message || 'Errore TMDB' });
   }
 }

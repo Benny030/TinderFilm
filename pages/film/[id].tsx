@@ -1,11 +1,11 @@
-"use client";
+'use client';
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/router";
-import AppShell from "@/components/layout/AppShell";
-import { useTheme } from "@/context/ThemeContext";
-import { useAuth } from "@/hooks/useAuth";
-import { createBrowserClient } from "@/utils/supabase/browser";
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/router';
+import AppShell from '@/components/layout/AppShell';
+import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/hooks/useAuth';
+import { createBrowserClient } from '@/utils/supabase/browser';
 import {
   getMovieEntry,
   setFavorite,
@@ -14,7 +14,7 @@ import {
   clearWatched,
   ensureTmdbMovie,
   type UserMovieEntry,
-} from "@/utils/movieEntries";
+} from '@/utils/movieEntries';
 import {
   ArrowLeft,
   BookmarkSimple,
@@ -24,78 +24,123 @@ import {
   FilmSlate,
   Heart,
   PencilSimple,
+  MapPin,
+  TelevisionSimple,
+  ArrowRight,
+  Trash,
   Play,
   Star,
   UserCircle,
   X,
-} from "@phosphor-icons/react";
+  ShareNetwork,
+} from '@phosphor-icons/react';
 
 // ─── Hook per media query ──────────────────────────────────────────────
+
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia(query);
 
-    if (media.matches !== matches) {
+    const sync = () =>
       setMatches(media.matches);
-    }
 
-    const listener = (event: MediaQueryListEvent) => setMatches(event.matches);
+    sync();
 
-    media.addEventListener("change", listener);
+    media.addEventListener('change', sync);
 
-    return () => media.removeEventListener("change", listener);
-  }, [query, matches]);
+    return () =>
+      media.removeEventListener('change', sync);
+  }, [query]);
 
   return matches;
 }
 
-// ─── Palette dark "cinema elegante" ──────────────────────────────────────
+function getYouTubeKey(url?: string | null) {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+
+    if (parsed.hostname.includes('youtu.be')) {
+      return parsed.pathname.replace(/^\//, '') || null;
+    }
+
+    if (
+      parsed.hostname.includes('youtube.com') ||
+      parsed.hostname.includes('youtube-nocookie.com')
+    ) {
+      if (parsed.pathname.startsWith('/embed/')) {
+        return parsed.pathname.split('/embed/')[1]?.split('/')[0] || null;
+      }
+
+      return parsed.searchParams.get('v');
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+// ─── Palette dark ─────────────────────────────────────────────────────
+
 const D = {
-  bg: "#0a0806",
-  bgSoft: "#14100e",
-  card: "#1c1613",
-  cardHover: "#241d19",
-  border: "#2d221c",
-  gold: "#f5b92f",
-  goldSoft: "#ffd875",
-  goldGlow: "rgba(245,185,47,0.12)",
-  pink: "#ed3d73",
-  pinkDeep: "#8e1740",
-  pinkGlow: "rgba(237,61,115,0.15)",
-  text: "#f0ebe6",
-  textMuted: "#b5a89e",
-  textFaint: "#7a6b60",
-  overlayDark: "rgba(10,8,6,0.74)",
-  overlayMid: "rgba(10,8,6,0.26)",
-  overlayLight: "rgba(10,8,6,0.04)",
+  bg: '#0a0806',
+  bgSoft: '#14100e',
+  card: '#1c1613',
+  cardHover: '#241d19',
+  border: '#2d221c',
+
+  gold: '#f5b92f',
+  goldSoft: '#ffd875',
+  goldGlow: 'rgba(245,185,47,0.12)',
+
+  pink: '#ed3d73',
+  pinkDeep: '#8e1740',
+  pinkGlow: 'rgba(237,61,115,0.15)',
+
+  text: '#f0ebe6',
+  textMuted: '#b5a89e',
+  textFaint: '#7a6b60',
+
+  overlayDark: 'rgba(10,8,6,0.74)',
+  overlayMid: 'rgba(10,8,6,0.26)',
+  overlayLight: 'rgba(10,8,6,0.04)',
 };
 
-// ─── Palette light "cinema elegante" ──────────────────────────────────────
+// ─── Palette light ────────────────────────────────────────────────────
+
 const L = {
-  bg: "#f5efe8",
-  bgSoft: "#ece3d9",
-  card: "#ffffff",
-  cardHover: "#faf5ef",
-  border: "#d6cbbc",
-  gold: "#b8860b",
-  goldSoft: "#e8c84a",
-  goldGlow: "rgba(184,134,11,0.10)",
-  pink: "#b83060",
-  pinkDeep: "#8a1d44",
-  pinkGlow: "rgba(184,48,96,0.10)",
-  text: "#1f1a16",
-  textMuted: "#5c5248",
-  textFaint: "#8a7c6e",
-  overlayDark: "rgba(31,26,22,0.74)",
-  overlayMid: "rgba(31,26,22,0.26)",
-  overlayLight: "rgba(31,26,22,0.04)",
+  bg: '#f5efe8',
+  bgSoft: '#ece3d9',
+  card: '#ffffff',
+  cardHover: '#faf5ef',
+  border: '#d6cbbc',
+
+  gold: '#b8860b',
+  goldSoft: '#e8c84a',
+  goldGlow: 'rgba(184,134,11,0.10)',
+
+  pink: '#b83060',
+  pinkDeep: '#8a1d44',
+  pinkGlow: 'rgba(184,48,96,0.10)',
+
+  text: '#1f1a16',
+  textMuted: '#5c5248',
+  textFaint: '#8a7c6e',
+
+  overlayDark: 'rgba(31,26,22,0.74)',
+  overlayMid: 'rgba(31,26,22,0.26)',
+  overlayLight: 'rgba(31,26,22,0.04)',
 };
 
-const FONT_SANS = "'Inter','Helvetica Neue',sans-serif";
+const FONT_SANS =
+  "'Inter','Helvetica Neue',sans-serif";
 
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
+const FONT_DISPLAY =
+  "'Playfair Display','Georgia',serif";
 
 type SimilarMovie = {
   tmdb_id: number;
@@ -110,6 +155,7 @@ type CastMember = {
   name: string;
   character: string;
   profile: string | null;
+  order?: number;
 };
 
 type MovieDetail = {
@@ -117,66 +163,252 @@ type MovieDetail = {
   title: string;
   year: number;
   genre: string;
+
   cover: string | null;
   backdrop: string | null;
   trailer: string | null;
+
   trama_c: string | null;
+
   rating: number;
   vote_count: number;
+
   runtime: string | null;
   tagline: string | null;
+
   director: string | null;
+  director_id: number | null;
+
   cast: CastMember[];
   similar: SimilarMovie[];
 };
 
-const fallbackPoster = "https://placehold.co/342x513/F4EEE6/6E6258?text=Film";
+type WatchProvider = {
+  provider_id: number;
+  name: string;
+  logo: string | null;
+  url?: string | null;
+};
+
+type CinemaShowing = {
+  session_id: string;
+  showing_date: string;
+  time: string;
+  format: string | null;
+  booking_url: string | null;
+};
+
+type CinemaAvailability = {
+  id: number;
+  name: string;
+  city: string | null;
+  address: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  showings: CinemaShowing[];
+};
+
+type Availability = {
+  status:
+    | 'cinema_and_streaming'
+    | 'cinema_only'
+    | 'streaming_only'
+    | 'digital_only'
+    | 'unavailable';
+
+  cinema: {
+    available: boolean;
+    cinemas: CinemaAvailability[];
+    total_showings: number;
+  };
+
+  streaming: {
+    available: boolean;
+    flatrate: WatchProvider[];
+    free: WatchProvider[];
+    ads: WatchProvider[];
+    rent: WatchProvider[];
+    buy: WatchProvider[];
+    link: string | null;
+  };
+};
+
+const fallbackPoster =
+  'https://placehold.co/342x513/F4EEE6/6E6258?text=Film';
 
 export default function FilmDetailPage() {
   const router = useRouter();
 
   const { theme } = useTheme();
-  const { currentUser, isGuest } = useAuth();
 
-  const supabase = useRef(createBrowserClient()).current;
+  const {
+    currentUser,
+    isGuest,
+  } = useAuth();
 
-  const isDark = theme === "dark";
-  const P = isDark ? D : L;
+  const supabase =
+    useRef(createBrowserClient()).current;
 
-  const isMobile = useMediaQuery("(max-width: 640px)");
+  const isDark =
+    theme === 'dark';
 
-  const [movie, setMovie] = useState<MovieDetail | null>(null);
+  const P =
+    isDark ? D : L;
 
-  const [loading, setLoading] = useState(true);
+  const isMobile =
+    useMediaQuery('(max-width: 640px)');
 
-  const [showSpoiler, setShowSpoiler] = useState(false);
+  // ─────────────────────────────────────────────
+  // FILM
+  // ─────────────────────────────────────────────
 
-  // ─── CAST ────────────────────────────────────────────────────────────
-  const [showCast, setShowCast] = useState(false);
+  const [
+    movie,
+    setMovie,
+  ] = useState<MovieDetail | null>(null);
 
-  const [castPage, setCastPage] = useState(1);
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  // ─────────────────────────────────────────────
+  // DISPONIBILITÀ
+  // ─────────────────────────────────────────────
+
+  const [
+    availability,
+    setAvailability,
+  ] = useState<Availability | null>(null);
+
+  const [
+    availabilityLoading,
+    setAvailabilityLoading,
+  ] = useState(false);
+
+
+  const [
+    userPosition,
+    setUserPosition,
+  ] = useState<{ latitude: number; longitude: number } | null>(null);
+
+  const [
+    userArea,
+    setUserArea,
+  ] = useState<string | null>(null);
+
+  const [
+    locationLoading,
+    setLocationLoading,
+  ] = useState(false);
+
+  const [
+    locationError,
+    setLocationError,
+  ] = useState('');
+
+  // ─────────────────────────────────────────────
+  // SPOILER
+  // ─────────────────────────────────────────────
+
+  const [
+    showSpoiler,
+    setShowSpoiler,
+  ] = useState(false);
+
+  // ─────────────────────────────────────────────
+  // CAST
+  // ─────────────────────────────────────────────
+
+  const [
+    showCast,
+    setShowCast,
+  ] = useState(false);
+
+  const [
+    castPage,
+    setCastPage,
+  ] = useState(1);
 
   const CAST_PER_PAGE = 6;
 
-  const [entry, setEntry] = useState<UserMovieEntry | null>(null);
+  // ─────────────────────────────────────────────
+  // STREAMING
+  // ─────────────────────────────────────────────
 
-  const [entryLoading, setEntryLoading] = useState(false);
+  const [
+    showAllStreaming,
+    setShowAllStreaming,
+  ] = useState(false);
 
-  const [entryAction, setEntryAction] = useState<string | null>(null);
+  const STREAMING_INITIAL_LIMIT = 4;
 
-  const [entryError, setEntryError] = useState("");
+  // ─────────────────────────────────────────────
+  // LIBRERIA
+  // ─────────────────────────────────────────────
 
-  const [reviewOpen, setReviewOpen] = useState(false);
+  const [
+    entry,
+    setEntry,
+  ] = useState<UserMovieEntry | null>(null);
 
-  const [reviewRating, setReviewRating] = useState<number | null>(null);
+  const [
+    entryLoading,
+    setEntryLoading,
+  ] = useState(false);
 
-  const [reviewText, setReviewText] = useState("");
+  const [
+    entryAction,
+    setEntryAction,
+  ] = useState<string | null>(null);
 
-  const [publishRating, setPublishRating] = useState(true);
+  const [
+    entryError,
+    setEntryError,
+  ] = useState('');
 
-  const [savingReview, setSavingReview] = useState(false);
+  // ─────────────────────────────────────────────
+  // RECENSIONE
+  // ─────────────────────────────────────────────
 
-  const movieId = typeof router.query.id === "string" ? router.query.id : null;
+  const [
+    reviewOpen,
+    setReviewOpen,
+  ] = useState(false);
+
+  const [
+    reviewRating,
+    setReviewRating,
+  ] = useState<number | null>(null);
+
+  const [
+    reviewText,
+    setReviewText,
+  ] = useState('');
+
+  const [
+    publishRating,
+    setPublishRating,
+  ] = useState(true);
+
+  const [
+    savingReview,
+    setSavingReview,
+  ] = useState(false);
+
+  const [
+    reviewHoverRating,
+    setReviewHoverRating,
+  ] = useState<number | null>(null);
+
+  const movieId =
+    typeof router.query.id === 'string'
+      ? router.query.id
+      : null;
+
+  // ─────────────────────────────────────────────
+  // CARICAMENTO FILM
+  // ─────────────────────────────────────────────
 
   useEffect(() => {
     if (!movieId) return;
@@ -185,21 +417,23 @@ export default function FilmDetailPage() {
       setLoading(true);
 
       try {
-        const response = await fetch(`/api/tmdb/movie/${movieId}`);
+        const response = await fetch(
+          `/api/tmdb/movie/${movieId}`
+        );
 
         if (!response.ok) {
-          throw new Error("Film non trovato");
+          throw new Error(
+            'Film non trovato'
+          );
         }
 
-        const data = await response.json();
+        const data =
+          await response.json();
 
         setMovie(data);
-
-        setShowCast(false);
-        setCastPage(1);
-        setShowSpoiler(false);
       } catch (error) {
         console.error(error);
+
         setMovie(null);
       } finally {
         setLoading(false);
@@ -209,29 +443,295 @@ export default function FilmDetailPage() {
     void loadMovie();
   }, [movieId]);
 
+  // ─────────────────────────────────────────────
+  // FILM RECENTI
+  // ─────────────────────────────────────────────
+
   useEffect(() => {
-    if (!movie || !currentUser || currentUser.isGuest || isGuest) {
+    if (!movie) return;
+
+    const recentItem = {
+      tmdb_id: movie.tmdb_id,
+      title: movie.title,
+      year: movie.year,
+      cover: movie.cover,
+    };
+
+    try {
+      const raw =
+        window.localStorage.getItem(
+          'cinedate_recent_films'
+        );
+
+      const parsed =
+        raw
+          ? JSON.parse(raw)
+          : [];
+
+      const list =
+        Array.isArray(parsed)
+          ? parsed
+          : [];
+
+      const next = [
+        recentItem,
+
+        ...list.filter(
+          (item: any) =>
+            Number(item?.tmdb_id) !==
+            movie.tmdb_id
+        ),
+      ].slice(0, 8);
+
+      window.localStorage.setItem(
+        'cinedate_recent_films',
+        JSON.stringify(next)
+      );
+    } catch {
+      // La pagina resta utilizzabile.
+    }
+  }, [movie]);
+
+  // ─────────────────────────────────────────────
+  // RESET CAMBIO FILM
+  // ─────────────────────────────────────────────
+
+  useEffect(() => {
+    setCastPage(1);
+
+    setShowCast(false);
+
+    setShowAllStreaming(false);
+
+    setReviewHoverRating(null);
+
+    setShowSpoiler(false);
+  }, [movie?.tmdb_id]);
+
+  // ─────────────────────────────────────────────
+  // DISPONIBILITÀ
+  // ─────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!movieId) return;
+
+    let cancelled = false;
+
+    const loadAvailability = async () => {
+      setAvailabilityLoading(true);
+
+      try {
+        const response = await fetch(
+          `/api/tmdb/movie/${encodeURIComponent(
+            movieId
+          )}/availability`,
+          {
+            cache: 'no-store',
+          }
+        );
+
+        const data =
+          await response
+            .json()
+            .catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(
+            data.error ||
+              'Disponibilità non caricabile'
+          );
+        }
+
+        if (!cancelled) {
+          setAvailability(data);
+        }
+      } catch (error) {
+        console.error(
+          'Movie availability load failed:',
+          error
+        );
+
+        if (!cancelled) {
+          setAvailability(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setAvailabilityLoading(false);
+        }
+      }
+    };
+
+    void loadAvailability();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [movieId]);
+
+
+  // ─────────────────────────────────────────────
+  // CINEMA VICINO A TE
+  // ─────────────────────────────────────────────
+
+  const normalizePlace = (value?: string | null) =>
+    (value ?? '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  const distanceKm = (
+    a: { latitude: number; longitude: number },
+    b: { latitude: number; longitude: number }
+  ) => {
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const earthRadiusKm = 6371;
+
+    const dLat = toRad(b.latitude - a.latitude);
+    const dLon = toRad(b.longitude - a.longitude);
+    const lat1 = toRad(a.latitude);
+    const lat2 = toRad(b.latitude);
+
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+
+    return 2 * earthRadiusKm * Math.asin(Math.sqrt(h));
+  };
+
+  const requestUserLocation = async () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      setLocationError('La geolocalizzazione non è disponibile su questo dispositivo.');
+      return;
+    }
+
+    setLocationLoading(true);
+    setLocationError('');
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const coords = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+
+        setUserPosition(coords);
+
+        try {
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${coords.latitude}&lon=${coords.longitude}&accept-language=it`,
+            { headers: { Accept: 'application/json' } }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            const address = data?.address ?? {};
+            const area =
+              address.city ??
+              address.town ??
+              address.village ??
+              address.municipality ??
+              address.county ??
+              null;
+
+            setUserArea(area);
+          }
+        } catch (error) {
+          console.error('Reverse geocoding failed:', error);
+        } finally {
+          setLocationLoading(false);
+        }
+      },
+      (error) => {
+        setLocationLoading(false);
+        setLocationError(
+          error.code === error.PERMISSION_DENIED
+            ? 'Posizione non autorizzata.'
+            : 'Non riesco a rilevare la tua posizione.'
+        );
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 8000,
+        maximumAge: 10 * 60 * 1000,
+      }
+    );
+  };
+
+  useEffect(() => {
+    if (
+      !availability?.cinema.available ||
+      typeof navigator === 'undefined' ||
+      !('permissions' in navigator) ||
+      !navigator.geolocation
+    ) {
+      return;
+    }
+
+    let cancelled = false;
+
+    navigator.permissions
+      .query({ name: 'geolocation' as PermissionName })
+      .then((permission) => {
+        if (!cancelled && permission.state === 'granted' && !userPosition) {
+          void requestUserLocation();
+        }
+      })
+      .catch(() => {
+        // Su alcuni browser Permissions API non espone geolocation.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [availability?.cinema.available, userPosition]);
+
+  // ─────────────────────────────────────────────
+  // ENTRY UTENTE
+  // ─────────────────────────────────────────────
+
+  useEffect(() => {
+    if (
+      !movie ||
+      !currentUser ||
+      currentUser.isGuest ||
+      isGuest
+    ) {
       setEntry(null);
+
       return;
     }
 
     const loadEntry = async () => {
       setEntryLoading(true);
-      setEntryError("");
+
+      setEntryError('');
 
       try {
-        const data = await getMovieEntry(supabase, movie.tmdb_id);
+        const data =
+          await getMovieEntry(
+            supabase,
+            movie.tmdb_id
+          );
 
         setEntry(data);
 
-        setReviewRating(data?.rating ?? null);
+        setReviewRating(
+          data?.rating ?? null
+        );
 
-        setReviewText(data?.review_text ?? "");
+        setReviewText(
+          data?.review_text ?? ''
+        );
       } catch (error: any) {
-        console.error("Movie entry load failed:", error);
+        console.error(
+          'Movie entry load failed:',
+          error
+        );
 
         setEntryError(
-          error.message ?? "Impossibile caricare il tuo stato per questo film.",
+          error.message ??
+            'Impossibile caricare il tuo stato per questo film.'
         );
       } finally {
         setEntryLoading(false);
@@ -239,15 +739,34 @@ export default function FilmDetailPage() {
     };
 
     void loadEntry();
-  }, [movie, currentUser, isGuest, supabase]);
+  }, [
+    movie,
+    currentUser,
+    isGuest,
+    supabase,
+  ]);
 
-  const trailerKey = movie?.trailer
-    ? new URL(movie.trailer).searchParams.get("v")
-    : null;
+  // ─────────────────────────────────────────────
+  // TRAILER
+  // ─────────────────────────────────────────────
+
+  const trailerKey =
+    getYouTubeKey(
+      movie?.trailer
+    );
+
+  // ─────────────────────────────────────────────
+  // ACCOUNT
+  // ─────────────────────────────────────────────
 
   const requireAccount = () => {
-    if (!currentUser || currentUser.isGuest || isGuest) {
-      router.push("/auth");
+    if (
+      !currentUser ||
+      currentUser.isGuest ||
+      isGuest
+    ) {
+      router.push('/auth');
+
       return false;
     }
 
@@ -256,25 +775,40 @@ export default function FilmDetailPage() {
 
   const runEntryAction = async (
     action: string,
-    operation: () => Promise<UserMovieEntry>,
+    operation: () =>
+      Promise<UserMovieEntry>
   ) => {
-    if (!requireAccount()) return;
+    if (!requireAccount()) {
+      return;
+    }
 
     setEntryAction(action);
-    setEntryError("");
+
+    setEntryError('');
 
     try {
-      const updated = await operation();
+      const updated =
+        await operation();
 
       setEntry(updated);
 
-      setReviewRating(updated.rating ?? null);
+      setReviewRating(
+        updated.rating ?? null
+      );
 
-      setReviewText(updated.review_text ?? "");
+      setReviewText(
+        updated.review_text ?? ''
+      );
     } catch (error: any) {
-      console.error(`Movie entry action failed (${action}):`, error);
+      console.error(
+        `Movie entry action failed (${action}):`,
+        error
+      );
 
-      setEntryError(error.message ?? "Impossibile aggiornare il film.");
+      setEntryError(
+        error.message ??
+          'Impossibile aggiornare il film.'
+      );
     } finally {
       setEntryAction(null);
     }
@@ -283,92 +817,164 @@ export default function FilmDetailPage() {
   const handleFavorite = () => {
     if (!movie) return;
 
-    void runEntryAction("favorite", () =>
-      setFavorite(supabase, movie.tmdb_id, !(entry?.is_favorite ?? false)),
+    void runEntryAction(
+      'favorite',
+      () =>
+        setFavorite(
+          supabase,
+          movie.tmdb_id,
+          !(entry?.is_favorite ?? false)
+        )
     );
   };
 
   const handleWatchlist = () => {
     if (!movie) return;
 
-    void runEntryAction("watchlist", () =>
-      setWatchlist(supabase, movie.tmdb_id, !(entry?.in_watchlist ?? false)),
+    void runEntryAction(
+      'watchlist',
+      () =>
+        setWatchlist(
+          supabase,
+          movie.tmdb_id,
+          !(entry?.in_watchlist ?? false)
+        )
     );
   };
 
   const handleWatched = () => {
     if (!movie) return;
 
-    void runEntryAction("watched", () =>
-      entry?.watched_on
-        ? clearWatched(supabase, movie.tmdb_id)
-        : markWatched(supabase, movie.tmdb_id),
+    void runEntryAction(
+      'watched',
+      () =>
+        entry?.watched_on
+          ? clearWatched(
+              supabase,
+              movie.tmdb_id
+            )
+          : markWatched(
+              supabase,
+              movie.tmdb_id
+            )
     );
   };
 
+  // ─────────────────────────────────────────────
+  // RECENSIONE
+  // ─────────────────────────────────────────────
+
   const openReview = () => {
-    if (!requireAccount()) return;
+    if (!requireAccount()) {
+      return;
+    }
 
-    setReviewRating(entry?.rating ?? null);
+    setReviewRating(
+      entry?.rating ?? null
+    );
 
-    setReviewText(entry?.review_text ?? "");
+    setReviewText(
+      entry?.review_text ?? ''
+    );
 
     setPublishRating(true);
-    setEntryError("");
+
+    setReviewHoverRating(null);
+
+    setEntryError('');
+
     setReviewOpen(true);
   };
 
   const saveReview = async () => {
-    if (!movie || !currentUser || currentUser.isGuest || isGuest) {
+    if (
+      !movie ||
+      !currentUser ||
+      currentUser.isGuest ||
+      isGuest
+    ) {
       return;
     }
 
-    const cleanText = reviewText.trim();
+    const cleanText =
+      reviewText.trim();
 
     if (cleanText.length > 3000) {
-      setEntryError("La recensione può contenere massimo 3000 caratteri.");
+      setEntryError(
+        'La recensione può contenere massimo 3000 caratteri.'
+      );
 
       return;
     }
 
     setSavingReview(true);
-    setEntryError("");
+
+    setEntryError('');
 
     try {
-      const catalogMovie = await ensureTmdbMovie(supabase, movie.tmdb_id);
+      const catalogMovie =
+        await ensureTmdbMovie(
+          supabase,
+          movie.tmdb_id
+        );
 
       const payload = {
-        rating: reviewRating,
+        rating:
+          reviewRating,
 
-        review_text: cleanText || null,
+        review_text:
+          cleanText || null,
 
-        review_visibility: cleanText ? "public" : "private",
+        review_visibility:
+          cleanText
+            ? 'public'
+            : 'private',
 
         rating_visibility:
-          reviewRating !== null && publishRating ? "public" : "private",
+          reviewRating !== null &&
+          publishRating
+            ? 'public'
+            : 'private',
       };
 
-      const { data: existing, error: lookupError } = await supabase
-        .from("user_movie_entries")
-        .select("id")
-        .eq("user_id", currentUser.id)
-        .eq("movie_id", catalogMovie.id)
+      const {
+        data: existing,
+        error: lookupError,
+      } = await supabase
+        .from('user_movie_entries')
+        .select('id')
+        .eq(
+          'user_id',
+          currentUser.id
+        )
+        .eq(
+          'movie_id',
+          catalogMovie.id
+        )
         .maybeSingle();
 
       if (lookupError) {
         throw lookupError;
       }
 
-      let saved: UserMovieEntry | null = null;
+      let saved:
+        | UserMovieEntry
+        | null = null;
 
       if (existing?.id) {
-        const { data, error } = await supabase
-          .from("user_movie_entries")
+        const {
+          data,
+          error,
+        } = await supabase
+          .from('user_movie_entries')
           .update(payload)
-          .eq("id", existing.id)
-          .eq("user_id", currentUser.id)
+          .eq('id', existing.id)
+          .eq(
+            'user_id',
+            currentUser.id
+          )
           .select(
-            "id,user_id,movie_id,rating,review_text,review_updated_at,is_favorite,in_watchlist,watched_on,created_at,updated_at",
+            'id,user_id,movie_id,rating,review_text,review_updated_at,is_favorite,in_watchlist,watched_on,created_at,updated_at'
           )
           .single<UserMovieEntry>();
 
@@ -378,17 +984,22 @@ export default function FilmDetailPage() {
 
         saved = data;
       } else {
-        const { data, error } = await supabase
-          .from("user_movie_entries")
+        const {
+          data,
+          error,
+        } = await supabase
+          .from('user_movie_entries')
           .insert({
-            user_id: currentUser.id,
+            user_id:
+              currentUser.id,
 
-            movie_id: catalogMovie.id,
+            movie_id:
+              catalogMovie.id,
 
             ...payload,
           })
           .select(
-            "id,user_id,movie_id,rating,review_text,review_updated_at,is_favorite,in_watchlist,watched_on,created_at,updated_at",
+            'id,user_id,movie_id,rating,review_text,review_updated_at,is_favorite,in_watchlist,watched_on,created_at,updated_at'
           )
           .single<UserMovieEntry>();
 
@@ -400,67 +1011,555 @@ export default function FilmDetailPage() {
       }
 
       setEntry(saved);
+
       setReviewOpen(false);
     } catch (error: any) {
-      console.error("Review save failed:", error);
+      console.error(
+        'Review save failed:',
+        error
+      );
 
-      setEntryError(error.message ?? "Impossibile salvare la recensione.");
+      setEntryError(
+        error.message ??
+          'Impossibile salvare la recensione.'
+      );
     } finally {
       setSavingReview(false);
     }
   };
+
+  const removeReview = async () => {
+    if (
+      !entry ||
+      !currentUser ||
+      currentUser.isGuest ||
+      isGuest
+    ) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        'Vuoi rimuovere il voto e la recensione? Preferiti, Watchlist e stato Visto resteranno invariati.'
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setSavingReview(true);
+
+    setEntryError('');
+
+    try {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from('user_movie_entries')
+        .update({
+          rating: null,
+
+          review_text: null,
+
+          review_visibility:
+            'private',
+
+          rating_visibility:
+            'private',
+        })
+        .eq('id', entry.id)
+        .eq(
+          'user_id',
+          currentUser.id
+        )
+        .select(
+          'id,user_id,movie_id,rating,review_text,review_updated_at,is_favorite,in_watchlist,watched_on,created_at,updated_at'
+        )
+        .single<UserMovieEntry>();
+
+      if (error) {
+        throw error;
+      }
+
+      setEntry(data);
+
+      setReviewRating(null);
+
+      setReviewText('');
+
+      setPublishRating(true);
+
+      setReviewOpen(false);
+    } catch (error: any) {
+      console.error(
+        'Review remove failed:',
+        error
+      );
+
+      setEntryError(
+        error.message ??
+          'Impossibile rimuovere voto e recensione.'
+      );
+    } finally {
+      setSavingReview(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────
+  // PROVIDER STREAMING
+  // ─────────────────────────────────────────────
+
+  const getProviderTargetUrl = (
+    provider: WatchProvider
+  ) => {
+    if (provider.url) {
+      return provider.url;
+    }
+
+    const title =
+      encodeURIComponent(
+        [
+          movie?.title ?? '',
+          movie?.year || '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+      );
+
+    const name =
+      provider.name.toLowerCase();
+
+    if (
+      name.includes('netflix')
+    ) {
+      return `https://www.netflix.com/search?q=${title}`;
+    }
+
+    if (
+      name.includes('prime') ||
+      name.includes('amazon')
+    ) {
+      return `https://www.primevideo.com/search/ref=atv_nb_sr?phrase=${title}`;
+    }
+
+    if (
+      name.includes('disney')
+    ) {
+      return `https://www.disneyplus.com/search?q=${title}`;
+    }
+
+    if (
+      name.includes('apple')
+    ) {
+      return `https://tv.apple.com/search?term=${title}`;
+    }
+
+    if (
+      name.includes('paramount')
+    ) {
+      return `https://www.paramountplus.com/it/search/?q=${title}`;
+    }
+
+    if (
+      name.includes('mubi')
+    ) {
+      return `https://mubi.com/it/search/films?query=${title}`;
+    }
+
+    if (
+      name.includes('rakuten')
+    ) {
+      return `https://www.rakuten.tv/it/search?q=${title}`;
+    }
+
+    if (
+      name.includes('chili')
+    ) {
+      return `https://it.chili.com/search?q=${title}`;
+    }
+
+    if (
+      name === 'now' ||
+      name.includes('now tv')
+    ) {
+      return `https://www.nowtv.it/cerca.html?search=${title}`;
+    }
+
+    if (
+      name.includes('sky')
+    ) {
+      return `https://www.sky.it/cerca?query=${title}`;
+    }
+
+    if (
+      name.includes('google')
+    ) {
+      return `https://play.google.com/store/search?q=${title}&c=movies`;
+    }
+
+    if (
+      name.includes('microsoft')
+    ) {
+      return `https://www.microsoft.com/it-it/search/shop/movies?q=${title}`;
+    }
+
+    return null;
+  };
+
+  // ─────────────────────────────────────────────
+  // CAST
+  // ─────────────────────────────────────────────
+
+  const orderedCast =
+    [...(movie?.cast ?? [])]
+      .sort(
+        (a, b) => {
+          const orderA =
+            a.order ??
+            Number.MAX_SAFE_INTEGER;
+
+          const orderB =
+            b.order ??
+            Number.MAX_SAFE_INTEGER;
+
+          return orderA - orderB;
+        }
+      );
+
+  const castTotalPages =
+    Math.max(
+      1,
+      Math.ceil(
+        orderedCast.length /
+          CAST_PER_PAGE
+      )
+    );
+
+  useEffect(() => {
+    setCastPage(
+      (page) =>
+        Math.min(
+          Math.max(1, page),
+          castTotalPages
+        )
+    );
+  }, [castTotalPages]);
+
+  const castStartIndex =
+    (castPage - 1) *
+    CAST_PER_PAGE;
+
+  const visibleCast =
+    orderedCast.slice(
+      castStartIndex,
+      castStartIndex +
+        CAST_PER_PAGE
+    );
+
+  // ─────────────────────────────────────────────
+  // STREAMING COMPATTO
+  // ─────────────────────────────────────────────
+
+  const streamingGroups =
+    availability
+      ? [
+          {
+            key:
+              'flatrate',
+
+            label:
+              'Abbonamento',
+
+            providers:
+              availability
+                .streaming
+                .flatrate,
+          },
+
+          {
+            key:
+              'free',
+
+            label:
+              'Gratis',
+
+            providers:
+              availability
+                .streaming
+                .free,
+          },
+
+          {
+            key:
+              'ads',
+
+            label:
+              'Con pubblicità',
+
+            providers:
+              availability
+                .streaming
+                .ads,
+          },
+
+          {
+            key:
+              'rent',
+
+            label:
+              'Noleggio',
+
+            providers:
+              availability
+                .streaming
+                .rent,
+          },
+
+          {
+            key:
+              'buy',
+
+            label:
+              'Acquisto',
+
+            providers:
+              availability
+                .streaming
+                .buy,
+          },
+        ].filter(
+          (group) =>
+            group.providers.length >
+            0
+        )
+      : [];
+
+  const allStreamingOptions =
+    streamingGroups.flatMap(
+      (group) =>
+        group.providers.map(
+          (provider) => ({
+            ...provider,
+
+            categoryKey:
+              group.key,
+
+            categoryLabel:
+              group.label,
+          })
+        )
+    );
+
+  const visibleStreamingOptions =
+    showAllStreaming
+      ? allStreamingOptions
+      : allStreamingOptions.slice(
+          0,
+          STREAMING_INITIAL_LIMIT
+        );
+
+  const hiddenStreamingCount =
+    Math.max(
+      0,
+
+      allStreamingOptions.length -
+        STREAMING_INITIAL_LIMIT
+    );
+
+  // ─────────────────────────────────────────────
+  // FILM SIMILI
+  // ─────────────────────────────────────────────
+  //
+  // L'API ordina già i risultati usando segnali molto
+  // più forti (saga, keyword, generi, cast, regista,
+  // recommendations TMDB). Qui NON li riordiniamo per
+  // anno o voto, altrimenti perderemmo quella coerenza.
+
+  const smartSimilar =
+    Array.from(
+      new Map(
+        (movie?.similar ?? [])
+          .filter(
+            (item) =>
+              item.tmdb_id !==
+                movie?.tmdb_id &&
+              Boolean(item.cover)
+          )
+          .map(
+            (item) =>
+              [
+                item.tmdb_id,
+                item,
+              ] as const
+          )
+      ).values()
+    ).slice(0, 18);
+
+
+  const cinemasByProximity = availability?.cinema.cinemas
+    ? availability.cinema.cinemas
+        .map((cinema, originalIndex) => {
+          const hasCoordinates =
+            userPosition &&
+            typeof cinema.latitude === 'number' &&
+            typeof cinema.longitude === 'number';
+
+          const distance = hasCoordinates
+            ? distanceKm(userPosition, {
+                latitude: cinema.latitude as number,
+                longitude: cinema.longitude as number,
+              })
+            : null;
+
+          const normalizedArea = normalizePlace(userArea);
+          const normalizedCinemaCity = normalizePlace(cinema.city);
+          const normalizedCinemaAddress = normalizePlace(cinema.address);
+
+          const sameArea = Boolean(
+            normalizedArea &&
+              (normalizedCinemaCity.includes(normalizedArea) ||
+                normalizedArea.includes(normalizedCinemaCity) ||
+                normalizedCinemaAddress.includes(normalizedArea))
+          );
+
+          return {
+            ...cinema,
+            _distanceKm: distance,
+            _sameArea: sameArea,
+            _originalIndex: originalIndex,
+          };
+        })
+        .sort((a, b) => {
+          if (a._distanceKm !== null && b._distanceKm !== null) {
+            return a._distanceKm - b._distanceKm;
+          }
+
+          if (a._distanceKm !== null) return -1;
+          if (b._distanceKm !== null) return 1;
+
+          if (a._sameArea !== b._sameArea) {
+            return a._sameArea ? -1 : 1;
+          }
+
+          return a._originalIndex - b._originalIndex;
+        })
+    : [];
+
+  const hasCinemaLocationSuggestion =
+    Boolean(userPosition || userArea) &&
+    cinemasByProximity.some(
+      (cinema) => cinema._distanceKm !== null || cinema._sameArea
+    );
+
+  // ─────────────────────────────────────────────
+  // LOADING
+  // ─────────────────────────────────────────────
 
   if (loading) {
     return (
       <AppShell activeNav="home">
         <div
           style={{
-            minHeight: "70vh",
-            display: "grid",
-            placeItems: "center",
-            color: P.textMuted,
-            background: P.bg,
-            fontFamily: FONT_SANS,
+            minHeight:
+              '70vh',
+
+            display:
+              'grid',
+
+            placeItems:
+              'center',
+
+            color:
+              P.textMuted,
+
+            background:
+              P.bg,
+
+            fontFamily:
+              FONT_SANS,
           }}
         >
-          <FilmSlate size={38} color={P.pink} weight="duotone" />
+          <FilmSlate
+            size={38}
+            color={P.pink}
+            weight="duotone"
+          />
         </div>
       </AppShell>
     );
   }
+
+  // ─────────────────────────────────────────────
+  // FILM NON TROVATO
+  // ─────────────────────────────────────────────
 
   if (!movie) {
     return (
       <AppShell activeNav="home">
         <div
           style={{
-            minHeight: "70vh",
-            display: "grid",
-            placeItems: "center",
-            color: P.textMuted,
-            background: P.bg,
-            fontFamily: FONT_SANS,
+            minHeight:
+              '70vh',
+
+            display:
+              'grid',
+
+            placeItems:
+              'center',
+
+            color:
+              P.textMuted,
+
+            background:
+              P.bg,
+
+            fontFamily:
+              FONT_SANS,
           }}
         >
           <div
             style={{
-              textAlign: "center",
+              textAlign:
+                'center',
             }}
           >
-            <p>Non siamo riusciti a trovare questo film.</p>
+            <p>
+              Non siamo riusciti a
+              trovare questo film.
+            </p>
 
             <button
-              onClick={() => router.push("/home")}
+              onClick={() =>
+                router.push(
+                  '/home'
+                )
+              }
               style={{
                 marginTop: 16,
-                padding: "10px 20px",
-                background: P.pink,
-                color: "#fff",
-                border: "none",
-                cursor: "pointer",
-                fontFamily: FONT_SANS,
+
+                padding:
+                  '10px 20px',
+
+                background:
+                  P.pink,
+
+                color:
+                  '#fff',
+
+                border:
+                  'none',
+
+                cursor:
+                  'pointer',
+
+                fontFamily:
+                  FONT_SANS,
+
                 fontWeight: 700,
+
                 fontSize: 14,
+
                 borderRadius: 0,
               }}
             >
@@ -472,131 +1571,242 @@ export default function FilmDetailPage() {
     );
   }
 
-  const heroBackground = movie.backdrop
-    ? `linear-gradient(90deg, ${P.overlayDark} 0%, ${P.overlayMid} 60%, ${P.overlayLight} 100%), linear-gradient(0deg, ${P.bg} 0%, transparent 42%), url(${movie.backdrop})`
-    : `linear-gradient(90deg, ${P.overlayDark} 0%, ${P.overlayMid} 60%, ${P.overlayLight} 100%), linear-gradient(0deg, ${P.bg} 0%, transparent 42%)`;
+  // ─────────────────────────────────────────────
+  // HERO
+  // ─────────────────────────────────────────────
 
-  const totalCastPages = Math.ceil(movie.cast.length / CAST_PER_PAGE);
+  const heroBackground =
+    movie.backdrop
+      ? `linear-gradient(90deg, ${P.overlayDark} 0%, ${P.overlayMid} 60%, ${P.overlayLight} 100%), linear-gradient(0deg, ${P.bg} 0%, transparent 42%), url(${movie.backdrop})`
+      : `linear-gradient(90deg, ${P.overlayDark} 0%, ${P.overlayMid} 60%, ${P.overlayLight} 100%), linear-gradient(0deg, ${P.bg} 0%, transparent 42%)`;
 
-  const castStartIndex = (castPage - 1) * CAST_PER_PAGE;
+  // ─────────────────────────────────────────────
+  // CONDIVISIONE
+  // ─────────────────────────────────────────────
 
-  const visibleCast = movie.cast.slice(
-    castStartIndex,
-    castStartIndex + CAST_PER_PAGE,
-  );
+  const shareMovie = async () => {
+    const url =
+      typeof window !==
+      'undefined'
+        ? `${window.location.origin}/film/${movie.tmdb_id}`
+        : '';
+
+    const payload = {
+      title:
+        movie.title,
+
+      text:
+        `Guarda ${movie.title} su CineDate`,
+
+      url,
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(
+          payload
+        );
+
+        return;
+      }
+
+      await navigator.clipboard.writeText(
+        url
+      );
+
+      window.alert(
+        'Link copiato'
+      );
+    } catch {
+      // L'utente può chiudere il pannello.
+    }
+  };
 
   return (
     <AppShell activeNav="home">
       <main
         style={{
           paddingBottom: 96,
-          background: P.bg,
-          fontFamily: FONT_SANS,
-          minHeight: "100vh",
-          color: P.text,
+
+          background:
+            P.bg,
+
+          fontFamily:
+            FONT_SANS,
+
+          minHeight:
+            '100vh',
+
+          color:
+            P.text,
         }}
       >
+        {/* ───────────────── HERO ───────────────── */}
+
         <section
           style={{
-            height: isMobile ? 220 : 390,
+            height:
+              isMobile
+                ? 220
+                : 390,
 
-            position: "relative",
+            position:
+              'relative',
 
-            background: heroBackground,
+            background:
+              heroBackground,
 
-            backgroundSize: "cover",
+            backgroundSize:
+              'cover',
 
-            backgroundPosition: "center",
+            backgroundPosition:
+              'center',
           }}
         >
           <button
-            onClick={() => router.back()}
+            onClick={() =>
+              router.back()
+            }
             aria-label="Torna indietro"
             style={{
-              position: "absolute",
+              position:
+                'absolute',
 
-              top: isMobile ? 10 : 18,
+              top:
+                isMobile
+                  ? 10
+                  : 18,
 
-              left: isMobile ? 10 : 18,
+              left:
+                isMobile
+                  ? 10
+                  : 18,
 
               zIndex: 3,
 
-              width: isMobile ? 34 : 42,
+              width:
+                isMobile
+                  ? 34
+                  : 42,
 
-              height: isMobile ? 34 : 42,
+              height:
+                isMobile
+                  ? 34
+                  : 42,
 
               border: 0,
 
-              borderRadius: "50%",
+              borderRadius:
+                '50%',
 
-              background: "rgba(0,0,0,0.72)",
+              background:
+                'rgba(0,0,0,0.72)',
 
-              color: "#fff",
+              color:
+                '#fff',
 
-              display: "grid",
+              display:
+                'grid',
 
-              placeItems: "center",
+              placeItems:
+                'center',
 
-              cursor: "pointer",
+              cursor:
+                'pointer',
 
-              backdropFilter: "blur(8px)",
+              backdropFilter:
+                'blur(8px)',
             }}
           >
-            <ArrowLeft size={isMobile ? 18 : 21} />
+            <ArrowLeft
+              size={
+                isMobile
+                  ? 18
+                  : 21
+              }
+            />
           </button>
 
           <div
             style={{
-              position: "absolute",
+              position:
+                'absolute',
 
               zIndex: 2,
 
-              left: isMobile ? 16 : "calc(50% - min(42%, 430px))",
+              left:
+                isMobile
+                  ? 16
+                  : 'calc(50% - min(42%, 430px))',
 
-              bottom: isMobile ? 24 : 42,
+              bottom:
+                isMobile
+                  ? 24
+                  : 42,
 
-              color: "#fff",
+              color:
+                '#fff',
 
-              maxWidth: isMobile ? "90%" : 500,
+              maxWidth:
+                isMobile
+                  ? '90%'
+                  : 500,
             }}
           >
             <span
               style={{
-                background: P.pinkGlow,
+                background:
+                  P.pinkGlow,
 
-                color: P.pink,
+                color:
+                  P.pink,
 
-                borderRadius: 999,
+                borderRadius: 3,
 
-                padding: isMobile ? "3px 8px" : "5px 10px",
+                padding:
+                  isMobile
+                    ? '3px 8px'
+                    : '5px 10px',
 
-                fontSize: isMobile ? 10 : 12,
+                fontSize:
+                  isMobile
+                    ? 10
+                    : 12,
 
                 fontWeight: 700,
 
-                border: `1px solid ${P.pink}`,
+                border:
+                  `1px solid ${P.pink}`,
               }}
             >
-              {movie.genre || "Film"}
+              {movie.genre ||
+                'Film'}
             </span>
 
             <h1
               style={{
-                fontSize: isMobile
-                  ? "clamp(24px, 8vw, 32px)"
-                  : "clamp(30px, 4vw, 48px)",
+                fontSize:
+                  isMobile
+                    ? 'clamp(24px, 8vw, 32px)'
+                    : 'clamp(30px, 4vw, 48px)',
 
                 lineHeight: 1.04,
 
-                margin: isMobile ? "6px 0" : "10px 0",
+                margin:
+                  isMobile
+                    ? '6px 0'
+                    : '10px 0',
 
-                letterSpacing: "-0.035em",
+                letterSpacing:
+                  '-0.035em',
 
-                fontFamily: FONT_DISPLAY,
+                fontFamily:
+                  FONT_DISPLAY,
 
                 fontWeight: 800,
 
-                color: "#fff",
+                color:
+                  '#fff',
               }}
             >
               {movie.title}
@@ -605,11 +1815,15 @@ export default function FilmDetailPage() {
             {movie.tagline && (
               <div
                 style={{
-                  fontStyle: "italic",
+                  fontStyle:
+                    'italic',
 
                   opacity: 0.9,
 
-                  fontSize: isMobile ? 13 : 15,
+                  fontSize:
+                    isMobile
+                      ? 13
+                      : 15,
                 }}
               >
                 {movie.tagline}
@@ -618,71 +1832,128 @@ export default function FilmDetailPage() {
           </div>
         </section>
 
+        {/* ───────────────── CONTENT ───────────────── */}
+
         <div
           style={{
             maxWidth: 1060,
 
-            margin: "-18px auto 0",
+            margin:
+              '-18px auto 0',
 
-            position: "relative",
+            position:
+              'relative',
 
-            padding: isMobile ? "0 12px" : "0 24px",
+            padding:
+              isMobile
+                ? '0 12px'
+                : '0 24px',
           }}
         >
+          {/* ───────────────── MAIN INFO ───────────────── */}
+
           <div
             style={{
-              display: "grid",
+              display:
+                'grid',
 
-              gridTemplateColumns: isMobile ? "1fr" : "190px minmax(0,1fr)",
+              gridTemplateColumns:
+                isMobile
+                  ? '1fr'
+                  : '190px minmax(0,1fr)',
 
-              gap: isMobile ? 16 : 30,
+              gap:
+                isMobile
+                  ? 16
+                  : 30,
 
-              alignItems: "start",
+              alignItems:
+                'start',
             }}
           >
             <img
-              src={movie.cover || fallbackPoster}
+              src={
+                movie.cover ||
+                fallbackPoster
+              }
               alt={`Locandina di ${movie.title}`}
               style={{
-                width: isMobile ? 140 : 190,
+                width:
+                  isMobile
+                    ? 140
+                    : 190,
 
-                justifySelf: isMobile ? "center" : "start",
+                justifySelf:
+                  isMobile
+                    ? 'center'
+                    : 'start',
 
                 borderRadius: 20,
 
-                boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+                boxShadow:
+                  '0 8px 32px rgba(0,0,0,0.2)',
 
-                background: P.bgSoft,
+                background:
+                  P.bgSoft,
               }}
             />
 
-            <div>
+            <div
+              style={{
+                minWidth: 0,
+
+                maxWidth: 720,
+              }}
+            >
+              {/* METADATA */}
+
               <div
                 style={{
-                  display: "flex",
+                  display:
+                    'flex',
 
-                  flexWrap: "wrap",
+                  flexWrap:
+                    'wrap',
 
-                  gap: isMobile ? "6px 12px" : "8px 18px",
+                  gap:
+                    isMobile
+                      ? '6px 12px'
+                      : '8px 18px',
 
-                  color: P.text,
+                  color:
+                    P.text,
 
-                  fontSize: isMobile ? 12 : 13,
+                  fontSize:
+                    isMobile
+                      ? 12
+                      : 13,
 
-                  justifyContent: isMobile ? "center" : "flex-start",
+                  justifyContent:
+                    isMobile
+                      ? 'center'
+                      : 'flex-start',
                 }}
               >
-                {movie.year > 0 && (
+                {movie.year >
+                  0 && (
                   <span
                     style={{
-                      display: "flex",
+                      display:
+                        'flex',
 
-                      alignItems: "center",
+                      alignItems:
+                        'center',
 
                       gap: 5,
                     }}
                   >
-                    <CalendarBlank size={isMobile ? 14 : 16} />
+                    <CalendarBlank
+                      size={
+                        isMobile
+                          ? 14
+                          : 16
+                      }
+                    />
 
                     {movie.year}
                   </span>
@@ -691,111 +1962,297 @@ export default function FilmDetailPage() {
                 {movie.runtime && (
                   <span
                     style={{
-                      display: "flex",
+                      display:
+                        'flex',
 
-                      alignItems: "center",
+                      alignItems:
+                        'center',
 
                       gap: 5,
                     }}
                   >
-                    <Clock size={isMobile ? 14 : 16} />
+                    <Clock
+                      size={
+                        isMobile
+                          ? 14
+                          : 16
+                      }
+                    />
 
                     {movie.runtime}
                   </span>
                 )}
 
-                {movie.rating > 0 && (
+                {movie.rating >
+                  0 && (
                   <span
                     style={{
-                      display: "flex",
+                      display:
+                        'flex',
 
-                      alignItems: "center",
+                      alignItems:
+                        'center',
 
                       gap: 5,
 
-                      color: P.gold,
+                      color:
+                        P.gold,
 
                       fontWeight: 700,
                     }}
                   >
-                    <Star size={isMobile ? 14 : 16} weight="fill" />
+                    <Star
+                      size={
+                        isMobile
+                          ? 14
+                          : 16
+                      }
+                      weight="fill"
+                    />
 
-                    {movie.rating.toFixed(1)}
+                    {movie.rating.toFixed(
+                      1
+                    )}
 
                     <span
                       style={{
-                        color: P.textMuted,
+                        color:
+                          P.textMuted,
 
                         fontWeight: 400,
 
-                        fontSize: isMobile ? 11 : 13,
+                        fontSize:
+                          isMobile
+                            ? 11
+                            : 13,
                       }}
                     >
-                      ({movie.vote_count.toLocaleString("it-IT")} voti)
+                      (
+                      {movie.vote_count.toLocaleString(
+                        'it-IT'
+                      )}{' '}
+                      voti)
                     </span>
                   </span>
                 )}
               </div>
 
+              {/* REGISTA */}
+
               {movie.director && (
                 <p
                   style={{
-                    color: P.textMuted,
+                    color:
+                      P.textMuted,
 
-                    fontSize: isMobile ? 12 : 13,
+                    fontSize:
+                      isMobile
+                        ? 12
+                        : 13,
 
-                    margin: "10px 0 0",
+                    margin:
+                      '10px 0 0',
 
-                    textAlign: isMobile ? "center" : "left",
+                    textAlign:
+                      isMobile
+                        ? 'center'
+                        : 'left',
                   }}
                 >
-                  Regia di{" "}
-                  <strong
-                    style={{
-                      color: P.text,
-                    }}
-                  >
-                    {movie.director}
-                  </strong>
+                  Regia di{' '}
+
+                  {movie.director_id ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          `/persona/${movie.director_id}`
+                        )
+                      }
+                      style={{
+                        border: 0,
+
+                        background:
+                          'transparent',
+
+                        color:
+                          P.text,
+
+                        padding: 0,
+
+                        fontFamily:
+                          FONT_SANS,
+
+                        fontSize:
+                          'inherit',
+
+                        fontWeight: 850,
+
+                        cursor:
+                          'pointer',
+
+                        textDecoration:
+                          'underline',
+
+                        textUnderlineOffset: 3,
+                      }}
+                    >
+                      {movie.director}
+                    </button>
+                  ) : (
+                    <strong
+                      style={{
+                        color:
+                          P.text,
+                      }}
+                    >
+                      {movie.director}
+                    </strong>
+                  )}
                 </p>
               )}
 
+              {/* SHARE */}
+
+              <button
+                type="button"
+                onClick={() =>
+                  void shareMovie()
+                }
+                aria-label="Condividi film"
+                title="Condividi"
+                style={{
+                  marginTop: 14,
+
+                  width: 34,
+
+                  height: 34,
+
+                  borderRadius:
+                    '50%',
+
+                  border:
+                    `1px solid ${P.border}`,
+
+                  background:
+                    P.card,
+
+                  color:
+                    P.textMuted,
+
+                  display:
+                    'grid',
+
+                  placeItems:
+                    'center',
+
+                  cursor:
+                    'pointer',
+                }}
+              >
+                <ShareNetwork
+                  size={15}
+                />
+              </button>
+
+              {!isGuest &&
+                currentUser &&
+                !currentUser.isGuest && (
+                  <div
+                    style={{
+                      marginTop: 16,
+
+                      marginBottom:
+                        -7,
+
+                      color:
+                        P.textFaint,
+
+                      fontSize: 8.5,
+
+                      fontWeight: 900,
+
+                      textTransform:
+                        'uppercase',
+
+                      letterSpacing:
+                        '.1em',
+
+                      textAlign:
+                        isMobile
+                          ? 'center'
+                          : 'left',
+                    }}
+                  >
+                    La tua libreria
+                  </div>
+                )}
+
+              {/* ACTIONS */}
+
               <div
                 style={{
-                  display: "flex",
+                  display:
+                    'flex',
 
-                  flexWrap: "wrap",
+                  flexWrap:
+                    'wrap',
 
                   gap: 8,
 
                   marginTop: 16,
 
-                  justifyContent: isMobile ? "center" : "flex-start",
+                  justifyContent:
+                    isMobile
+                      ? 'center'
+                      : 'flex-start',
                 }}
               >
                 <button
-                  onClick={handleFavorite}
-                  disabled={entryLoading || entryAction !== null}
+                  onClick={
+                    handleFavorite
+                  }
+                  disabled={
+                    entryLoading ||
+                    entryAction !==
+                      null
+                  }
                   style={{
-                    border: `1px solid ${
-                      entry?.is_favorite ? P.pink : P.border
-                    }`,
+                    border:
+                      `1px solid ${
+                        entry?.is_favorite
+                          ? P.pink
+                          : P.border
+                      }`,
 
-                    background: entry?.is_favorite ? P.pinkGlow : P.card,
+                    background:
+                      entry?.is_favorite
+                        ? P.pinkGlow
+                        : P.card,
 
-                    color: entry?.is_favorite ? P.pink : P.textMuted,
+                    color:
+                      entry?.is_favorite
+                        ? P.pink
+                        : P.textMuted,
 
-                    padding: "9px 12px",
+                    padding:
+                      '9px 12px',
 
-                    cursor: entryAction ? "wait" : "pointer",
+                    cursor:
+                      entryAction
+                        ? 'wait'
+                        : 'pointer',
 
-                    display: "inline-flex",
+                    display:
+                      'inline-flex',
 
-                    alignItems: "center",
+                    alignItems:
+                      'center',
 
                     gap: 6,
 
-                    fontFamily: FONT_SANS,
+                    fontFamily:
+                      FONT_SANS,
 
                     fontWeight: 700,
 
@@ -804,35 +2261,63 @@ export default function FilmDetailPage() {
                 >
                   <Heart
                     size={16}
-                    weight={entry?.is_favorite ? "fill" : "regular"}
+                    weight={
+                      entry?.is_favorite
+                        ? 'fill'
+                        : 'regular'
+                    }
                   />
 
-                  {entry?.is_favorite ? "Preferito" : "Preferiti"}
+                  {entry?.is_favorite
+                    ? 'Preferito'
+                    : 'Preferiti'}
                 </button>
 
                 <button
-                  onClick={handleWatchlist}
-                  disabled={entryLoading || entryAction !== null}
+                  onClick={
+                    handleWatchlist
+                  }
+                  disabled={
+                    entryLoading ||
+                    entryAction !==
+                      null
+                  }
                   style={{
-                    border: `1px solid ${
-                      entry?.in_watchlist ? P.gold : P.border
-                    }`,
+                    border:
+                      `1px solid ${
+                        entry?.in_watchlist
+                          ? P.gold
+                          : P.border
+                      }`,
 
-                    background: entry?.in_watchlist ? P.goldGlow : P.card,
+                    background:
+                      entry?.in_watchlist
+                        ? P.goldGlow
+                        : P.card,
 
-                    color: entry?.in_watchlist ? P.gold : P.textMuted,
+                    color:
+                      entry?.in_watchlist
+                        ? P.gold
+                        : P.textMuted,
 
-                    padding: "9px 12px",
+                    padding:
+                      '9px 12px',
 
-                    cursor: entryAction ? "wait" : "pointer",
+                    cursor:
+                      entryAction
+                        ? 'wait'
+                        : 'pointer',
 
-                    display: "inline-flex",
+                    display:
+                      'inline-flex',
 
-                    alignItems: "center",
+                    alignItems:
+                      'center',
 
                     gap: 6,
 
-                    fontFamily: FONT_SANS,
+                    fontFamily:
+                      FONT_SANS,
 
                     fontWeight: 700,
 
@@ -841,37 +2326,63 @@ export default function FilmDetailPage() {
                 >
                   <BookmarkSimple
                     size={16}
-                    weight={entry?.in_watchlist ? "fill" : "regular"}
+                    weight={
+                      entry?.in_watchlist
+                        ? 'fill'
+                        : 'regular'
+                    }
                   />
 
-                  {entry?.in_watchlist ? "In watchlist" : "Watchlist"}
+                  {entry?.in_watchlist
+                    ? 'In watchlist'
+                    : 'Watchlist'}
                 </button>
 
                 <button
-                  onClick={handleWatched}
-                  disabled={entryLoading || entryAction !== null}
+                  onClick={
+                    handleWatched
+                  }
+                  disabled={
+                    entryLoading ||
+                    entryAction !==
+                      null
+                  }
                   style={{
-                    border: `1px solid ${
-                      entry?.watched_on ? "#4ade80" : P.border
-                    }`,
+                    border:
+                      `1px solid ${
+                        entry?.watched_on
+                          ? '#4ade80'
+                          : P.border
+                      }`,
 
-                    background: entry?.watched_on
-                      ? "rgba(74,222,128,0.10)"
-                      : P.card,
+                    background:
+                      entry?.watched_on
+                        ? 'rgba(74,222,128,0.10)'
+                        : P.card,
 
-                    color: entry?.watched_on ? "#4ade80" : P.textMuted,
+                    color:
+                      entry?.watched_on
+                        ? '#4ade80'
+                        : P.textMuted,
 
-                    padding: "9px 12px",
+                    padding:
+                      '9px 12px',
 
-                    cursor: entryAction ? "wait" : "pointer",
+                    cursor:
+                      entryAction
+                        ? 'wait'
+                        : 'pointer',
 
-                    display: "inline-flex",
+                    display:
+                      'inline-flex',
 
-                    alignItems: "center",
+                    alignItems:
+                      'center',
 
                     gap: 6,
 
-                    fontFamily: FONT_SANS,
+                    fontFamily:
+                      FONT_SANS,
 
                     fontWeight: 700,
 
@@ -880,194 +2391,1238 @@ export default function FilmDetailPage() {
                 >
                   <CheckCircle
                     size={16}
-                    weight={entry?.watched_on ? "fill" : "regular"}
+                    weight={
+                      entry?.watched_on
+                        ? 'fill'
+                        : 'regular'
+                    }
                   />
 
-                  {entry?.watched_on ? "Visto" : "Segna visto"}
+                  {entry?.watched_on
+                    ? 'Visto'
+                    : 'Segna visto'}
                 </button>
 
                 <button
-                  onClick={openReview}
-                  disabled={entryLoading}
+                  onClick={
+                    openReview
+                  }
+                  disabled={
+                    entryLoading
+                  }
                   style={{
-                    border: `1px solid ${P.gold}`,
+                    border:
+                      `1px solid ${P.gold}`,
 
-                    background: P.gold,
+                    background:
+                      P.gold,
 
-                    color: "#120d05",
+                    color:
+                      '#120d05',
 
-                    padding: "9px 12px",
+                    padding:
+                      '9px 12px',
 
-                    cursor: "pointer",
+                    cursor:
+                      'pointer',
 
-                    display: "inline-flex",
+                    display:
+                      'inline-flex',
 
-                    alignItems: "center",
+                    alignItems:
+                      'center',
 
                     gap: 6,
 
-                    fontFamily: FONT_SANS,
+                    fontFamily:
+                      FONT_SANS,
 
                     fontWeight: 800,
 
                     fontSize: 12,
                   }}
                 >
-                  <PencilSimple size={16} weight="bold" />
+                  <PencilSimple
+                    size={16}
+                    weight="bold"
+                  />
 
-                  {entry?.review_text || entry?.rating
-                    ? "Modifica voto/recensione"
-                    : "Vota / Recensisci"}
+                  {entry?.review_text ||
+                  entry?.rating
+                    ? 'Modifica voto/recensione'
+                    : 'Vota / Recensisci'}
                 </button>
               </div>
 
-              {entry?.rating !== null && entry?.rating !== undefined && (
-                <div
-                  style={{
-                    marginTop: 10,
+              {entry?.rating !==
+                null &&
+                entry?.rating !==
+                  undefined && (
+                  <div
+                    style={{
+                      marginTop: 10,
 
-                    color: P.gold,
+                      color:
+                        P.gold,
 
-                    fontSize: 12,
+                      fontSize: 12,
 
-                    fontWeight: 700,
+                      fontWeight: 700,
 
-                    display: "flex",
+                      display:
+                        'flex',
 
-                    alignItems: "center",
+                      alignItems:
+                        'center',
 
-                    gap: 5,
+                      gap: 5,
 
-                    justifyContent: isMobile ? "center" : "flex-start",
-                  }}
-                >
-                  <Star size={14} weight="fill" />
-                  Il tuo voto: {Number(entry.rating).toFixed(1)}
-                  /5
-                </div>
-              )}
+                      justifyContent:
+                        isMobile
+                          ? 'center'
+                          : 'flex-start',
+                    }}
+                  >
+                    <Star
+                      size={14}
+                      weight="fill"
+                    />
+
+                    Il tuo voto:{' '}
+
+                    {Number(
+                      entry.rating
+                    ).toFixed(1)}
+                    /5
+                  </div>
+                )}
 
               {entryError && (
                 <div
                   style={{
                     marginTop: 10,
 
-                    padding: "9px 11px",
+                    padding:
+                      '9px 11px',
 
-                    border: "1px solid rgba(251,113,133,0.28)",
+                    border:
+                      '1px solid rgba(251,113,133,0.28)',
 
-                    background: "rgba(251,113,133,0.07)",
+                    background:
+                      'rgba(251,113,133,0.07)',
 
-                    color: "#fb7185",
+                    color:
+                      '#fb7185',
 
                     fontSize: 11,
 
-                    textAlign: isMobile ? "center" : "left",
+                    textAlign:
+                      isMobile
+                        ? 'center'
+                        : 'left',
                   }}
                 >
                   {entryError}
                 </div>
               )}
 
+              {/* TRAMA */}
+
               <div
                 onClick={() =>
-                  movie.trama_c && setShowSpoiler((value) => !value)
+                  movie.trama_c &&
+                  setShowSpoiler(
+                    (value) =>
+                      !value
+                  )
                 }
-                role={movie.trama_c ? "button" : undefined}
-                tabIndex={movie.trama_c ? 0 : undefined}
-                onKeyDown={(e) => {
-                  if (movie.trama_c && (e.key === "Enter" || e.key === " ")) {
-                    e.preventDefault();
+                role={
+                  movie.trama_c
+                    ? 'button'
+                    : undefined
+                }
+                tabIndex={
+                  movie.trama_c
+                    ? 0
+                    : undefined
+                }
+                onKeyDown={(
+                  event
+                ) => {
+                  if (
+                    movie.trama_c &&
+                    (event.key ===
+                      'Enter' ||
+                      event.key ===
+                        ' ')
+                  ) {
+                    event.preventDefault();
 
-                    setShowSpoiler((value) => !value);
+                    setShowSpoiler(
+                      (value) =>
+                        !value
+                    );
                   }
                 }}
                 aria-label={
                   movie.trama_c
                     ? showSpoiler
-                      ? "Nascondi spoiler"
-                      : "Mostra trama"
+                      ? 'Nascondi spoiler'
+                      : 'Mostra trama'
                     : undefined
                 }
                 style={{
-                  position: "relative",
+                  position:
+                    'relative',
 
                   marginTop: 14,
 
-                  cursor: movie.trama_c ? "pointer" : "default",
+                  cursor:
+                    movie.trama_c
+                      ? 'pointer'
+                      : 'default',
 
-                  overflow: "hidden",
+                  overflow:
+                    'hidden',
 
                   borderRadius: 12,
                 }}
               >
                 <p
                   style={{
-                    color: P.text,
+                    color:
+                      P.text,
 
-                    fontSize: isMobile ? 14 : 15,
+                    fontSize:
+                      isMobile
+                        ? 14
+                        : 15,
 
                     lineHeight: 1.7,
 
                     margin: 0,
 
                     filter:
-                      movie.trama_c && !showSpoiler ? "blur(8px)" : "none",
+                      movie.trama_c &&
+                      !showSpoiler
+                        ? 'blur(8px)'
+                        : 'none',
 
-                    userSelect: movie.trama_c && !showSpoiler ? "none" : "text",
+                    userSelect:
+                      movie.trama_c &&
+                      !showSpoiler
+                        ? 'none'
+                        : 'text',
 
-                    transition: "filter 0.25s ease",
+                    transition:
+                      'filter 0.25s ease',
 
-                    textAlign: isMobile ? "center" : "left",
+                    textAlign:
+                      isMobile
+                        ? 'center'
+                        : 'left',
                   }}
                 >
-                  {movie.trama_c || "La trama non è ancora disponibile."}
+                  {movie.trama_c ||
+                    'La trama non è ancora disponibile.'}
                 </p>
 
-                {movie.trama_c && !showSpoiler && (
-                  <div
-                    style={{
-                      position: "absolute",
-
-                      inset: 0,
-
-                      display: "grid",
-
-                      placeItems: "center",
-
-                      background: isDark
-                        ? "rgba(10,8,6,0.28)"
-                        : "rgba(245,239,232,0.35)",
-
-                      backdropFilter: "blur(2px)",
-                    }}
-                  >
-                    <span
+                {movie.trama_c &&
+                  !showSpoiler && (
+                    <div
                       style={{
-                        padding: isMobile ? "6px 12px" : "8px 14px",
+                        position:
+                          'absolute',
 
-                        borderRadius: 5,
+                        inset: 0,
 
-                        background: P.pink,
+                        display:
+                          'grid',
 
-                        color: "#fff",
+                        placeItems:
+                          'center',
 
-                        fontSize: isMobile ? 10 : 12,
+                        background:
+                          isDark
+                            ? 'rgba(10,8,6,0.28)'
+                            : 'rgba(245,239,232,0.35)',
 
-                        fontWeight: 800,
-
-                        letterSpacing: "0.02em",
-
-                        boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
+                        backdropFilter:
+                          'blur(2px)',
                       }}
                     >
-                      👁 Clicca per mostrare la trama
-                    </span>
-                  </div>
-                )}
+                      <span
+                        style={{
+                          padding:
+                            isMobile
+                              ? '6px 12px'
+                              : '8px 14px',
+
+                          borderRadius: 5,
+
+                          background:
+                            P.pink,
+
+                          color:
+                            '#fff',
+
+                          fontSize:
+                            isMobile
+                              ? 10
+                              : 12,
+
+                          fontWeight: 800,
+
+                          letterSpacing:
+                            '0.02em',
+
+                          boxShadow:
+                            '0 4px 16px rgba(0,0,0,0.18)',
+                        }}
+                      >
+                        👁 Clicca per
+                        mostrare la trama
+                      </span>
+                    </div>
+                  )}
               </div>
             </div>
           </div>
+
+          {/* ───────────────── DOVE GUARDARLO ───────────────── */}
+
+          <section
+            id="availability-section"
+            style={{
+              marginTop: 34,
+            }}
+          >
+            <div
+              style={{
+                display:
+                  'flex',
+
+                alignItems:
+                  'flex-end',
+
+                justifyContent:
+                  'space-between',
+
+                gap: 12,
+
+                marginBottom: 12,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    color:
+                      P.pink,
+
+                    fontSize: 9,
+
+                    fontWeight: 900,
+
+                    textTransform:
+                      'uppercase',
+
+                    letterSpacing:
+                      '.12em',
+
+                    marginBottom: 4,
+                  }}
+                >
+                  Disponibilità
+                </div>
+
+                <h2
+                  style={{
+                    fontSize:
+                      isMobile
+                        ? 20
+                        : 23,
+
+                    margin: 0,
+
+                    color:
+                      P.text,
+
+                    fontFamily:
+                      FONT_DISPLAY,
+
+                    fontWeight: 800,
+                  }}
+                >
+                  Dove guardarlo
+                </h2>
+              </div>
+
+              {!availabilityLoading &&
+                availability && (
+                  <span
+                    style={{
+                      color:
+                        P.textFaint,
+
+                      fontSize: 10,
+
+                      fontWeight: 750,
+                    }}
+                  >
+                    Italia
+                  </span>
+                )}
+            </div>
+
+            {availabilityLoading ? (
+              <div
+                style={{
+                  border:
+                    `1px solid ${P.border}`,
+
+                  background:
+                    P.card,
+
+                  padding: 18,
+
+                  color:
+                    P.textMuted,
+
+                  fontSize: 12,
+                }}
+              >
+                Controllo cinema e
+                streaming…
+              </div>
+            ) : !availability ? (
+              <div
+                style={{
+                  border:
+                    `1px dashed ${P.border}`,
+
+                  background:
+                    P.bgSoft,
+
+                  padding: 18,
+
+                  color:
+                    P.textMuted,
+
+                  fontSize: 12,
+                }}
+              >
+                Non riesco a
+                verificare la
+                disponibilità in
+                questo momento.
+              </div>
+            ) : (
+              <div
+                style={{
+                  display:
+                    'grid',
+
+                  gridTemplateColumns:
+                    isMobile
+                      ? '1fr'
+                      : '1fr 1fr',
+
+                  gap: 12,
+                }}
+              >
+                {/* CINEMA */}
+
+                <div
+                  style={{
+                    border:
+                      `1px solid ${
+                        availability
+                          .cinema
+                          .available
+                          ? P.gold
+                          : P.border
+                      }`,
+
+                    background:
+                      availability
+                        .cinema
+                        .available
+                        ? P.goldGlow
+                        : P.card,
+
+                    padding:
+                      isMobile
+                        ? 15
+                        : 18,
+                  }}
+                >
+                  <div
+                    style={{
+                      display:
+                        'flex',
+
+                      alignItems:
+                        'center',
+
+                      gap: 8,
+                    }}
+                  >
+                    <FilmSlate
+                      size={19}
+                      weight={
+                        availability
+                          .cinema
+                          .available
+                          ? 'fill'
+                          : 'regular'
+                      }
+                      color={
+                        availability
+                          .cinema
+                          .available
+                          ? P.gold
+                          : P.textFaint
+                      }
+                    />
+
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 13,
+
+                          fontWeight: 900,
+
+                          color:
+                            P.text,
+                        }}
+                      >
+                        Al cinema
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 10,
+
+                          color:
+                            P.textFaint,
+
+                          marginTop: 2,
+                        }}
+                      >
+                        {availability
+                          .cinema
+                          .available
+                          ? `${availability.cinema.total_showings} proiezioni trovate`
+                          : 'Non risulta nella programmazione sincronizzata'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {availability
+                    .cinema
+                    .available && (
+                    <>
+                      {!userPosition && !userArea && (
+                        <button
+                          type="button"
+                          onClick={() => void requestUserLocation()}
+                          disabled={locationLoading}
+                          style={{
+                            marginTop: 12,
+                            border: `1px solid ${P.border}`,
+                            background: P.card,
+                            color: locationLoading ? P.textFaint : P.gold,
+                            padding: '8px 10px',
+                            fontFamily: FONT_SANS,
+                            fontSize: 9.5,
+                            fontWeight: 850,
+                            cursor: locationLoading ? 'wait' : 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
+                        >
+                          <MapPin size={12} />
+                          {locationLoading ? 'Cerco la tua zona…' : 'Mostra il cinema più vicino'}
+                        </button>
+                      )}
+
+                      {locationError && (
+                        <div
+                          style={{
+                            marginTop: 8,
+                            color: P.textFaint,
+                            fontSize: 8.5,
+                          }}
+                        >
+                          {locationError}
+                        </div>
+                      )}
+
+                      <div
+                        style={{
+                          display:
+                            'grid',
+
+                          gap: 7,
+
+                          marginTop: 13,
+                        }}
+                      >
+                        {cinemasByProximity
+                          .slice(
+                            0,
+                            3
+                          )
+                          .map(
+                            (
+                              cinema
+                            ) => (
+                              <div
+                                key={
+                                  cinema.id
+                                }
+                                style={{
+                                  borderTop:
+                                    `1px solid ${P.border}`,
+
+                                  paddingTop: 8,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    fontSize: 11,
+
+                                    fontWeight: 850,
+
+                                    color:
+                                      P.text,
+
+                                    display:
+                                      'flex',
+
+                                    alignItems:
+                                      'center',
+
+                                    gap: 5,
+                                  }}
+                                >
+                                  <MapPin
+                                    size={12}
+                                    color={
+                                      P.gold
+                                    }
+                                  />
+
+                                  {cinema.name}
+
+                                  {hasCinemaLocationSuggestion &&
+                                    cinemasByProximity[0]?.id === cinema.id && (
+                                      <span
+                                        style={{
+                                          marginLeft: 'auto',
+                                          color: P.gold,
+                                          fontSize: 8,
+                                          fontWeight: 900,
+                                          textTransform: 'uppercase',
+                                          letterSpacing: '.06em',
+                                        }}
+                                      >
+                                        Più vicino a te
+                                      </span>
+                                    )}
+                                </div>
+
+                                <div
+                                  style={{
+                                    fontSize: 9.5,
+
+                                    color:
+                                      P.textFaint,
+
+                                    marginTop: 3,
+                                  }}
+                                >
+                                  {[
+                                    cinema._distanceKm !== null
+                                      ? `${cinema._distanceKm.toFixed(1)} km`
+                                      : cinema._sameArea
+                                        ? 'Nella tua zona'
+                                        : cinema.city,
+
+                                    cinema.showings[
+                                      0
+                                    ]
+                                      ?.showing_date,
+
+                                    cinema.showings[
+                                      0
+                                    ]
+                                      ?.time,
+                                  ]
+                                    .filter(
+                                      Boolean
+                                    )
+                                    .join(
+                                      ' · '
+                                    )}
+                                </div>
+                              </div>
+                            )
+                          )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push(
+                            `/cinema?movie=${movie.tmdb_id}`
+                          )
+                        }
+                        style={{
+                          marginTop: 13,
+
+                          border: 0,
+
+                          padding: 0,
+
+                          background:
+                            'transparent',
+
+                          color:
+                            P.gold,
+
+                          display:
+                            'inline-flex',
+
+                          alignItems:
+                            'center',
+
+                          gap: 5,
+
+                          fontFamily:
+                            FONT_SANS,
+
+                          fontSize: 10,
+
+                          fontWeight: 850,
+
+                          cursor:
+                            'pointer',
+                        }}
+                      >
+                        Vedi cinema e
+                        orari
+
+                        <ArrowRight
+                          size={12}
+                          weight="bold"
+                        />
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {/* STREAMING */}
+
+                <div
+                  style={{
+                    border:
+                      `1px solid ${
+                        availability
+                          .streaming
+                          .available
+                          ? P.pink
+                          : P.border
+                      }`,
+
+                    background:
+                      availability
+                        .streaming
+                        .available
+                        ? P.pinkGlow
+                        : P.card,
+
+                    padding:
+                      isMobile
+                        ? 15
+                        : 18,
+                  }}
+                >
+                  <div
+                    style={{
+                      display:
+                        'flex',
+
+                      alignItems:
+                        'center',
+
+                      gap: 8,
+                    }}
+                  >
+                    <TelevisionSimple
+                      size={19}
+                      weight={
+                        availability
+                          .streaming
+                          .available
+                          ? 'fill'
+                          : 'regular'
+                      }
+                      color={
+                        availability
+                          .streaming
+                          .available
+                          ? P.pink
+                          : P.textFaint
+                      }
+                    />
+
+                    <div>
+                      <div
+                        style={{
+                          fontSize: 13,
+
+                          fontWeight: 900,
+
+                          color:
+                            P.text,
+                        }}
+                      >
+                        Streaming
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 10,
+
+                          color:
+                            P.textFaint,
+
+                          marginTop: 2,
+                        }}
+                      >
+                        {availability
+                          .streaming
+                          .available
+                          ? 'Disponibile con abbonamento, gratis o con pubblicità'
+                          : availability
+                                .streaming
+                                .rent
+                                .length >
+                                0 ||
+                              availability
+                                .streaming
+                                .buy
+                                .length >
+                                0
+                            ? 'Disponibile solo a noleggio o acquisto'
+                            : 'Nessun provider italiano trovato'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {allStreamingOptions.length >
+                    0 && (
+                    <div
+                      style={{
+                        display:
+                          'grid',
+
+                        gap: 8,
+
+                        marginTop: 14,
+                      }}
+                    >
+                      {visibleStreamingOptions.map(
+                        (
+                          provider,
+                          index
+                        ) => {
+                          const providerUrl =
+                            getProviderTargetUrl(
+                              provider
+                            );
+
+                          const previousCategory =
+                            index >
+                            0
+                              ? visibleStreamingOptions[
+                                  index -
+                                    1
+                                ]
+                                  .categoryKey
+                              : null;
+
+                          const showCategory =
+                            provider.categoryKey !==
+                            previousCategory;
+
+                          return (
+                            <div
+                              key={`${provider.categoryKey}-${provider.provider_id}`}
+                            >
+                              {showCategory && (
+                                <div
+                                  style={{
+                                    color:
+                                      P.textFaint,
+
+                                    fontSize: 8,
+
+                                    fontWeight: 900,
+
+                                    textTransform:
+                                      'uppercase',
+
+                                    letterSpacing:
+                                      '.09em',
+
+                                    marginTop:
+                                      index ===
+                                      0
+                                        ? 0
+                                        : 8,
+
+                                    marginBottom: 6,
+                                  }}
+                                >
+                                  {
+                                    provider.categoryLabel
+                                  }
+                                </div>
+                              )}
+
+                              <button
+                                type="button"
+                                disabled={
+                                  !providerUrl
+                                }
+                                onClick={() => {
+                                  if (
+                                    !providerUrl
+                                  ) {
+                                    return;
+                                  }
+
+                                  window.open(
+                                    providerUrl,
+                                    '_blank',
+                                    'noopener,noreferrer'
+                                  );
+                                }}
+                                style={{
+                                  width:
+                                    '100%',
+
+                                  minHeight: 48,
+
+                                  border:
+                                    `1px solid ${P.border}`,
+
+                                  borderRadius: 7,
+
+                                  background:
+                                    P.bgSoft,
+
+                                  color:
+                                    P.text,
+
+                                  padding:
+                                    '8px 10px',
+
+                                  display:
+                                    'flex',
+
+                                  alignItems:
+                                    'center',
+
+                                  justifyContent:
+                                    'space-between',
+
+                                  gap: 10,
+
+                                  textAlign:
+                                    'left',
+
+                                  fontFamily:
+                                    FONT_SANS,
+
+                                  cursor:
+                                    providerUrl
+                                      ? 'pointer'
+                                      : 'default',
+
+                                  opacity:
+                                    providerUrl
+                                      ? 1
+                                      : 0.55,
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display:
+                                      'flex',
+
+                                    alignItems:
+                                      'center',
+
+                                    gap: 10,
+
+                                    minWidth: 0,
+                                  }}
+                                >
+                                  {provider.logo && (
+                                    <img
+                                      src={
+                                        provider.logo
+                                      }
+                                      alt=""
+                                      style={{
+                                        width: 30,
+
+                                        height: 30,
+
+                                        objectFit:
+                                          'cover',
+
+                                        borderRadius: 5,
+
+                                        flexShrink: 0,
+                                      }}
+                                    />
+                                  )}
+
+                                  <div
+                                    style={{
+                                      minWidth: 0,
+                                    }}
+                                  >
+                                    <div
+                                      style={{
+                                        color:
+                                          P.text,
+
+                                        fontSize: 11,
+
+                                        fontWeight: 850,
+
+                                        overflow:
+                                          'hidden',
+
+                                        textOverflow:
+                                          'ellipsis',
+
+                                        whiteSpace:
+                                          'nowrap',
+                                      }}
+                                    >
+                                      {
+                                        provider.name
+                                      }
+                                    </div>
+
+                                    <div
+                                      style={{
+                                        marginTop: 2,
+
+                                        color:
+                                          P.textFaint,
+
+                                        fontSize: 9,
+                                      }}
+                                    >
+                                      {providerUrl
+                                        ? `Apri su ${provider.name}`
+                                        : 'Link non disponibile'}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {providerUrl && (
+                                  <ArrowRight
+                                    size={13}
+                                    color={
+                                      P.pink
+                                    }
+                                    weight="bold"
+                                  />
+                                )}
+                              </button>
+                            </div>
+                          );
+                        }
+                      )}
+
+                      {allStreamingOptions.length >
+                        STREAMING_INITIAL_LIMIT && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowAllStreaming(
+                              (
+                                value
+                              ) =>
+                                !value
+                            )
+                          }
+                          style={{
+                            marginTop: 3,
+
+                            width:
+                              '100%',
+
+                            border:
+                              `1px solid ${P.border}`,
+
+                            borderRadius: 7,
+
+                            background:
+                              P.card,
+
+                            color:
+                              P.textMuted,
+
+                            padding:
+                              '10px 12px',
+
+                            fontFamily:
+                              FONT_SANS,
+
+                            fontSize: 10,
+
+                            fontWeight: 850,
+
+                            cursor:
+                              'pointer',
+                          }}
+                        >
+                          {showAllStreaming
+                            ? 'Mostra meno'
+                            : `Altro · ${hiddenStreamingCount} opzioni`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* ───────────────── COMMUNITY ───────────────── */}
+
+          <section
+            id="community-section"
+            style={{
+              marginTop: 20,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() =>
+                router.push(
+                  `/recensioni?movie=${movie.tmdb_id}&q=${encodeURIComponent(
+                    movie.title
+                  )}`
+                )
+              }
+              style={{
+                width:
+                  '100%',
+
+                border:
+                  `1px solid ${P.border}`,
+
+                background:
+                  P.card,
+
+                color:
+                  P.text,
+
+                padding:
+                  isMobile
+                    ? '14px'
+                    : '16px 18px',
+
+                display:
+                  'flex',
+
+                alignItems:
+                  'center',
+
+                justifyContent:
+                  'space-between',
+
+                gap: 12,
+
+                textAlign:
+                  'left',
+
+                cursor:
+                  'pointer',
+
+                fontFamily:
+                  FONT_SANS,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    color:
+                      P.pink,
+
+                    fontSize: 9,
+
+                    fontWeight: 900,
+
+                    textTransform:
+                      'uppercase',
+
+                    letterSpacing:
+                      '.1em',
+                  }}
+                >
+                  Community
+                </div>
+
+                <div
+                  style={{
+                    fontSize: 13,
+
+                    fontWeight: 900,
+
+                    marginTop: 3,
+                  }}
+                >
+                  Cosa ne pensa la
+                  community?
+                </div>
+
+                <div
+                  style={{
+                    fontSize: 10,
+
+                    color:
+                      P.textMuted,
+
+                    marginTop: 3,
+                  }}
+                >
+                  Leggi recensioni e
+                  opinioni su{' '}
+                  {movie.title}
+                </div>
+              </div>
+
+              <ArrowRight
+                size={16}
+                color={P.pink}
+                weight="bold"
+              />
+            </button>
+          </section>
+
+          {/* ───────────────── TRAILER ───────────────── */}
 
           <section
             style={{
@@ -1076,13 +3631,19 @@ export default function FilmDetailPage() {
           >
             <h2
               style={{
-                fontSize: isMobile ? 18 : 20,
+                fontSize:
+                  isMobile
+                    ? 18
+                    : 20,
 
-                margin: "0 0 12px",
+                margin:
+                  '0 0 12px',
 
-                color: P.text,
+                color:
+                  P.text,
 
-                fontFamily: FONT_DISPLAY,
+                fontFamily:
+                  FONT_DISPLAY,
 
                 fontWeight: 800,
               }}
@@ -1093,17 +3654,21 @@ export default function FilmDetailPage() {
             {trailerKey ? (
               <iframe
                 style={{
-                  width: "100%",
+                  width:
+                    '100%',
 
-                  aspectRatio: "16/9",
+                  aspectRatio:
+                    '16/9',
 
                   border: 0,
 
                   borderRadius: 20,
 
-                  boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+                  boxShadow:
+                    '0 4px 16px rgba(0,0,0,0.2)',
 
-                  background: "#201B18",
+                  background:
+                    '#201B18',
                 }}
                 src={`https://www.youtube-nocookie.com/embed/${trailerKey}`}
                 title={`Trailer di ${movie.title}`}
@@ -1113,615 +3678,964 @@ export default function FilmDetailPage() {
             ) : (
               <div
                 style={{
-                  minHeight: isMobile ? 120 : 190,
+                  minHeight:
+                    isMobile
+                      ? 120
+                      : 190,
 
-                  border: `1.5px dashed ${P.border}`,
+                  border:
+                    `1.5px dashed ${P.border}`,
 
                   borderRadius: 20,
 
-                  display: "grid",
+                  display:
+                    'grid',
 
-                  placeItems: "center",
+                  placeItems:
+                    'center',
 
-                  color: P.textMuted,
+                  color:
+                    P.textMuted,
 
-                  textAlign: "center",
+                  textAlign:
+                    'center',
 
-                  background: P.bgSoft,
+                  background:
+                    P.bgSoft,
                 }}
               >
                 <div>
                   <Play
-                    size={isMobile ? 24 : 32}
-                    color={P.pink}
+                    size={
+                      isMobile
+                        ? 24
+                        : 32
+                    }
+                    color={
+                      P.pink
+                    }
                     weight="fill"
                   />
 
                   <p
                     style={{
-                      fontSize: isMobile ? 13 : 16,
+                      fontSize:
+                        isMobile
+                          ? 13
+                          : 16,
                     }}
                   >
-                    Trailer non disponibile al momento.
+                    Trailer non
+                    disponibile al
+                    momento.
                   </p>
                 </div>
               </div>
             )}
           </section>
 
-          {/* ─── CAST ─────────────────────────────────────── */}
+          {/* ───────────────── CAST ───────────────── */}
 
-          {movie.cast.length > 0 && (
+          {orderedCast.length >
+            0 && (
             <section
               style={{
-                marginTop: 30,
+                marginTop: 36,
               }}
             >
               <div
                 style={{
-                  display: "flex",
+                  display:
+                    'flex',
 
-                  justifyContent: "space-between",
+                  alignItems:
+                    'flex-end',
 
-                  alignItems: "center",
+                  justifyContent:
+                    'space-between',
 
-                  gap: 12,
+                  gap: 14,
 
-                  marginBottom: 12,
+                  marginBottom: 14,
                 }}
               >
-                <h2
-                  style={{
-                    fontSize: isMobile ? 18 : 20,
-
-                    margin: 0,
-
-                    color: P.text,
-
-                    fontFamily: FONT_DISPLAY,
-
-                    fontWeight: 800,
-                  }}
-                >
-                  Nel cast
-                </h2>
-
-                {!showCast && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCast(true);
-                      setCastPage(1);
-                    }}
+                <div>
+                  <div
                     style={{
-                      border: `1px solid ${P.pink}`,
+                      color:
+                        P.textFaint,
 
-                      background: P.pink,
+                      fontSize: 8.5,
 
-                      color: "#fff",
+                      fontWeight: 900,
 
-                      padding: isMobile ? "7px 11px" : "8px 14px",
+                      textTransform:
+                        'uppercase',
 
-                      cursor: "pointer",
+                      letterSpacing:
+                        '.11em',
 
-                      fontFamily: FONT_SANS,
-
-                      fontWeight: 800,
-
-                      fontSize: isMobile ? 10 : 12,
-
-                      borderRadius: 7,
-
-                      boxShadow: "0 4px 14px rgba(0,0,0,0.16)",
+                      marginBottom: 4,
                     }}
                   >
-                    👁 Mostra cast
-                  </button>
-                )}
+                    Attori e
+                    personaggi
+                  </div>
+
+                  <h2
+                    style={{
+                      fontSize:
+                        isMobile
+                          ? 20
+                          : 23,
+
+                      margin: 0,
+
+                      color:
+                        P.text,
+
+                      fontFamily:
+                        FONT_DISPLAY,
+
+                      fontWeight: 800,
+                    }}
+                  >
+                    Nel cast
+                  </h2>
+                </div>
+
+                <button
+                  type="button"
+                  aria-pressed={showCast}
+                  aria-label={
+                    showCast
+                      ? 'Nascondi tutto il cast'
+                      : 'Mostra tutto il cast'
+                  }
+                  onClick={() =>
+                    setShowCast(
+                      (value) =>
+                        !value
+                    )
+                  }
+                  style={{
+                    border:
+                      `1px solid ${
+                        showCast
+                          ? P.pink
+                          : P.border
+                      }`,
+
+                    borderRadius: 7,
+
+                    background:
+                      showCast
+                        ? P.pinkGlow
+                        : P.card,
+
+                    color:
+                      showCast
+                        ? P.pink
+                        : P.textMuted,
+
+                    padding:
+                      isMobile
+                        ? '8px 9px'
+                        : '9px 12px',
+
+                    cursor:
+                      'pointer',
+
+                    fontFamily:
+                      FONT_SANS,
+
+                    fontSize: 10,
+
+                    fontWeight: 850,
+
+                    whiteSpace:
+                      'nowrap',
+                  }}
+                >
+                  {showCast
+                    ? 'Nascondi cast'
+                    : 'Mostra cast'}
+                </button>
               </div>
 
               <div
                 style={{
-                  position: "relative",
+                  display:
+                    'grid',
+
+                  gridTemplateColumns:
+                    isMobile
+                      ? 'repeat(2, minmax(0, 1fr))'
+                      : 'repeat(6, minmax(0, 1fr))',
+
+                  gap:
+                    isMobile
+                      ? 12
+                      : 14,
                 }}
               >
-                <div
-                  style={{
-                    display: "grid",
-
-                    gridTemplateColumns: isMobile
-                      ? "repeat(3, minmax(0, 1fr))"
-                      : "repeat(6, minmax(0, 1fr))",
-
-                    gap: isMobile ? 14 : 18,
-
-                    padding: "4px 1px 10px",
-                  }}
-                >
-                  {visibleCast.map((person) => {
-                    const size = isMobile ? 80 : 106;
-
-                    return (
-                      <button
-                        key={person.id}
-                        type="button"
-                        disabled={!showCast}
-                        onClick={() => {
-                          if (showCast) {
-                            router.push(`/attore/${person.id}`);
-                          }
-                        }}
-                        title={
+                {visibleCast.map(
+                  (person) => (
+                    <button
+                      key={
+                        person.id
+                      }
+                      type="button"
+                      onClick={() => {
+                        if (
                           showCast
-                            ? `Apri la pagina di ${person.name}`
-                            : undefined
+                        ) {
+                          router.push(
+                            `/persona/${person.id}`
+                          );
                         }
+                      }}
+                      disabled={
+                        !showCast
+                      }
+                      style={{
+                        minWidth: 0,
+
+                        padding: 0,
+
+                        border: 0,
+
+                        background:
+                          'transparent',
+
+                        textAlign:
+                          'left',
+
+                        fontFamily:
+                          FONT_SANS,
+
+                        color:
+                          P.text,
+
+                        cursor:
+                          showCast
+                            ? 'pointer'
+                            : 'default',
+
+                        opacity: 1,
+                      }}
+                    >
+                      <div
                         style={{
-                          border: 0,
+                          position:
+                            'relative',
 
-                          padding: 0,
+                          width:
+                            '100%',
 
-                          background: "transparent",
+                          aspectRatio:
+                            '1 / 1',
 
-                          fontFamily: FONT_SANS,
+                          overflow:
+                            'hidden',
 
-                          color: P.text,
+                          borderRadius: 12,
 
-                          textAlign: "center",
+                          background:
+                            P.bgSoft,
 
-                          cursor: showCast ? "pointer" : "default",
-
-                          width: "100%",
-
-                          transition: "transform 0.2s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (showCast) {
-                            e.currentTarget.style.transform =
-                              "translateY(-4px)";
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "translateY(0)";
+                          border:
+                            `1px solid ${P.border}`,
                         }}
                       >
-                        <div
-                          style={{
-                            filter: showCast ? "none" : "blur(8px)",
+                        {person.profile ? (
+                          <img
+                            src={
+                              person.profile
+                            }
+                            alt={
+                              showCast
+                                ? person.name
+                                : ''
+                            }
+                            style={{
+                              width:
+                                '100%',
 
-                            opacity: showCast ? 1 : 0.65,
+                              height:
+                                '100%',
 
-                            transition: "filter 0.3s ease, opacity 0.3s ease",
+                              objectFit:
+                                'cover',
 
-                            userSelect: showCast ? "auto" : "none",
-                          }}
-                        >
-                          {person.profile ? (
-                            <img
-                              src={person.profile}
-                              alt={showCast ? person.name : ""}
-                              style={{
-                                width: size,
+                              display:
+                                'block',
 
-                                height: size,
+                              filter:
+                                showCast
+                                  ? 'none'
+                                  : 'blur(11px)',
 
-                                objectFit: "cover",
+                              transform:
+                                showCast
+                                  ? 'scale(1)'
+                                  : 'scale(1.08)',
 
-                                borderRadius: "50%",
+                              transition:
+                                'filter .25s ease, transform .25s ease',
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              width:
+                                '100%',
 
-                                background: P.bgSoft,
+                              height:
+                                '100%',
 
-                                display: "block",
+                              display:
+                                'grid',
 
-                                margin: "0 auto 7px",
+                              placeItems:
+                                'center',
 
-                                boxShadow: showCast
-                                  ? "0 4px 18px rgba(0,0,0,0.18)"
-                                  : "none",
-                              }}
+                              filter:
+                                showCast
+                                  ? 'none'
+                                  : 'blur(8px)',
+
+                              background:
+                                P.bgSoft,
+                            }}
+                          >
+                            <UserCircle
+                              size={
+                                isMobile
+                                  ? 42
+                                  : 46
+                              }
+                              color={
+                                P.textFaint
+                              }
                             />
-                          ) : (
-                            <div
+                          </div>
+                        )}
+
+                        {!showCast && (
+                          <div
+                            style={{
+                              position:
+                                'absolute',
+
+                              inset: 0,
+
+                              display:
+                                'grid',
+
+                              placeItems:
+                                'center',
+
+                              background:
+                                isDark
+                                  ? 'rgba(10,8,6,.18)'
+                                  : 'rgba(245,239,232,.18)',
+
+                              pointerEvents:
+                                'none',
+                            }}
+                          >
+                            <span
                               style={{
-                                width: size,
+                                padding:
+                                  '6px 8px',
 
-                                height: size,
+                                borderRadius: 6,
 
-                                borderRadius: "50%",
+                                background:
+                                  P.card,
 
-                                background: P.bgSoft,
+                                border:
+                                  `1px solid ${P.border}`,
 
-                                display: "grid",
+                                color:
+                                  P.textMuted,
 
-                                placeItems: "center",
+                                fontSize: 8.5,
 
-                                margin: "0 auto 7px",
+                                fontWeight: 850,
                               }}
                             >
-                              <UserCircle
-                                size={isMobile ? 32 : 50}
-                                color={P.textFaint}
-                              />
-                            </div>
-                          )}
+                              Cast nascosto
+                            </span>
+                          </div>
+                        )}
+                      </div>
 
-                          <strong
-                            style={{
-                              display: "block",
+                      <div
+                        style={{
+                          marginTop: 8,
 
-                              color: P.text,
+                          filter:
+                            showCast
+                              ? 'none'
+                              : 'blur(7px)',
 
-                              overflow: "hidden",
+                          userSelect:
+                            showCast
+                              ? 'auto'
+                              : 'none',
 
-                              textOverflow: "ellipsis",
+                          transition:
+                            'filter .25s ease',
+                        }}
+                      >
+                        <strong
+                          style={{
+                            display:
+                              'block',
 
-                              whiteSpace: "nowrap",
+                            color:
+                              P.text,
 
-                              fontSize: isMobile ? 10 : 12,
-                            }}
-                          >
-                            {person.name}
-                          </strong>
+                            fontSize:
+                              isMobile
+                                ? 11
+                                : 12,
 
-                          <span
-                            style={{
-                              color: P.textMuted,
+                            lineHeight: 1.3,
 
-                              overflow: "hidden",
+                            overflow:
+                              'hidden',
 
-                              textOverflow: "ellipsis",
+                            textOverflow:
+                              'ellipsis',
 
-                              whiteSpace: "nowrap",
+                            whiteSpace:
+                              'nowrap',
+                          }}
+                        >
+                          {person.name}
+                        </strong>
 
-                              display: "block",
+                        <span
+                          style={{
+                            display:
+                              'block',
 
-                              fontSize: isMobile ? 9 : 11,
+                            marginTop: 3,
 
-                              marginTop: 2,
-                            }}
-                          >
-                            {person.character || "—"}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                            color:
+                              P.textMuted,
 
-                {!showCast && (
-                  <div
-                    style={{
-                      position: "absolute",
+                            fontSize:
+                              isMobile
+                                ? 9
+                                : 10,
 
-                      inset: 0,
+                            lineHeight: 1.35,
 
-                      pointerEvents: "none",
+                            overflow:
+                              'hidden',
 
-                      background: isDark
-                        ? "rgba(10,8,6,0.10)"
-                        : "rgba(245,239,232,0.12)",
+                            textOverflow:
+                              'ellipsis',
 
-                      borderRadius: 14,
-                    }}
-                  />
+                            whiteSpace:
+                              'nowrap',
+                          }}
+                        >
+                          {person.character}
+                        </span>
+                      </div>
+                    </button>
+                  )
                 )}
               </div>
 
-              {showCast && totalCastPages > 1 && (
+              {castTotalPages >
+                1 && (
                 <div
                   style={{
-                    marginTop: 12,
+                    marginTop: 18,
 
-                    display: "flex",
+                    paddingTop: 14,
 
-                    alignItems: "center",
+                    borderTop:
+                      `1px solid ${P.border}`,
 
-                    justifyContent: "center",
+                    display:
+                      'flex',
 
-                    gap: 6,
+                    alignItems:
+                      'center',
 
-                    flexWrap: "wrap",
+                    justifyContent:
+                      'space-between',
+
+                    gap: 12,
                   }}
                 >
                   <button
                     type="button"
-                    disabled={castPage === 1}
-                    onClick={() => setCastPage((page) => Math.max(1, page - 1))}
+                    disabled={
+                      !showCast ||
+                      castPage ===
+                      1
+                    }
+                    onClick={() =>
+                      setCastPage(
+                        (page) =>
+                          Math.max(
+                            1,
+                            page - 1
+                          )
+                      )
+                    }
                     style={{
-                      width: 34,
-
-                      height: 34,
-
-                      border: `1px solid ${P.border}`,
-
-                      background: P.card,
-
-                      color: castPage === 1 ? P.textFaint : P.text,
-
-                      cursor: castPage === 1 ? "default" : "pointer",
-
-                      opacity: castPage === 1 ? 0.45 : 1,
-
-                      fontFamily: FONT_SANS,
-
-                      fontWeight: 800,
-
-                      fontSize: 15,
+                      border:
+                        `1px solid ${P.border}`,
 
                       borderRadius: 7,
+
+                      background:
+                        P.card,
+
+                      color:
+                        !showCast ||
+                        castPage ===
+                        1
+                          ? P.textFaint
+                          : P.text,
+
+                      padding:
+                        '9px 12px',
+
+                      fontFamily:
+                        FONT_SANS,
+
+                      fontSize: 10,
+
+                      fontWeight: 850,
+
+                      cursor:
+                        !showCast ||
+                        castPage ===
+                        1
+                          ? 'default'
+                          : 'pointer',
+
+                      opacity:
+                        !showCast ||
+                        castPage ===
+                        1
+                          ? 0.35
+                          : 1,
                     }}
                   >
-                    ‹
+                    ← Precedente
                   </button>
 
-                  {Array.from(
-                    {
-                      length: totalCastPages,
-                    },
-                    (_, index) => index + 1,
-                  )
-                    .filter((page) => {
-                      if (totalCastPages <= 7) {
-                        return true;
-                      }
+                  <div
+                    style={{
+                      textAlign:
+                        'center',
+                    }}
+                  >
+                    <div
+                      style={{
+                        color:
+                          P.text,
 
-                      if (castPage <= 4) {
-                        return page <= 5;
-                      }
+                        fontSize: 10,
 
-                      if (castPage >= totalCastPages - 3) {
-                        return page >= totalCastPages - 4;
-                      }
+                        fontWeight: 850,
+                      }}
+                    >
+                      {castPage} /{' '}
+                      {castTotalPages}
+                    </div>
 
-                      return page >= castPage - 2 && page <= castPage + 2;
-                    })
-                    .map((page) => (
-                      <button
-                        key={page}
-                        type="button"
-                        onClick={() => setCastPage(page)}
-                        style={{
-                          minWidth: 34,
+                    <div
+                      style={{
+                        color:
+                          P.textFaint,
 
-                          height: 34,
+                        fontSize: 8.5,
 
-                          padding: "0 9px",
-
-                          border:
-                            page === castPage
-                              ? `1px solid ${P.pink}`
-                              : `1px solid ${P.border}`,
-
-                          background: page === castPage ? P.pink : P.card,
-
-                          color: page === castPage ? "#fff" : P.text,
-
-                          cursor: "pointer",
-
-                          fontFamily: FONT_SANS,
-
-                          fontWeight: 800,
-
-                          fontSize: 10,
-
-                          borderRadius: 7,
-                        }}
-                      >
-                        {page}
-                      </button>
-                    ))}
+                        marginTop: 2,
+                      }}
+                    >
+                      {orderedCast.length}{' '}
+                      persone nel cast
+                    </div>
+                  </div>
 
                   <button
                     type="button"
-                    disabled={castPage === totalCastPages}
+                    disabled={
+                      !showCast ||
+                      castPage ===
+                      castTotalPages
+                    }
                     onClick={() =>
-                      setCastPage((page) => Math.min(totalCastPages, page + 1))
+                      setCastPage(
+                        (page) =>
+                          Math.min(
+                            castTotalPages,
+                            page + 1
+                          )
+                      )
                     }
                     style={{
-                      width: 34,
-
-                      height: 34,
-
-                      border: `1px solid ${P.border}`,
-
-                      background: P.card,
-
-                      color: castPage === totalCastPages ? P.textFaint : P.text,
-
-                      cursor:
-                        castPage === totalCastPages ? "default" : "pointer",
-
-                      opacity: castPage === totalCastPages ? 0.45 : 1,
-
-                      fontFamily: FONT_SANS,
-
-                      fontWeight: 800,
-
-                      fontSize: 15,
+                      border:
+                        `1px solid ${P.border}`,
 
                       borderRadius: 7,
+
+                      background:
+                        P.card,
+
+                      color:
+                        !showCast ||
+                        castPage ===
+                        castTotalPages
+                          ? P.textFaint
+                          : P.text,
+
+                      padding:
+                        '9px 12px',
+
+                      fontFamily:
+                        FONT_SANS,
+
+                      fontSize: 10,
+
+                      fontWeight: 850,
+
+                      cursor:
+                        !showCast ||
+                        castPage ===
+                        castTotalPages
+                          ? 'default'
+                          : 'pointer',
+
+                      opacity:
+                        !showCast ||
+                        castPage ===
+                        castTotalPages
+                          ? 0.35
+                          : 1,
                     }}
                   >
-                    ›
+                    Successiva →
                   </button>
                 </div>
               )}
             </section>
           )}
 
-          {movie.similar.length > 0 && (
+          {/* ───────────────── FILM SIMILI ───────────────── */}
+
+          {smartSimilar.length >
+            0 && (
             <section
               style={{
                 marginTop: 30,
               }}
             >
-              <h2
+              <div
                 style={{
-                  fontSize: isMobile ? 18 : 20,
-
-                  margin: "0 0 12px",
-
-                  color: P.text,
-
-                  fontFamily: FONT_DISPLAY,
-
-                  fontWeight: 800,
+                  marginBottom: 12,
                 }}
               >
-                Film simili
-              </h2>
+                <div
+                  style={{
+                    color:
+                      P.textFaint,
+
+                    fontSize: 8.5,
+
+                    fontWeight: 900,
+
+                    textTransform:
+                      'uppercase',
+
+                    letterSpacing:
+                      '.1em',
+
+                    marginBottom: 4,
+                  }}
+                >
+                  Potrebbero piacerti
+                </div>
+
+                <h2
+                  style={{
+                    fontSize:
+                      isMobile
+                        ? 18
+                        : 20,
+
+                    margin: 0,
+
+                    color:
+                      P.text,
+
+                    fontFamily:
+                      FONT_DISPLAY,
+
+                    fontWeight: 800,
+                  }}
+                >
+                  Film simili
+                </h2>
+              </div>
 
               <div
                 style={{
-                  display: "flex",
+                  display:
+                    'flex',
 
-                  gap: isMobile ? 10 : 14,
+                  gap:
+                    isMobile
+                      ? 10
+                      : 14,
 
-                  overflowX: "auto",
+                  overflowX:
+                    'auto',
 
-                  padding: "2px 1px 9px",
+                  padding:
+                    '2px 1px 9px',
 
-                  scrollbarWidth: "none",
+                  scrollbarWidth:
+                    'none',
+
+                  scrollSnapType:
+                    'x proximity',
+
+                  WebkitOverflowScrolling:
+                    'touch',
                 }}
               >
-                {movie.similar.map((item) => {
-                  const width = isMobile ? 100 : 132;
+                {smartSimilar.map(
+                  (item) => {
+                    const width =
+                      isMobile
+                        ? 100
+                        : 132;
 
-                  return (
-                    <button
-                      key={item.tmdb_id}
-                      onClick={() => router.push(`/film/${item.tmdb_id}`)}
-                      style={{
-                        minWidth: width,
-
-                        width: width,
-
-                        cursor: "pointer",
-
-                        border: 0,
-
-                        padding: 0,
-
-                        background: "none",
-
-                        textAlign: "left",
-
-                        fontFamily: FONT_SANS,
-
-                        color: P.text,
-                      }}
-                    >
-                      <img
-                        src={item.cover || fallbackPoster}
-                        alt={`Locandina di ${item.title}`}
+                    return (
+                      <button
+                        key={
+                          item.tmdb_id
+                        }
+                        onClick={() =>
+                          router.push(
+                            `/film/${item.tmdb_id}`
+                          )
+                        }
                         style={{
+                          minWidth:
+                            width,
+
                           width,
 
-                          aspectRatio: "2/3",
+                          cursor:
+                            'pointer',
 
-                          objectFit: "cover",
+                          border: 0,
 
-                          borderRadius: 14,
+                          padding: 0,
 
-                          boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+                          background:
+                            'none',
 
-                          display: "block",
+                          textAlign:
+                            'left',
 
-                          transition: "transform 0.18s",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "translateY(-4px)";
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "translateY(0)";
-                        }}
-                      />
+                          fontFamily:
+                            FONT_SANS,
 
-                      <strong
-                        style={{
-                          display: "block",
+                          color:
+                            P.text,
 
-                          marginTop: 6,
-
-                          overflow: "hidden",
-
-                          textOverflow: "ellipsis",
-
-                          whiteSpace: "nowrap",
-
-                          color: P.text,
-
-                          fontSize: isMobile ? 12 : 14,
+                          scrollSnapAlign:
+                            'start',
                         }}
                       >
-                        {item.title}
-                      </strong>
+                        <img
+                          src={
+                            item.cover ||
+                            fallbackPoster
+                          }
+                          alt={`Locandina di ${item.title}`}
+                          style={{
+                            width,
 
-                      <span
-                        style={{
-                          color: P.textMuted,
+                            aspectRatio:
+                              '2/3',
 
-                          fontSize: isMobile ? 10 : 12,
-                        }}
-                      >
-                        {item.year || "—"}
+                            objectFit:
+                              'cover',
 
-                        {item.rating > 0
-                          ? ` · ★ ${item.rating.toFixed(1)}`
-                          : ""}
-                      </span>
-                    </button>
-                  );
-                })}
+                            borderRadius: 14,
+
+                            boxShadow:
+                              '0 1px 4px rgba(0,0,0,0.2)',
+
+                            display:
+                              'block',
+
+                            transition:
+                              'transform 0.18s',
+                          }}
+                          onMouseEnter={(
+                            event
+                          ) => {
+                            event.currentTarget.style.transform =
+                              'translateY(-4px)';
+                          }}
+                          onMouseLeave={(
+                            event
+                          ) => {
+                            event.currentTarget.style.transform =
+                              'translateY(0)';
+                          }}
+                        />
+
+                        <strong
+                          style={{
+                            marginTop: 6,
+
+                            overflow:
+                              'hidden',
+
+                            display:
+                              '-webkit-box',
+
+                            WebkitLineClamp: 2,
+
+                            WebkitBoxOrient:
+                              'vertical',
+
+                            minHeight:
+                              isMobile
+                                ? 30
+                                : 34,
+
+                            lineHeight: 1.2,
+
+                            color:
+                              P.text,
+
+                            fontSize:
+                              isMobile
+                                ? 12
+                                : 14,
+                          }}
+                        >
+                          {item.title}
+                        </strong>
+
+                        <span
+                          style={{
+                            color:
+                              P.textMuted,
+
+                            fontSize:
+                              isMobile
+                                ? 10
+                                : 12,
+                          }}
+                        >
+                          {item.year ||
+                            '—'}
+
+                          {item.rating >
+                          0
+                            ? ` · ★ ${item.rating.toFixed(
+                                1
+                              )}`
+                            : ''}
+                        </span>
+                      </button>
+                    );
+                  }
+                )}
               </div>
             </section>
           )}
         </div>
 
+        {/* ───────────────── MODALE RECENSIONE ───────────────── */}
+
         {reviewOpen && (
           <div
-            onMouseDown={() => !savingReview && setReviewOpen(false)}
+            onMouseDown={() =>
+              !savingReview &&
+              setReviewOpen(
+                false
+              )
+            }
             style={{
-              position: "fixed",
+              position:
+                'fixed',
 
               inset: 0,
 
               zIndex: 10000,
 
-              background: "rgba(0,0,0,0.76)",
+              background:
+                'rgba(0,0,0,0.76)',
 
-              backdropFilter: "blur(6px)",
+              backdropFilter:
+                'blur(6px)',
 
-              display: "grid",
+              display:
+                'grid',
 
-              placeItems: "center",
+              placeItems:
+                'center',
 
               padding: 18,
             }}
           >
             <div
-              onMouseDown={(event) => event.stopPropagation()}
+              onMouseDown={(
+                event
+              ) =>
+                event.stopPropagation()
+              }
               style={{
-                width: "min(540px, 100%)",
+                width:
+                  'min(540px, 100%)',
 
-                maxHeight: "90vh",
+                maxHeight:
+                  '90vh',
 
-                overflowY: "auto",
+                overflowY:
+                  'auto',
 
-                background: P.card,
+                background:
+                  P.card,
 
-                border: `1px solid ${P.border}`,
+                border:
+                  `1px solid ${P.border}`,
 
-                boxShadow: "0 28px 90px rgba(0,0,0,0.55)",
+                boxShadow:
+                  '0 28px 90px rgba(0,0,0,0.55)',
 
                 padding: 22,
               }}
             >
               <div
                 style={{
-                  display: "flex",
+                  display:
+                    'flex',
 
-                  justifyContent: "space-between",
+                  justifyContent:
+                    'space-between',
 
                   gap: 18,
 
@@ -1731,13 +4645,16 @@ export default function FilmDetailPage() {
                 <div>
                   <div
                     style={{
-                      color: P.pink,
+                      color:
+                        P.pink,
 
                       fontSize: 9,
 
-                      textTransform: "uppercase",
+                      textTransform:
+                        'uppercase',
 
-                      letterSpacing: ".12em",
+                      letterSpacing:
+                        '.12em',
 
                       fontWeight: 800,
                     }}
@@ -1747,11 +4664,14 @@ export default function FilmDetailPage() {
 
                   <h2
                     style={{
-                      margin: "4px 0 0",
+                      margin:
+                        '4px 0 0',
 
-                      color: P.text,
+                      color:
+                        P.text,
 
-                      fontFamily: FONT_DISPLAY,
+                      fontFamily:
+                        FONT_DISPLAY,
 
                       fontSize: 24,
                     }}
@@ -1761,131 +4681,499 @@ export default function FilmDetailPage() {
                 </div>
 
                 <button
-                  onClick={() => setReviewOpen(false)}
-                  disabled={savingReview}
+                  type="button"
+                  onClick={() =>
+                    setReviewOpen(
+                      false
+                    )
+                  }
+                  disabled={
+                    savingReview
+                  }
                   style={{
                     width: 32,
 
                     height: 32,
 
-                    border: `1px solid ${P.border}`,
+                    border:
+                      `1px solid ${P.border}`,
 
-                    background: P.bgSoft,
+                    background:
+                      P.bgSoft,
 
-                    color: P.textMuted,
+                    color:
+                      P.textMuted,
 
-                    display: "grid",
+                    display:
+                      'grid',
 
-                    placeItems: "center",
+                    placeItems:
+                      'center',
 
-                    cursor: "pointer",
+                    cursor:
+                      'pointer',
                   }}
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              <div
-                style={{
-                  fontSize: 10,
-
-                  color: P.textMuted,
-
-                  fontWeight: 800,
-
-                  textTransform: "uppercase",
-
-                  letterSpacing: ".06em",
-
-                  marginBottom: 8,
-                }}
-              >
-                Il tuo voto
-              </div>
+              {/* STELLE */}
 
               <div
                 style={{
-                  display: "grid",
+                  border:
+                    `1px solid ${P.border}`,
 
-                  gridTemplateColumns: isMobile
-                    ? "repeat(4,1fr)"
-                    : "repeat(6,1fr)",
+                  background:
+                    P.bgSoft,
 
-                  gap: 5,
+                  padding:
+                    isMobile
+                      ? 14
+                      : 16,
 
-                  marginBottom: 16,
+                  marginBottom: 18,
                 }}
               >
-                {[0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map((value) => (
-                  <button
-                    key={value}
-                    onClick={() => setReviewRating(value)}
-                    style={{
-                      height: 34,
-
-                      border: `1px solid ${
-                        reviewRating === value ? P.gold : P.border
-                      }`,
-
-                      background: reviewRating === value ? P.gold : P.bgSoft,
-
-                      color: reviewRating === value ? "#120d05" : P.textMuted,
-
-                      cursor: "pointer",
-
-                      fontWeight: 700,
-
-                      fontSize: 10,
-                    }}
-                  >
-                    {value}
-                  </button>
-                ))}
-
-                <button
-                  onClick={() => setReviewRating(null)}
+                <div
                   style={{
-                    height: 34,
+                    display:
+                      'flex',
 
-                    border: `1px solid ${
-                      reviewRating === null ? P.gold : P.border
-                    }`,
+                    alignItems:
+                      'center',
 
-                    background: reviewRating === null ? P.gold : P.bgSoft,
+                    justifyContent:
+                      'space-between',
 
-                    color: reviewRating === null ? "#120d05" : P.textMuted,
+                    gap: 12,
 
-                    cursor: "pointer",
-
-                    fontWeight: 700,
-
-                    fontSize: 10,
+                    marginBottom: 12,
                   }}
                 >
-                  —
-                </button>
+                  <div>
+                    <div
+                      style={{
+                        fontSize: 9,
+
+                        color:
+                          P.textFaint,
+
+                        fontWeight: 900,
+
+                        textTransform:
+                          'uppercase',
+
+                        letterSpacing:
+                          '.08em',
+                      }}
+                    >
+                      Il tuo voto
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop: 3,
+
+                        color:
+                          P.text,
+
+                        fontSize: 12,
+
+                        fontWeight: 800,
+                      }}
+                    >
+                      Scegli da 0,5 a
+                      5 stelle
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      minWidth: 52,
+
+                      height: 42,
+
+                      border:
+                        `1px solid ${P.border}`,
+
+                      background:
+                        P.card,
+
+                      display:
+                        'grid',
+
+                      placeItems:
+                        'center',
+
+                      color:
+                        reviewRating !==
+                        null
+                          ? P.gold
+                          : P.textFaint,
+
+                      fontSize: 14,
+
+                      fontWeight: 900,
+                    }}
+                  >
+                    {reviewRating !==
+                    null
+                      ? reviewRating.toFixed(
+                          1
+                        )
+                      : '—'}
+                  </div>
+                </div>
+
+                <div
+                  onMouseLeave={() =>
+                    setReviewHoverRating(
+                      null
+                    )
+                  }
+                  style={{
+                    display:
+                      'flex',
+
+                    alignItems:
+                      'center',
+
+                    gap:
+                      isMobile
+                        ? 5
+                        : 8,
+                  }}
+                >
+                  {[
+                    1,
+                    2,
+                    3,
+                    4,
+                    5,
+                  ].map(
+                    (
+                      starIndex
+                    ) => {
+                      const activeRating =
+                        reviewHoverRating ??
+                        reviewRating ??
+                        0;
+
+                      const fillPercent =
+                        Math.max(
+                          0,
+
+                          Math.min(
+                            100,
+
+                            (activeRating -
+                              (starIndex -
+                                1)) *
+                              100
+                          )
+                        );
+
+                      const chooseRating =
+                        (
+                          event: React.MouseEvent<HTMLButtonElement>
+                        ) => {
+                          const rect =
+                            event.currentTarget.getBoundingClientRect();
+
+                          const half =
+                            event.clientX -
+                              rect.left <
+                            rect.width /
+                              2;
+
+                          return half
+                            ? starIndex -
+                                0.5
+                            : starIndex;
+                        };
+
+                      const buttonSize =
+                        isMobile
+                          ? 42
+                          : 48;
+
+                      const starSize =
+                        isMobile
+                          ? 35
+                          : 40;
+
+                      return (
+                        <button
+                          key={
+                            starIndex
+                          }
+                          type="button"
+                          aria-label={`Vota ${starIndex} stelle`}
+                          onMouseMove={(
+                            event
+                          ) =>
+                            setReviewHoverRating(
+                              chooseRating(
+                                event
+                              )
+                            )
+                          }
+                          onClick={(
+                            event
+                          ) => {
+                            setReviewRating(
+                              chooseRating(
+                                event
+                              )
+                            );
+
+                            setReviewHoverRating(
+                              null
+                            );
+                          }}
+                          onKeyDown={(
+                            event
+                          ) => {
+                            if (
+                              event.key ===
+                                'ArrowRight' ||
+                              event.key ===
+                                'ArrowUp'
+                            ) {
+                              event.preventDefault();
+
+                              setReviewRating(
+                                (
+                                  value
+                                ) =>
+                                  Math.min(
+                                    5,
+
+                                    (value ??
+                                      0) +
+                                      0.5
+                                  )
+                              );
+                            }
+
+                            if (
+                              event.key ===
+                                'ArrowLeft' ||
+                              event.key ===
+                                'ArrowDown'
+                            ) {
+                              event.preventDefault();
+
+                              setReviewRating(
+                                (
+                                  value
+                                ) =>
+                                  Math.max(
+                                    0.5,
+
+                                    (value ??
+                                      1) -
+                                      0.5
+                                  )
+                              );
+                            }
+                          }}
+                          style={{
+                            position:
+                              'relative',
+
+                            width:
+                              buttonSize,
+
+                            height:
+                              buttonSize,
+
+                            border: 0,
+
+                            background:
+                              'transparent',
+
+                            padding: 0,
+
+                            cursor:
+                              'pointer',
+
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Star
+                            size={
+                              starSize
+                            }
+                            color={
+                              P.textFaint
+                            }
+                            weight="regular"
+                            style={{
+                              position:
+                                'absolute',
+
+                              inset: 0,
+
+                              margin:
+                                'auto',
+                            }}
+                          />
+
+                          <span
+                            style={{
+                              position:
+                                'absolute',
+
+                              inset: 0,
+
+                              overflow:
+                                'hidden',
+
+                              width:
+                                `${fillPercent}%`,
+
+                              pointerEvents:
+                                'none',
+                            }}
+                          >
+                            <Star
+                              size={
+                                starSize
+                              }
+                              color={
+                                P.gold
+                              }
+                              weight="fill"
+                              style={{
+                                position:
+                                  'absolute',
+
+                                left:
+                                  buttonSize /
+                                    2 -
+                                  starSize /
+                                    2,
+
+                                top:
+                                  buttonSize /
+                                    2 -
+                                  starSize /
+                                    2,
+                              }}
+                            />
+                          </span>
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 11,
+
+                    display:
+                      'flex',
+
+                    alignItems:
+                      'center',
+
+                    justifyContent:
+                      'space-between',
+
+                    gap: 10,
+                  }}
+                >
+                  <span
+                    style={{
+                      color:
+                        P.textFaint,
+
+                      fontSize: 9,
+
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Puoi assegnare
+                    anche mezze
+                    stelle.
+                  </span>
+
+                  {reviewRating !==
+                    null && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReviewRating(
+                          null
+                        );
+
+                        setReviewHoverRating(
+                          null
+                        );
+                      }}
+                      style={{
+                        border:
+                          `1px solid ${P.border}`,
+
+                        background:
+                          P.card,
+
+                        color:
+                          P.textMuted,
+
+                        padding:
+                          '7px 9px',
+
+                        fontFamily:
+                          FONT_SANS,
+
+                        fontSize: 9,
+
+                        fontWeight: 800,
+
+                        cursor:
+                          'pointer',
+                      }}
+                    >
+                      Rimuovi voto
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* TESTO RECENSIONE */}
 
               <div
                 style={{
-                  display: "flex",
+                  display:
+                    'flex',
 
-                  justifyContent: "space-between",
+                  justifyContent:
+                    'space-between',
 
                   fontSize: 10,
 
-                  color: P.textMuted,
+                  color:
+                    P.textMuted,
 
                   fontWeight: 800,
 
-                  textTransform: "uppercase",
+                  textTransform:
+                    'uppercase',
 
-                  letterSpacing: ".06em",
+                  letterSpacing:
+                    '.06em',
 
                   marginBottom: 8,
                 }}
               >
-                <span>Recensione</span>
+                <span>
+                  Recensione
+                </span>
 
                 <span>
                   {reviewText.length}
@@ -1894,30 +5182,45 @@ export default function FilmDetailPage() {
               </div>
 
               <textarea
-                value={reviewText}
-                onChange={(event) =>
-                  setReviewText(event.target.value.slice(0, 3000))
+                value={
+                  reviewText
+                }
+                onChange={(
+                  event
+                ) =>
+                  setReviewText(
+                    event.target.value.slice(
+                      0,
+                      3000
+                    )
+                  )
                 }
                 rows={7}
                 placeholder="Cosa ne pensi di questo film?"
                 style={{
-                  width: "100%",
+                  width:
+                    '100%',
 
-                  resize: "vertical",
+                  resize:
+                    'vertical',
 
                   minHeight: 130,
 
-                  border: `1px solid ${P.border}`,
+                  border:
+                    `1px solid ${P.border}`,
 
-                  background: P.bgSoft,
+                  background:
+                    P.bgSoft,
 
-                  color: P.text,
+                  color:
+                    P.text,
 
                   outline: 0,
 
                   padding: 12,
 
-                  fontFamily: FONT_SANS,
+                  fontFamily:
+                    FONT_SANS,
 
                   fontSize: 13,
 
@@ -1925,75 +5228,114 @@ export default function FilmDetailPage() {
                 }}
               />
 
+              {/* PUBBLICAZIONE VOTO */}
+
               <label
                 style={{
-                  display: "flex",
+                  display:
+                    'flex',
 
-                  alignItems: "flex-start",
+                  alignItems:
+                    'flex-start',
 
                   gap: 10,
 
-                  margin: "14px 0",
+                  margin:
+                    '14px 0',
 
-                  cursor: "pointer",
+                  cursor:
+                    'pointer',
                 }}
               >
                 <button
                   type="button"
-                  onClick={() => setPublishRating((value) => !value)}
+                  onClick={() =>
+                    setPublishRating(
+                      (value) =>
+                        !value
+                    )
+                  }
                   style={{
                     width: 20,
 
                     height: 20,
 
-                    border: `1px solid ${publishRating ? P.gold : P.border}`,
+                    border:
+                      `1px solid ${
+                        publishRating
+                          ? P.gold
+                          : P.border
+                      }`,
 
-                    background: publishRating ? P.gold : P.bgSoft,
+                    background:
+                      publishRating
+                        ? P.gold
+                        : P.bgSoft,
 
-                    color: "#120d05",
+                    color:
+                      '#120d05',
 
-                    display: "grid",
+                    display:
+                      'grid',
 
-                    placeItems: "center",
+                    placeItems:
+                      'center',
 
-                    cursor: "pointer",
+                    cursor:
+                      'pointer',
 
                     flexShrink: 0,
                   }}
                 >
-                  {publishRating && <CheckCircle size={13} weight="fill" />}
+                  {publishRating && (
+                    <CheckCircle
+                      size={13}
+                      weight="fill"
+                    />
+                  )}
                 </button>
 
                 <span
                   style={{
-                    display: "flex",
+                    display:
+                      'flex',
 
-                    flexDirection: "column",
+                    flexDirection:
+                      'column',
 
                     gap: 3,
                   }}
                 >
                   <strong
                     style={{
-                      color: P.text,
+                      color:
+                        P.text,
 
                       fontSize: 11,
                     }}
                   >
-                    Mostra pubblicamente anche il voto
+                    Mostra
+                    pubblicamente
+                    anche il voto
                   </strong>
 
                   <small
                     style={{
-                      color: P.textFaint,
+                      color:
+                        P.textFaint,
 
                       fontSize: 9,
 
                       lineHeight: 1.45,
                     }}
                   >
-                    La recensione viene pubblicata se scrivi del testo.
-                    Watchlist, preferiti e data di visione restano privati.
+                    La recensione
+                    viene pubblicata
+                    se scrivi del
+                    testo. Watchlist,
+                    preferiti e data
+                    di visione restano
+                    privati.
                   </small>
                 </span>
               </label>
@@ -2003,13 +5345,17 @@ export default function FilmDetailPage() {
                   style={{
                     marginBottom: 12,
 
-                    padding: "9px 11px",
+                    padding:
+                      '9px 11px',
 
-                    border: "1px solid rgba(251,113,133,0.28)",
+                    border:
+                      '1px solid rgba(251,113,133,0.28)',
 
-                    background: "rgba(251,113,133,0.07)",
+                    background:
+                      'rgba(251,113,133,0.07)',
 
-                    color: "#fb7185",
+                    color:
+                      '#fb7185',
 
                     fontSize: 10,
                   }}
@@ -2018,33 +5364,130 @@ export default function FilmDetailPage() {
                 </div>
               )}
 
-              <button
-                onClick={() => void saveReview()}
-                disabled={savingReview}
+              {/* BOTTONI MODALE */}
+
+              <div
                 style={{
-                  width: "100%",
+                  display:
+                    'flex',
 
-                  border: `1px solid ${P.gold}`,
+                  gap: 8,
 
-                  background: P.gold,
-
-                  color: "#120d05",
-
-                  padding: "11px 14px",
-
-                  cursor: savingReview ? "wait" : "pointer",
-
-                  opacity: savingReview ? 0.6 : 1,
-
-                  fontWeight: 800,
-
-                  fontFamily: FONT_SANS,
-
-                  fontSize: 12,
+                  alignItems:
+                    'stretch',
                 }}
               >
-                {savingReview ? "Salvataggio..." : "Salva"}
-              </button>
+                {(entry?.review_text ||
+                  entry?.rating !==
+                    null) && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void removeReview()
+                    }
+                    disabled={
+                      savingReview
+                    }
+                    style={{
+                      border:
+                        '1px solid rgba(239,68,68,.45)',
+
+                      background:
+                        'rgba(239,68,68,.08)',
+
+                      color:
+                        '#ef4444',
+
+                      padding:
+                        '11px 12px',
+
+                      cursor:
+                        savingReview
+                          ? 'wait'
+                          : 'pointer',
+
+                      opacity:
+                        savingReview
+                          ? 0.6
+                          : 1,
+
+                      fontWeight: 800,
+
+                      fontFamily:
+                        FONT_SANS,
+
+                      fontSize: 11,
+
+                      display:
+                        'inline-flex',
+
+                      alignItems:
+                        'center',
+
+                      justifyContent:
+                        'center',
+
+                      gap: 6,
+
+                      whiteSpace:
+                        'nowrap',
+                    }}
+                  >
+                    <Trash
+                      size={15}
+                      weight="bold"
+                    />
+
+                    Rimuovi
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    void saveReview()
+                  }
+                  disabled={
+                    savingReview
+                  }
+                  style={{
+                    flex: 1,
+
+                    border:
+                      `1px solid ${P.gold}`,
+
+                    background:
+                      P.gold,
+
+                    color:
+                      '#120d05',
+
+                    padding:
+                      '11px 14px',
+
+                    cursor:
+                      savingReview
+                        ? 'wait'
+                        : 'pointer',
+
+                    opacity:
+                      savingReview
+                        ? 0.6
+                        : 1,
+
+                    fontWeight: 800,
+
+                    fontFamily:
+                      FONT_SANS,
+
+                    fontSize: 12,
+                  }}
+                >
+                  {savingReview
+                    ? 'Salvataggio...'
+                    : 'Salva'}
+                </button>
+              </div>
             </div>
           </div>
         )}

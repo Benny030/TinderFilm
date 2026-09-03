@@ -49,26 +49,25 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    id: 'per-te',
-    label: 'Per te',
-    path: '/per-te',
+    id: 'esplora',
+    label: 'Esplora',
+    path: '/esplora',
     icon: (active, color, activeColor) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? activeColor : 'none'} stroke={active ? activeColor : color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 3l1.55 4.45L18 9l-4.45 1.55L12 15l-1.55-4.45L6 9l4.45-1.55L12 3z" />
-        <path d="M19 15l.85 2.15L22 18l-2.15.85L19 21l-.85-2.15L16 18l2.15-.85L19 15z" />
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? activeColor : color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-3.5-3.5" />
       </svg>
     ),
   },
   {
-    id: 'persone',
-    label: 'Persone',
-    path: '/persone',
+    id: 'stanze',
+    label: 'Stanze',
+    path: '/crea-stanza',
     icon: (active, color, activeColor) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? activeColor : 'none'} stroke={active ? activeColor : color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M22 21v-2a4 4 0 00-3-3.87" />
-        <path d="M16 3.13a4 4 0 010 7.75" />
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? activeColor : color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="2" />
+        <path d="M8 2v4M16 2v4M3 9h18" />
+        <path d="m9 14 2 2 4-4" />
       </svg>
     ),
   },
@@ -84,15 +83,13 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    id: 'stanze',
-    label: 'Stanze',
-    path: '/crea-stanza',
+    id: 'cinema',
+    label: 'Cinema',
+    path: '/cinema',
     icon: (active, color, activeColor) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={active ? activeColor : color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-        <circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 00-3-3.87" />
-        <path d="M16 3.13a4 4 0 010 7.75" />
+      <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? activeColor : 'none'} stroke={active ? activeColor : color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s7-4.35 7-12a7 7 0 10-14 0c0 7.65 7 12 7 12z" />
+        <circle cx="12" cy="10" r="2.5" />
       </svg>
     ),
   },

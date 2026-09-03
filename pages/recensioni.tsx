@@ -23,6 +23,7 @@ import {
   UserCheck,
   UserPlus,
   X,
+  ArrowRight,
 } from '@phosphor-icons/react';
 
 const D = {
@@ -237,6 +238,7 @@ export default function RecensioniPage() {
 
   const [tab, setTab] = useState<Tab>('tutte');
   const [search, setSearch] = useState('');
+  const [targetMovieId, setTargetMovieId] = useState<number | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [movieQuery, setMovieQuery] = useState('');
@@ -417,6 +419,21 @@ export default function RecensioniPage() {
     };
   }, [movieQuery, modalOpen]);
 
+  useEffect(() => {
+    if (!router.isReady) return;
+
+    const q = typeof router.query.q === 'string' ? router.query.q.trim() : '';
+    const movieParam =
+      typeof router.query.movie === 'string' ? Number(router.query.movie) : null;
+
+    if (q) setSearch(q);
+    setTargetMovieId(
+      movieParam && Number.isInteger(movieParam) && movieParam > 0
+        ? movieParam
+        : null
+    );
+  }, [router.isReady, router.query.q, router.query.movie]);
+
   const filteredReviews = useMemo(() => {
     const needle = search.trim().toLowerCase();
     const source = tab === 'seguiti' ? followingReviews : reviews;
@@ -427,6 +444,13 @@ export default function RecensioniPage() {
       if (
         tab === 'animazione' &&
         !review.genre?.toLowerCase().includes('animazione')
+      ) {
+        return false;
+      }
+
+      if (
+        targetMovieId &&
+        Number(review.provider_movie_id) !== targetMovieId
       ) {
         return false;
       }
@@ -446,7 +470,7 @@ export default function RecensioniPage() {
 
       return true;
     });
-  }, [reviews, followingReviews, search, tab]);
+  }, [reviews, followingReviews, search, tab, targetMovieId]);
 
   useEffect(() => {
     const ids = Array.from(
@@ -982,6 +1006,32 @@ export default function RecensioniPage() {
                 </button>
               </div>
 
+              {!targetMovieId && (
+                <button
+                  type="button"
+                  onClick={()=>router.push('/esplora')}
+                  style={{
+                    width:'100%',
+                    marginBottom:10,
+                    border:`1px solid ${P.gold}60`,
+                    background:P.goldGlow,
+                    color:P.text,
+                    padding:'10px 12px',
+                    display:'flex',
+                    alignItems:'center',
+                    justifyContent:'space-between',
+                    gap:10,
+                    fontFamily:FONT,
+                    fontSize:10.5,
+                    fontWeight:850,
+                    cursor:'pointer',
+                  }}
+                >
+                  <span>Scopri un film e leggi cosa ne pensa la community</span>
+                  <ArrowRight size={13} color={P.gold} weight="bold"/>
+                </button>
+              )}
+
               <div className="toolbar">
                 <div className="search-box">
                   <MagnifyingGlass size={16} />
@@ -1002,6 +1052,46 @@ export default function RecensioniPage() {
                   Filtri
                 </button>
               </div>
+
+              {targetMovieId && (
+                <div style={{
+                  border:`1px solid ${P.gold}70`,
+                  background:P.goldGlow,
+                  padding:'11px 12px',
+                  marginBottom:12,
+                  display:'flex',
+                  alignItems:'center',
+                  justifyContent:'space-between',
+                  gap:10,
+                }}>
+                  <div>
+                    <div style={{fontSize:9,fontWeight:900,color:P.gold,textTransform:'uppercase',letterSpacing:'.1em'}}>
+                      Recensioni del film
+                    </div>
+                    <div style={{fontSize:11,color:P.text,marginTop:2}}>
+                      {search || 'Film selezionato'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTargetMovieId(null);
+                      setSearch('');
+                      router.replace('/recensioni', undefined, { shallow: true });
+                    }}
+                    style={{
+                      border:0,
+                      background:'transparent',
+                      color:P.textMuted,
+                      fontSize:10,
+                      fontWeight:800,
+                      cursor:'pointer',
+                    }}
+                  >
+                    Mostra tutto
+                  </button>
+                </div>
+              )}
 
               {feedError && (
                 <div className="error-box">{feedError}</div>

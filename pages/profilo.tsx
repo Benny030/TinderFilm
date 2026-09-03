@@ -925,6 +925,122 @@ export default function ProfiloPage() {
               </div>
             </div>
           </header>
+          <section
+            style={{
+              border: `1px solid ${P.border}`,
+              background: P.bgSoft,
+              padding: 16,
+              marginBottom: 18,
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-end',
+                gap: 12,
+                flexWrap: 'wrap',
+                marginBottom: 12,
+              }}
+            >
+              <div>
+                <div
+                  style={{
+                    color: P.pink,
+                    fontSize: 9,
+                    fontWeight: 900,
+                    textTransform: 'uppercase',
+                    letterSpacing: '.12em',
+                  }}
+                >
+                  La tua attività
+                </div>
+                <div
+                  style={{
+                    color: P.text,
+                    fontFamily: FONT_DISPLAY,
+                    fontSize: 21,
+                    fontWeight: 800,
+                    marginTop: 3,
+                  }}
+                >
+                  La tua CineDate in breve
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => router.push('/per-te')}
+                style={{
+                  border: `1px solid ${P.gold}`,
+                  background: P.goldGlow,
+                  color: P.gold,
+                  padding: '8px 11px',
+                  fontFamily: FONT_SANS,
+                  fontSize: 10,
+                  fontWeight: 850,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                }}
+              >
+                <Sparkle size={13} weight="fill" />
+                I tuoi consigli
+              </button>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))',
+                gap: 8,
+              }}
+            >
+              {[
+                { label: 'Preferiti', value: favorites.length, color: P.pink, tab: 'preferiti' },
+                { label: 'Watchlist', value: watchlist.length, color: P.gold, tab: 'watchlist' },
+                { label: 'Visti', value: watched.length, color: P.success, tab: 'visti' },
+                { label: 'Recensioni', value: reviewed.length, color: P.gold, tab: 'recensioni' },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={() => router.push(`/libreria?tab=${item.tab}`)}
+                  style={{
+                    border: `1px solid ${P.border}`,
+                    background: P.card,
+                    color: P.text,
+                    padding: 12,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontFamily: FONT_SANS,
+                  }}
+                >
+                  <div
+                    style={{
+                      color: item.color,
+                      fontSize: 21,
+                      fontWeight: 900,
+                    }}
+                  >
+                    {item.value}
+                  </div>
+                  <div
+                    style={{
+                      color: P.textMuted,
+                      fontSize: 9.5,
+                      fontWeight: 800,
+                      marginTop: 3,
+                    }}
+                  >
+                    {item.label}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+
 
           <div
             style={{

@@ -17,6 +17,7 @@ const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const guestExpiry = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+const presenceCutoff = () => new Date(Date.now() - 45 * 1000).toISOString();
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const supabase = createClient();
@@ -49,13 +50,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     const now = new Date().toISOString();
-    const { data, error } = await supabase
+
+    let participantsQuery = supabase
       .from('room_participants')
-      .select('id, room_id, actor_id, actor_type, display_name, role, membership_status, joined_at, left_at, expires_at')
+      .select('id, room_id, actor_id, actor_type, display_name, role, membership_status, joined_at, left_at, expires_at, last_seen_at')
       .eq('room_id', roomId)
       .eq('membership_status', wantsPending ? 'pending' : 'active')
       .or(`expires_at.is.null,expires_at.gt.${now}`)
       .order('joined_at', { ascending: true });
+
+    // Le richieste pending restano visibili finché l'host non le gestisce.
+    // I partecipanti "active" invece devono essere realmente presenti adesso.
+    if (!wantsPending) {
+      participantsQuery = participantsQuery.gte('last_seen_at', presenceCutoff());
+    }
+
+    const { data, error } = await participantsQuery;
 
     if (error) return res.status(500).json({ error: error.message });
     return res.status(200).json(data ?? []);
@@ -87,7 +97,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       .select('*', { count: 'exact', head: true })
       .eq('room_id', roomId)
       .eq('membership_status', 'active')
-      .or(`expires_at.is.null,expires_at.gt.${now}`);
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
+      .gte('last_seen_at', presenceCutoff());
 
     if (countError) return res.status(500).json({ error: countError.message });
 
@@ -135,13 +146,67 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         role: isHost ? 'host' : 'member',
         membership_status: membershipStatus,
         left_at: null,
+        last_seen_at: now,
         expires_at: actorType === 'guest' ? guestExpiry() : null,
       }, { onConflict: 'room_id,actor_id' })
       .select('*')
       .single();
 
     if (error) return res.status(500).json({ error: error.message });
+
+    if (membershipStatus === 'active') {
+      const { error: roomPresenceError } = await supabase
+        .from('rooms')
+        .update({ empty_since: null })
+        .eq('id', roomId);
+
+      if (roomPresenceError) {
+        console.error('Unable to clear room empty_since:', roomPresenceError.message);
+      }
+    }
+
     return res.status(existing ? 200 : 201).json({ participant: data });
+  }
+
+  if (req.method === 'PATCH') {
+    const body = req.body as { roomId?: string; actorId?: string };
+    const roomId =
+      typeof body.roomId === 'string' ? body.roomId.trim().toUpperCase() : '';
+    const actorId =
+      typeof body.actorId === 'string' ? body.actorId.trim() : '';
+
+    if (!roomId || !actorId || !isUuid(actorId)) {
+      return res.status(400).json({ error: 'roomId e actorId validi obbligatori' });
+    }
+
+    const heartbeatAt = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('room_participants')
+      .update({ last_seen_at: heartbeatAt })
+      .eq('room_id', roomId)
+      .eq('actor_id', actorId)
+      .eq('membership_status', 'active')
+      .select('actor_id')
+      .maybeSingle();
+
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data) {
+      return res.status(409).json({ error: 'Partecipante non attivo' });
+    }
+
+    // Se qualcuno è presente, la stanza non è vuota.
+    const { error: roomError } = await supabase
+      .from('rooms')
+      .update({ empty_since: null })
+      .eq('id', roomId)
+      .eq('room_phase', 'waiting');
+
+    if (roomError) {
+      console.error('Unable to clear room empty_since on heartbeat:', roomError.message);
+    }
+
+    return res.status(200).json({ ok: true, last_seen_at: heartbeatAt });
   }
 
   if (req.method === 'DELETE') {
@@ -239,6 +304,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (swipeDeleteError) {
       return res.status(500).json({ error: swipeDeleteError.message });
+    }
+
+    // Se dopo l'uscita non resta nessun partecipante attivo, parte il timer
+    // di 2 minuti. Se invece qualcuno è ancora dentro, il timer resta azzerato.
+    const activeNow = new Date().toISOString();
+    const { count: remainingActive, error: remainingError } = await supabase
+      .from('room_participants')
+      .select('*', { count: 'exact', head: true })
+      .eq('room_id', roomId)
+      .eq('membership_status', 'active')
+      .or(`expires_at.is.null,expires_at.gt.${activeNow}`)
+      .gte('last_seen_at', presenceCutoff());
+
+    if (remainingError) {
+      console.error('Unable to count remaining participants:', remainingError.message);
+    } else {
+      const { error: roomEmptyError } = await supabase
+        .from('rooms')
+        .update({
+          empty_since: (remainingActive ?? 0) === 0 ? activeNow : null,
+        })
+        .eq('id', roomId)
+        .eq('visibility', 'public')
+        .eq('room_phase', 'waiting');
+
+      if (roomEmptyError) {
+        console.error('Unable to update room empty_since:', roomEmptyError.message);
+      }
     }
 
     return res.status(200).json({ ok: true, status: 'left' });

@@ -66,6 +66,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const supabase = createClient();
 
+  // Prima di restituire la discovery, aggiorna/chiude le stanze pubbliche
+  // rimaste completamente vuote per almeno 2 minuti.
+  const { error: cleanupError } = await supabase.rpc('cleanup_empty_public_rooms');
+  if (cleanupError) {
+    console.error('Empty public rooms cleanup failed:', cleanupError.message);
+    // Non blocchiamo la discovery: se il cleanup fallisce, restituiamo comunque
+    // le stanze valide secondo i filtri correnti.
+  }
+
   // La discovery considera tutte le stanze pubbliche ancora disponibili.
   let roomsQuery = supabase
     .from('rooms')
@@ -87,6 +96,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       radius_km,
       is_locked,
       room_phase,
+      empty_since,
       created_at
     `)
     .eq('room_phase', 'waiting')
@@ -126,16 +136,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     await Promise.all([
       supabase
         .from('room_participants')
-        .select('room_id, actor_id, membership_status, expires_at')
+        .select('room_id, actor_id, membership_status, expires_at, last_seen_at')
         .in('room_id', roomIds)
         .eq('membership_status', 'active')
-        .or(`expires_at.is.null,expires_at.gt.${now}`),
+        .or(`expires_at.is.null,expires_at.gt.${now}`)
+        .gte('last_seen_at', new Date(Date.now() - 45 * 1000).toISOString()),
       supabase
         .from('room_participants')
         .select('room_id, actor_id, display_name, actor_type')
         .in('room_id', roomIds)
         .eq('role', 'host')
-        .eq('membership_status', 'active'),
+        .eq('membership_status', 'active')
+        .gte('last_seen_at', new Date(Date.now() - 45 * 1000).toISOString()),
     ]);
 
   if (participantsError) {

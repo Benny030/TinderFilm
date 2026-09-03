@@ -1,123 +1,1897 @@
-# Documento di analisi e proposta evolutiva — CineDate
+# CineDate — Documentazione tecnica e architetturale
 
-Ultimo aggiornamento: 11 agosto 2026. Stato: sola analisi; nessuna modifica applicativa o al database è inclusa in questo documento.
+**Repository:** `Benny030/TinderFilm`
+**Branch analizzato:** `main`
+**Stack principale:** Next.js Pages Router + React + TypeScript + Supabase + TMDB
+**Nome package:** `tinderfilm-next-supabase`
 
-## Contesto rapido per persone e agenti AI
+---
 
-**CineDate** è una web app per scegliere un film insieme: due persone entrano nella stessa stanza, ricevono lo stesso catalogo e indicano i titoli che gradiscono. Quando entrambe esprimono un like sullo stesso film, l'app mostra il match con dettagli e trailer, suggerisce dove il titolo è disponibile in streaming e, soprattutto, individua i cinema reali The Space più vicini alla posizione dell'utente. Per ogni cinema mostra la programmazione e fornisce il collegamento diretto alla pagina di acquisto/prenotazione del biglietto della proiezione. Il prodotto supporta sia utenti autenticati Supabase sia ospiti; gli ospiti possono partecipare alle stanze, ma i dati personali e persistenti devono appartenere soltanto a utenti autenticati.
+# 1. Panoramica del progetto
 
-L'obiettivo del progetto non è essere solo un sistema di swipe: CineDate deve diventare un posto personale e sociale per organizzare il proprio rapporto con i film. Le evoluzioni descritte qui puntano a permettere a ogni utente di salvare in modo affidabile voto, recensione personale, preferiti, film visti e watchlist; in seguito, di condividere selettivamente tali informazioni con gli amici. Privacy, assenza di duplicati, coerenza tra fonti film e autorizzazione lato database sono requisiti fondamentali, non dettagli opzionali.
+CineDate è una web application dedicata alla scoperta e scelta condivisa di film.
 
-Il progetto usa Next.js lato client/API, Supabase per Auth, database, Storage e Realtime, TMDB per gran parte del catalogo e un job server per le programmazioni The Space. Le stanze realtime sono intenzionalmente effimere e non sostituiscono la cronologia personale persistente. `auth.users` è l'identità autorevole; `public.users` è il profilo applicativo collegato a tale identità. Qualunque futura modifica che tocchi dati utente, recensioni, amicizie o API deve rispettare RLS, usare l'identità autenticata anziché dati dichiarati dal browser e mantenere una chiave canonica per i film.
+Il cuore dell’esperienza consiste nella creazione o partecipazione a una **stanza**, nella quale più utenti ricevono un catalogo comune di film e possono esprimere preferenze tramite un’interfaccia swipe.
 
-Quando si lavora sul repository, distinguere sempre ciò che è già implementato da ciò che è solo proposto in questa analisi. In particolare, recensioni e relative tabelle esistono nello schema ma non sono ancora integrate nel flusso UI/API; amicizie, watchlist, visti e preferiti film non risultano ancora modellati. Non dedurre policy, trigger, indici o impostazioni Google OAuth dal codice: devono essere verificati nell'ambiente Supabase prima di implementare o migrare.
+Quando un film raggiunge la soglia di consenso configurata per la stanza, viene generato un **match**.
 
-## Perimetro e attendibilità dell'analisi
+Il progetto si è successivamente esteso oltre il semplice meccanismo “Tinder dei film” e include oggi aree dedicate a:
 
-Sono stati esaminati i file versionati di `Client/` e `Server/`, tutte le chiamate Supabase individuabili nel codice, i tipi TypeScript e lo script SQL `Client/supabase/profile_mvp.sql`. In data 11 agosto 2026 è stato inoltre fornito uno snapshot dello schema `public` attuale, usato nelle sezioni seguenti per confermare tabelle, colonne, PK, FK e check. Non sono invece disponibili policy RLS, indici oltre a PK/UNIQUE dichiarati, trigger, contenuto dei dati, file `.env.local` o configurazioni del dashboard Supabase/Google. Questi aspetti restano da verificare prima di ogni implementazione.
+* autenticazione e profili;
+* utenti guest;
+* stanze private/pubbliche;
+* stanze di coppia e gruppo;
+* swipe e match;
+* cinema reali e programmazioni;
+* scelta finale del film;
+* libreria personale;
+* film preferiti;
+* watchlist;
+* film visti;
+* votazioni;
+* recensioni;
+* raccomandazioni personalizzate;
+* pagine pubbliche degli utenti;
+* blocco utenti;
+* segnalazioni;
+* pannello amministrativo;
+* integrazione TMDB;
+* integrazione con Supabase Realtime.
 
-Le note storiche in `components/screens/notes.txt` non sono una fonte progettuale vincolante; lo schema fornito conferma comunque l'esistenza di `reviews`, `review_likes` e `matches`, mentre il codice corrente non le interroga né espone schermate per recensioni. Prima di implementare è necessario esportare RLS, indici e trigger dall'ambiente Supabase interessato.
+La struttura generale presente nel repository conferma un’app Next.js basata sul **Pages Router**, con frontend e backend API ospitati nello stesso progetto.
 
-## Struttura e comunicazione con il database attuali
+---
 
-L'app è una Next.js Pages Router. Il browser usa un singleton `createBrowserClient()` con chiave anonima (`utils/supabase/browser.ts`) per sessione, profilo e Storage. Le API Next.js e il job `Server/sync-cinema-showings.mjs` usano `utils/supabase/server.ts`/`createClient` con `SUPABASE_SERVICE_ROLE_KEY` quando disponibile, altrimenti con la chiave anonima. Le route osservate non ricavano o verificano l'utente dal token della richiesta: questa è un'area da correggere in una fase di sicurezza separata prima di esporre dati sociali.
+# 2. Stack tecnologico
 
-Le relazioni e tabelle referenziate dal codice sono:
+Dal `package.json` risultano le principali dipendenze:
 
-| Area | Tabelle/campi osservati | Osservazioni |
-| --- | --- | --- |
-| Identità e profilo | `users`: `id`, `email`, `username`; lo SQL aggiunge `avatar_url`, `bio`, `favorite_genres` | Il profilo è letto/scritto dal browser e `id` deriva da `auth.users.id`. Il codice cerca anche per email come fallback. |
-| Film | `movies`: `id`, titolo e metadati locali; film TMDB con `tmdb_id` solo nell'oggetto in memoria | Non emerge una chiave canonica comune né un upsert del film TMDB in `movies`. |
-| Stanze/match | `rooms`, `swipes`, `matches` | La stanza corrente sincronizza swipe e match via Supabase Realtime Broadcast/Presence; le API swipe legacy operano globalmente. |
-| Cinema | `cinemas`, `cinema_showings` | Il job server usa service role per upsert/cancellazione/inserimento; le API leggono i dati tramite client server. |
-| Storage | bucket `avatars` | `profile_mvp.sql` definisce bucket e policy Storage, non policy della tabella `users`. |
+* **Next.js 16**
+* **React 18**
+* **TypeScript 5.6**
+* **Supabase JS**
+* **Supabase SSR**
+* **Leaflet**
+* **Phosphor Icons**
+* **Playwright**
+* **Playwright Core**
+* **Chromium serverless tramite `@sparticuz/chromium`**
 
-La scelta di dati personali non deve dipendere dagli eventi Realtime della stanza: essi sono effimeri, usano anche ospiti e non costituiscono una cronologia utente. Ogni scrittura personale deve invece essere associata a `auth.uid()` e autorizzata da RLS/API autenticata.
+Gli script principali sono:
 
-### Riscontri dallo schema fornito
+```text
+npm run dev
+npm run build
+npm run start
+npm run lint
+```
 
-- `users.id` è correttamente una FK verso `auth.users(id)` e `username` è unico. `favorite_genres` è indicato nello snapshot come `ARRAY`, ma senza tipo elemento: il tipo preciso va confermato; differisce dallo script versionato che lo dichiarava `jsonb`.
-- `movies.id` è testo ed è la sola tabella cui `swipes.movie_id` è vincolato. `custom_movies` è una seconda anagrafica con `id uuid`: non ha FK su `created_by` e non è collegata a `movies`.
-- `reviews.movie_id` non ha FK verso `movies`; `reviews.user_id` può essere null e `username` è una copia denormalizzata. Non esiste un vincolo unico per una recensione per utente-film.
-- `review_likes.review_id` e `user_id` sono nullable e non esiste unicità su `(review_id, user_id)`; `likes_count` in `reviews` può quindi divergere dal dettaglio dei like.
-- `matches` ha FK solo su `user_id`; `movie_id` e `room_id` non sono vincolati e non esiste unicità utente-film.
-- Non esistono nello snapshot tabelle di amicizia, watchlist, film visti o preferiti. `room_members.user_id bigint` non è compatibile con `users.id uuid` e non ha FK utente; `room_presence` permette una sola presenza per utente, anche se contiene `room_id`.
+Nel progetto `lint` esegue in realtà:
 
-## Recensioni, voto, preferiti, viste e watchlist
+```text
+tsc --noEmit
+```
 
-### Situazione rilevata
+quindi attualmente il comando controlla il type-checking TypeScript, non ESLint.
 
-Le tabelle `reviews` e `review_likes` esistono, ma non sono integrate dal codice. Il profilo oggi salva generi preferiti, non film preferiti. Il catalogo presenta tre rappresentazioni non collegate: `movies.id` testuale, `custom_movies.id` UUID e `tmdb_id` nell'oggetto remoto in memoria. `reviews.movie_id` non è vincolato, quindi oggi può contenere valori non validi o riferirsi a convenzioni diverse. Perciò non è sicuro aggiungere nuove FK o dati personali senza prima scegliere come rappresentare tutti i film.
+---
 
-### Modello consigliato
+# 3. Architettura generale
 
-1. Rendere ogni film referenziabile con un solo identificatore interno persistente. La soluzione preferibile è una tabella/catalogo film canonico con identificatore interno e coppia `provider` + `provider_movie_id` (per esempio `tmdb` + id TMDB), unica per provider. I film locali devono entrare nello stesso catalogo o essere esplicitamente mappati ad esso. Solo dopo, tutti i dati personali usano `movie_id` FK al catalogo canonico. Se il prodotto non vuole persistere il catalogo TMDB, l'alternativa è una coppia `movie_provider`/`external_movie_id` in ogni riga personale con vincolo univoco; perde però l'integrità referenziale verso i metadati del film.
-2. Usare una sola riga di stato per coppia utente-film, ad esempio `user_movie_entries`. Deve contenere almeno: `user_id`, `movie_id`, `rating` nullable, `review_text` nullable, `review_updated_at`, `is_favorite`, `in_watchlist`, `watched_on` nullable, `created_at`, `updated_at`. Il vincolo unico su `(user_id, movie_id)` è la protezione primaria contro doppie recensioni, preferiti duplicati e film ripetuti nelle liste.
-3. Interpretare le liste come viste dello stesso record, non come tabelle indipendenti: watchlist = `in_watchlist = true`; visti = `watched_on is not null`; preferiti = `is_favorite = true`; votati = `rating is not null`. Questo consente voto, recensione e visto nello stesso aggiornamento atomico. Decidere formalmente se segnare visto rimuove automaticamente dalla watchlist; la raccomandazione è rimuoverlo, salvo un esplicito requisito di mantenerlo.
-4. Consentire una sola recensione personale modificabile per film. Se in futuro serviranno più visioni, aggiungere una tabella separata `user_movie_watch_events` con data e note per singola visione, mantenendo il riepilogo in `user_movie_entries`; non simulare cronologia duplicando recensioni.
+L'architettura può essere vista come cinque livelli principali.
 
-Controlli consigliati: voto entro scala di prodotto dichiarata (ad esempio 0,5–5) e coerente con il componente UI; data di visione non futura; testo con limiti di lunghezza; aggiornamenti con timestamp server; FK non eliminabile o cancellazione gestita; esclusione degli ospiti. La funzione di like a una recensione, se rimane nel prodotto, va in una tabella separata con unico `(review_id, user_id)`, non in un contatore fidato dal client. Il contatore deve essere derivato o mantenuto transazionalmente lato database.
+```text
+Browser / React UI
+        │
+        ├── Context e Hooks
+        │
+        ├── Supabase Browser Client
+        │
+        │
+        └── Next.js API Routes
+                    │
+                    ├── Supabase
+                    │   ├── Auth
+                    │   ├── PostgreSQL
+                    │   ├── Realtime
+                    │   └── Storage
+                    │
+                    ├── TMDB
+                    │
+                    ├── servizi cinema
+                    │
+                    └── Playwright / Chromium
+```
 
-Privacy: voto, testo della recensione, preferito, watchlist e data di visione sono dati personali di utilizzo. Impostazione predefinita consigliata: privati. La visibilità agli amici deve essere distinta almeno per watchlist, voti/preferiti e testo recensioni; la data di visione dovrebbe restare privata salvo consenso separato. Non esporre l'email di `users` nelle query sociali.
+Il frontend può quindi comunicare con Supabase in due modi:
 
-### Task futuri — dati personali e recensioni
+1. direttamente dal browser tramite il client anonimo;
+2. tramite le API Next.js lato server.
 
-- [ ] **R1 — Audit di sicurezza e integrità.** Esportare RLS, indici, trigger e migrazioni; verificare dati orfani/nulli e decidere la bonifica di `reviews`, `review_likes`, `matches`, `custom_movies`, `room_members` e `room_presence` prima di introdurre nuovi vincoli.
-- [ ] **R2 — Definire l'identità canonica del film.** Decidere migrazione/catalogo TMDB-locale e imporre l'unicità dell'identificatore esterno.
-- [ ] **R3 — Progettare e migrare `user_movie_entries`.** Creare vincoli, check e indice unico; pianificare l'eventuale migrazione di recensioni/match esistenti senza perdita.
-- [ ] **R4 — Applicare autorizzazione e privacy.** RLS con `auth.uid()` per proprietario e query friend-only limitate ai campi consentiti; evitare service role nelle azioni utente.
-- [ ] **R5 — Implementare UI/API atomiche.** Upsert della singola riga utente-film, viste di liste, validazione server-side e gestione offline/errore.
-- [ ] **R6 — Test.** Coprire doppio click, concorrenza, cancellazione/modifica, film TMDB/locali, ospite e privacy tra utenti.
+Questa distinzione è molto importante dal punto di vista della sicurezza.
 
-## Social: richieste di amicizia e condivisione
+---
 
-Non risultano nello schema né nel codice tabelle, API o UI per amicizie. La presenza in una stanza non è un rapporto sociale persistente e non deve concedere accesso ai dati personali; inoltre l'attuale `room_presence` non è idonea a diventarlo, dato che ammette una sola riga per utente.
+# 4. Entry point dell'applicazione
 
-### Modello consigliato
+Il punto globale dell'app è:
 
-Usare una sola relazione per coppia di utenti, non due righe speculari. Per impedire richieste incrociate/duplicate, memorizzare una coppia canonica (`user_low_id`, `user_high_id`) con vincolo `user_low_id < user_high_id` e `unique(user_low_id, user_high_id)`. Conservare separatamente `requested_by`, `status` (`pending`, `accepted`, `declined`), `created_at`, `responded_at`, `updated_at`. Il richiedente deve appartenere alla coppia; nessuna auto-relazione è ammessa. Se servirà il blocco, modellarlo separatamente e farlo prevalere su qualunque stato amicizia.
+```text
+pages/_app.tsx
+```
 
-Transizioni ammesse: assente → pending (invio); pending → accepted (solo destinatario); pending → declined (solo destinatario); accepted → assente/rimosso (uno dei due). Una nuova richiesta dopo rifiuto necessita di una scelta di prodotto (cooldown o nuova riga); documentare e implementare una regola unica. Invio, accettazione, rifiuto e rimozione devono essere operazioni transazionali/RPC o API server autenticata: controllano identità, stato precedente e aggiornano una sola riga, così due richieste simultanee non producono duplicati.
+che:
 
-Alla relazione `accepted` si collega esclusivamente il diritto di lettura delle condivisioni abilitate dal proprietario. Una tabella/impostazioni privacy per utente dovrebbe includere almeno `share_watchlist_with_friends`, `share_ratings_with_friends`, `share_favorites_with_friends`, `share_reviews_with_friends`; impostazione iniziale `false`. Le query devono calcolare l'amicizia bidirezionale accepted e proiettare soltanto i campi condivisi. Nessuna query deve restituire recensioni, voti o watchlist del non-amico, di una richiesta pending/declined o dopo rimozione. Valutare paginazione e una vista/RPC dedicata, evitando di dare al client accesso diretto generalizzato a tutte le righe personali.
+* carica gli stylesheet globali;
+* imposta viewport, colore tema e titolo;
+* racchiude tutta l'app nel `ThemeProvider`;
+* racchiude l'app nell'`AuthProvider`.
 
-### Task futuri — social
+La gerarchia principale è:
 
-- [ ] **S1 — Confermare requisiti prodotto.** Definire ricerca utenti, ciclo di vita dopo rifiuto/rimozione, blocco e notifiche.
-- [ ] **S2 — Migrare relazione canonica.** Tabelle, check, unicità per coppia, indici e operazioni atomiche di stato.
-- [ ] **S3 — RLS e API social.** Consentire solo le transizioni dell'attore corretto e letture limitate a sé/amici accettati.
-- [ ] **S4 — Collegare privacy e dati personali.** Implementare preferenze e endpoint/vista di condivisione che rispettino ogni flag.
-- [ ] **S5 — UI e test.** Stati pending in entrata/uscita, azioni idempotenti, race condition, rimozione immediata dell'accesso e test anti-enumerazione utenti.
+```text
+ThemeProvider
+└── AuthProvider
+    └── pagina corrente
+```
 
-## Login con Google
+---
 
-### Flusso attuale e problemi verificabili
+# 5. Struttura delle directory
 
-Da `pages/auth.tsx`, il bottone invoca `signInWithOAuth({ provider: 'google', redirectTo: <origin>/auth/callback })`. La pagina `pages/auth/callback.tsx` interpreta nello stesso client browser tre varianti: `code`/`exchangeCodeForSession`, token nel fragment/`setSession` e OTP/`verifyOtp`. Poi cerca il profilo prima per `users.id` e, in assenza username, per `users.email`, decidendo se mandare a `/home` o `/username`.
+La parte realmente applicativa della repository può essere riassunta così:
 
-Questo flusso presenta rischi concreti: callback e username sono esclusi dal middleware proprio per una gara sui cookie; lo scambio di codice avviene nel browser mentre il middleware gestisce le sessioni tramite cookie; vengono supportati più flussi contemporaneamente senza una fonte unica; il ramo che dice di tollerare `AuthPKCECodeVerifierMissingError` lo rilancia subito dopo; e il fallback del profilo per email può collegare la UI a un profilo con `id` diverso dall'utente autenticato. Non sono presenti la configurazione Google/Supabase, log o un caso riproducibile, quindi non si può attribuire l'errore ricorrente a un singolo parametro mancante.
+```text
+TinderFilm/
+│
+├── components/
+│   ├── cinema/
+│   ├── layout/
+│   ├── screens/
+│   └── social/
+│
+├── context/
+│   ├── AuthContext.tsx
+│   └── ThemeContext.tsx
+│
+├── hooks/
+│   ├── useAuth.ts
+│   └── useSwipe.ts
+│
+├── pages/
+│   ├── api/
+│   ├── admin/
+│   ├── auth/
+│   ├── attore/
+│   ├── film/
+│   ├── impostazioni/
+│   ├── stanze/
+│   ├── utente/
+│   └── pagine principali
+│
+├── public/
+│
+├── styles/
+│
+├── supabase/
+│
+├── types/
+│
+├── utils/
+│   ├── cinema/
+│   └── supabase/
+│
+├── middleware.ts
+├── next.config.mjs
+├── tsconfig.json
+├── vercel.json
+└── package.json
+```
 
-### Flusso consigliato
+---
 
-Usare un solo flusso Authorization Code con PKCE e una callback server-side che riceve solo `code`, esegue una sola volta l'exchange, salva/rinnova la sessione nei cookie e redirige. La documentazione Supabase per Google indica esplicitamente lo scambio alla callback per il flusso PKCE e richiede che `redirectTo` sia nella redirect allow list; le identità OAuth sono associate a un singolo utente Auth. [Guida Google Supabase](https://supabase.com/docs/guides/auth/social-login/auth-google), [identità Auth](https://supabase.com/docs/guides/auth/identities).
+# 6. Componenti
 
-Il profilo applicativo deve avere `users.id` FK/uno-a-uno con `auth.users.id` e venire creato automaticamente/idempotentemente al nuovo utente (trigger sicuro o endpoint server) senza cercare per email. L'utente esistente è riconosciuto da `auth.users.id`; lo username mancante porta al solo onboarding username. Email e avatar Google sono metadati di bootstrap, non chiavi di join del profilo.
+## `components/layout`
 
-Per collegare Google a un account esistente con password, offrire un'azione esplicita “Collega Google” solo in sessione autenticata e usare il meccanismo di identity linking supportato da Supabase; non fondere record applicativi lato client in base alla sola email. Supabase espone `linkIdentity()` proprio per associare un'identità OAuth a un utente esistente. [Riferimento `linkIdentity`](https://supabase.com/docs/reference/javascript/auth-linkidentity). Il comportamento di linking automatico e l'email verificata vanno comunque verificati nella configurazione del progetto prima del rilascio.
+Contiene l'infrastruttura visuale condivisa.
 
-I token Google non sono necessari per login e non vanno salvati se l'app non chiama API Google. La sessione applicativa è quella Supabase: refresh via client/middleware cookie, scadenza e revoca configurate nel dashboard. Gli errori devono essere classificati (annullamento Google, redirect non autorizzato, exchange/PKCE, provider non configurato, rete) e mostrati senza dettagli sensibili; registrare lato server codice/categoria/correlation id, mai token o segreti.
+### `AppShell.tsx`
 
-### Task futuri — Google OAuth
+Rappresenta il contenitore principale delle schermate dell'app.
 
-- [ ] **G1 — Audit configurazione.** Verificare Google OAuth client, callback Supabase, Site URL, redirect allow list per locale/staging/produzione, provider abilitato e log Auth.
-- [ ] **G2 — Unificare il flusso PKCE.** Sostituire la callback client multi-flusso con callback server-side/cookie coerente con `@supabase/ssr`; rimuovere workaround e rami non necessari.
-- [ ] **G3 — Rendere canonico il profilo.** FK/trigger o provisioning idempotente su `auth.users.id`; eliminare il fallback di autorizzazione/identificazione per email.
-- [ ] **G4 — Account linking esplicito.** Disegnare UX, conferma e gestione errori per collegare/scollegare Google da sessione esistente; testare account password preesistente e account Google preesistente.
-- [ ] **G5 — Sessioni, osservabilità e test E2E.** Testare nuovo Google, Google già collegato, password→link, annullamento, callback duplicata, PKCE/cookie assenti, redirect errato e sign-out/revoca; log sicuri e messaggi localizzati.
+Gestisce il layout generale e permette alle varie pagine di condividere una struttura coerente.
 
-## Priorità proposta
+### `AppFooter.tsx`
 
-1. R1 e G1: schema di base disponibile, ma senza RLS/indici/trigger/configurazione non è possibile fare una migrazione o diagnosticare OAuth con certezza.
-2. G2–G3 e R2: stabilizzare identità utente e identità film prima di salvare dati personali.
-3. R3–R4 e S1–S4: integrità, autorizzazione e privacy prima della UI.
-4. R5–R6, S5 e G4–G5: implementazione, esperienza utente e copertura automatica.
+Footer condiviso.
+
+### `bottomNav.tsx`
+
+Navigazione mobile inferiore.
+
+Il progetto ha chiaramente una forte impostazione **mobile-first / app-like**.
+
+---
+
+# 7. Componenti delle stanze
+
+La directory:
+
+```text
+components/screens/
+```
+
+contiene buona parte della logica visuale dell'esperienza principale.
+
+### `WelcomeRoom.tsx`
+
+Sala d'attesa della stanza.
+
+Gestisce presumibilmente:
+
+* informazioni stanza;
+* partecipanti;
+* ingresso;
+* host;
+* avvio della votazione;
+* richieste di accesso.
+
+### `SwipeCard.tsx`
+
+Card visuale che rappresenta il film durante lo swipe.
+
+Lavora insieme a:
+
+```text
+hooks/useSwipe.ts
+```
+
+### `MatchScreen.tsx`
+
+Mostra un match appena raggiunto.
+
+### `matchesScreen.tsx`
+
+Mostra l'elenco dei match generati nella stanza.
+
+### `CinemaPlanScreen.tsx`
+
+Schermata dedicata alla pianificazione della visione al cinema.
+
+### `finalmatchescreen.tsx`
+
+Ulteriore rappresentazione finale del risultato della stanza.
+
+### `EmptyState.tsx`
+
+Componente generico per stati senza risultati.
+
+---
+
+# 8. Motore swipe
+
+La logica gestuale è stata estratta nel custom hook:
+
+```text
+hooks/useSwipe.ts
+```
+
+Il sistema supporta:
+
+* drag tramite mouse;
+* drag tramite touch;
+* soglia minima di spostamento;
+* rilevamento della velocità;
+* flick;
+* animazione di uscita;
+* snap-back della card;
+* rotazione dinamica;
+* fade;
+* blocco durante l'animazione;
+* long press.
+
+Uno swipe può essere accettato:
+
+* quando supera circa 92px;
+* oppure quando viene rilevato un flick sufficientemente veloce.
+
+È presente anche un **long press di 3 secondi**, collegato alla visualizzazione del trailer.
+
+Questa separazione tra gesto e schermata è una buona scelta architetturale.
+
+---
+
+# 9. Sistema di autenticazione
+
+La gestione centrale si trova in:
+
+```text
+context/AuthContext.tsx
+```
+
+CineDate supporta due identità differenti:
+
+```text
+Authenticated User
+Guest User
+```
+
+## Utente autenticato
+
+L'utente autenticato proviene da Supabase Auth.
+
+Dal profilo `public.users` viene recuperato almeno:
+
+```text
+username
+```
+
+L'identità autorevole resta l'UUID Supabase dell'utente.
+
+## Guest
+
+Il guest viene creato localmente tramite:
+
+```text
+crypto.randomUUID()
+```
+
+e riceve un nome generato attraverso:
+
+```text
+utils/guestName.ts
+```
+
+La sessione guest viene mantenuta in:
+
+```text
+localStorage
+```
+
+con durata:
+
+```text
+24 ore
+```
+
+ed è accompagnata da un cookie tecnico:
+
+```text
+cineDateGuest=true
+```
+
+La sessione Supabase, quando presente, ha precedenza sull'identità guest.
+
+---
+
+# 10. Supabase
+
+Sono presenti tre utility distinte:
+
+```text
+utils/supabase/browser.ts
+utils/supabase/server.ts
+utils/supabase/middleware.ts
+```
+
+## Browser
+
+Il browser utilizza:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+```
+
+tramite un client singleton.
+
+## Server
+
+Il client server utilizza:
+
+```text
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+quando disponibile, con fallback sulla anon key.
+
+Questa utility richiede particolare attenzione perché una route che utilizza la service role bypassa normalmente le policy RLS.
+
+Le route che usano un client amministrativo devono quindi verificare esplicitamente l'identità dell'utente.
+
+---
+
+# 11. Stanze
+
+La stanza è oggi uno degli oggetti centrali del progetto.
+
+La API principale è:
+
+```text
+/api/rooms
+```
+
+La stanza supporta quattro tipologie:
+
+```text
+private
+group
+cinema_pair
+cinema_group
+```
+
+La configurazione include:
+
+```text
+id
+mode
+genres
+year_from
+year_to
+
+room_type
+
+min_members
+max_members
+match_threshold_percent
+
+visibility
+requires_approval
+
+host_actor_id
+host_actor_type
+
+city
+province
+country_code
+latitude
+longitude
+radius_km
+```
+
+Il numero massimo di partecipanti è limitato a **20**.
+
+La soglia di match è configurabile da **1 a 100%**.
+
+Le stanze create dall'interfaccia API possono attualmente essere:
+
+```text
+private
+public
+```
+
+anche se il tipo `Visibility` contiene valori più ampi come:
+
+```text
+following
+followers
+network
+local
+```
+
+Ciò suggerisce un sistema di discovery/social già progettato per future estensioni.
+
+---
+
+# 12. Partecipanti delle stanze
+
+La gestione partecipanti è separata dalle stanze.
+
+La API:
+
+```text
+/api/room-participants
+```
+
+gestisce la membership.
+
+Ogni partecipante viene modellato attraverso:
+
+```text
+actor_id
+actor_type
+display_name
+```
+
+dove:
+
+```text
+actor_type = user | guest
+```
+
+Questo permette allo stesso sistema di funzionare sia con account reali sia con guest.
+
+Sono presenti anche concetti come:
+
+```text
+role
+membership_status
+expires_at
+```
+
+Il guest riceve una scadenza.
+
+---
+
+# 13. Stato della stanza
+
+La pagina:
+
+```text
+pages/stanza.tsx
+```
+
+gestisce diversi stati UI:
+
+```text
+welcome
+swipe
+matches
+match
+plan
+```
+
+e stati logici della stanza:
+
+```text
+waiting
+voting
+matched
+planning
+finished
+```
+
+La pagina ricostruisce periodicamente lo stato utilizzando:
+
+```text
+/api/rooms
+/api/room-participants
+/api/swipes
+```
+
+Il database è quindi trattato come **source of truth**.
+
+Supabase Realtime viene utilizzato soprattutto per notificare rapidamente ai client che lo stato deve essere aggiornato.
+
+Questa è una scelta robusta: gli eventi realtime non rappresentano lo stato persistente, ma solamente un meccanismo di sincronizzazione.
+
+---
+
+# 14. Realtime
+
+Ogni stanza crea un canale:
+
+```text
+room-{roomId}
+```
+
+Il sistema utilizza:
+
+```text
+Presence
+Broadcast
+```
+
+Tra gli eventi osservati:
+
+```text
+participants_changed
+room_state_changed
+swipe
+match
+match_removed
+reset
+```
+
+Questo permette ai partecipanti di vedere quasi immediatamente:
+
+* entrate/uscite;
+* nuove preferenze;
+* nuovi match;
+* cambiamenti di fase;
+* selezione finale.
+
+---
+
+# 15. Swipe lato backend
+
+L'endpoint principale è:
+
+```text
+/api/swipes
+```
+
+Utilizza le tabelle:
+
+```text
+room_swipes
+room_matches
+room_match_participants
+room_participants
+rooms
+```
+
+Lo swipe è salvato con:
+
+```text
+room_id
+movie_id
+actor_id
+actor_type
+liked
+expires_at
+```
+
+È presente un upsert con conflitto su:
+
+```text
+room_id,movie_id,actor_id
+```
+
+quindi ogni partecipante mantiene un solo voto per film nella stanza.
+
+---
+
+# 16. Algoritmo del match
+
+Dopo ogni swipe positivo il server:
+
+1. determina i partecipanti attivi;
+2. legge gli swipe positivi per quel film;
+3. elimina quelli appartenenti a partecipanti non più attivi;
+4. calcola:
+
+```text
+matchedMembers
+totalMembers
+matchPercent
+```
+
+La formula è:
+
+```text
+matchPercent =
+matchedMembers / totalMembers * 100
+```
+
+Il film diventa match quando:
+
+```text
+totalMembers >= min_members
+```
+
+e:
+
+```text
+matchPercent >= match_threshold_percent
+```
+
+Il sistema quindi non è limitato al caso classico 2/2.
+
+Può gestire, per esempio:
+
+```text
+5 partecipanti
+soglia 60%
+```
+
+e generare un match quando almeno 3 utenti hanno messo like.
+
+---
+
+# 17. Catalogo film
+
+Il progetto utilizza soprattutto **TMDB**.
+
+Sono presenti endpoint dedicati a:
+
+```text
+/api/tmdb/search
+/api/tmdb/trending
+/api/tmdb/explore
+/api/tmdb/movie/[id]
+/api/tmdb/movie/movies
+/api/tmdb/person/[id]
+```
+
+La API key server-side è:
+
+```text
+TMDB_API_KEY
+```
+
+---
+
+# 18. Catalogo canonico interno
+
+Una delle evoluzioni più importanti rispetto alla vecchia documentazione è l'introduzione di un catalogo persistente.
+
+L'utility:
+
+```text
+utils/movieEntries.ts
+```
+
+utilizza:
+
+```text
+movie_catalog
+```
+
+La struttura prevista include:
+
+```text
+id
+provider
+provider_movie_id
+title
+year
+genre
+cover
+backdrop
+trailer
+trama_c
+trama_l
+```
+
+Il provider attualmente tipizzato è:
+
+```text
+tmdb
+```
+
+L'endpoint:
+
+```text
+/api/movie-catalog/ensure
+```
+
+garantisce che un film TMDB disponga di un record persistente interno prima di associargli dati personali.
+
+Questa è un'importante correzione architetturale rispetto alla prima versione del progetto.
+
+---
+
+# 19. Libreria personale
+
+La tabella centrale della libreria è:
+
+```text
+user_movie_entries
+```
+
+Ogni record rappresenta la relazione:
+
+```text
+utente ↔ film
+```
+
+e contiene:
+
+```text
+id
+user_id
+movie_id
+
+rating
+review_text
+review_updated_at
+
+is_favorite
+in_watchlist
+watched_on
+
+created_at
+updated_at
+```
+
+Il codice esegue upsert sul vincolo:
+
+```text
+user_id,movie_id
+```
+
+Ciò significa che per ogni utente e film esiste un unico stato personale.
+
+---
+
+# 20. Funzioni della libreria
+
+`utils/movieEntries.ts` espone funzioni quali:
+
+```text
+getMovieEntry()
+setFavorite()
+setWatchlist()
+markWatched()
+clearWatched()
+setRating()
+saveReview()
+saveRatingAndReview()
+```
+
+Il voto accettato va da:
+
+```text
+0.5 → 5
+```
+
+in intervalli di:
+
+```text
+0.5
+```
+
+Le recensioni sono limitate lato client a:
+
+```text
+3000 caratteri
+```
+
+---
+
+# 21. Pagine della libreria e contenuti personali
+
+`user_movie_entries` viene utilizzata almeno da:
+
+```text
+pages/libreria.tsx
+pages/film/[id].tsx
+pages/recensioni.tsx
+pages/profilo.tsx
+pages/api/recommendations/for-you.ts
+utils/movieEntries.ts
+```
+
+Questo conferma che la libreria personale è ormai una feature realmente integrata, non soltanto una proposta.
+
+---
+
+# 22. Sistema "Per te"
+
+La pagina:
+
+```text
+pages/per-te.tsx
+```
+
+utilizza un motore personalizzato:
+
+```text
+/api/recommendations/for-you
+```
+
+Il sistema costruisce un profilo di gusto combinando diversi segnali.
+
+## Segnali positivi
+
+```text
+favorite
+high_rating
+watchlist
+room_like
+room_match
+room_winner
+explicit_more_like_this
+```
+
+## Segnali negativi
+
+Include almeno:
+
+```text
+dislike nelle stanze
+feedback "not_for_me"
+```
+
+---
+
+# 23. Pesi delle raccomandazioni
+
+Il sistema attribuisce pesi diversi.
+
+Indicativamente:
+
+```text
+preferito          ≈ 6
+voto >= 4.5        ≈ 6
+voto >= 4          ≈ 5
+voto >= 3.5        ≈ 3
+watchlist           ≈ 2
+room like           ≈ 2
+room match          ≈ 2
+room winner         ≈ 4
+more_like_this      ≈ 8
+```
+
+A questi viene applicato anche un moltiplicatore di recency.
+
+Gli eventi più recenti pesano maggiormente.
+
+Esempio:
+
+```text
+<= 7 giorni     ×1.25
+<= 30 giorni    ×1.15
+<= 90 giorni    ×1.08
+<= 180 giorni   ×1.03
+```
+
+---
+
+# 24. Profilo di gusto
+
+Il motore costruisce due mappe principali:
+
+```text
+genreWeights
+actorWeights
+```
+
+Per i film seed interroga TMDB e ricava:
+
+```text
+generi
+cast principale
+```
+
+Quindi CineDate non suggerisce film solamente perché “simili”, ma costruisce progressivamente una rappresentazione dei gusti dell'utente.
+
+---
+
+# 25. Cold start
+
+Quando non esistono segnali sufficienti vengono usati:
+
+```text
+favorite_genres
+```
+
+del profilo utente.
+
+È presente una mappatura dei nomi italiani/inglesi ai genre ID TMDB.
+
+Esempio:
+
+```text
+azione        → 28
+commedia      → 35
+dramma        → 18
+horror        → 27
+fantascienza  → 878
+thriller      → 53
+```
+
+Il sistema può quindi produrre consigli anche per utenti che non hanno ancora compilato la libreria.
+
+---
+
+# 26. Autenticazione delle raccomandazioni
+
+La API `/api/recommendations/for-you` è strutturata correttamente sotto questo aspetto.
+
+Richiede:
+
+```text
+Authorization: Bearer <access_token>
+```
+
+Il token viene verificato tramite:
+
+```text
+auth.getUser(token)
+```
+
+e solo dopo viene creato il client amministrativo con service role.
+
+In questo caso l'ID utente utilizzato nelle query deriva dalla sessione verificata e non da un `userId` inviato dal browser.
+
+Questo pattern dovrebbe essere adottato sistematicamente nelle altre API sensibili.
+
+---
+
+# 27. Cinema
+
+La directory:
+
+```text
+components/cinema/
+```
+
+contiene:
+
+```text
+CineMap.tsx
+CinemaInSala.tsx
+```
+
+Sono inoltre presenti API:
+
+```text
+/api/cinema/nearby
+/api/cinema/showtimes
+/api/cinema/check-film
+```
+
+e utility:
+
+```text
+utils/cinema/cinemaCache.ts
+utils/cinema/cinemaChain.ts
+utils/cinema/theSpaceCinemasFIX.ts
+utils/cinema/theSpaceFetcher.ts
+```
+
+---
+
+# 28. Scraping / recupero cinema
+
+`theSpaceFetcher.ts` utilizza:
+
+```text
+Playwright
+Chromium
+```
+
+e rileva se l'app sta girando in ambiente serverless attraverso:
+
+```text
+VERCEL
+AWS_LAMBDA_FUNCTION_NAME
+```
+
+Il progetto utilizza quindi browser automation per ottenere parte delle informazioni relative ai cinema.
+
+---
+
+# 29. Geolocalizzazione
+
+Sono presenti:
+
+```text
+/api/location/search
+/api/location/reverse
+```
+
+che vengono utilizzate per trasformare:
+
+```text
+testo → coordinate
+coordinate → località
+```
+
+Questa parte alimenta sia la ricerca dei cinema sia la creazione di stanze locali/cinema.
+
+---
+
+# 30. Film e attori
+
+Le pagine dinamiche:
+
+```text
+/film/[id]
+/attore/[id]
+```
+
+costituiscono le pagine di dettaglio.
+
+La prima collega anche le funzionalità personali dell'utente:
+
+* preferito;
+* watchlist;
+* visto;
+* voto;
+* recensione.
+
+La seconda utilizza le informazioni TMDB relative a una persona/cast.
+
+---
+
+# 31. Profilo
+
+Sono presenti:
+
+```text
+/profilo
+/utente/[username]
+/utente/[username]/connessioni
+/persone
+```
+
+Questo mostra chiaramente l'evoluzione del prodotto verso una componente social.
+
+La pagina utente contiene anche logiche relative al blocco di altri profili.
+
+---
+
+# 32. Blocco utenti
+
+Esiste la schermata:
+
+```text
+/impostazioni/utenti-bloccati
+```
+
+che utilizza una RPC Supabase chiamata:
+
+```text
+get_my_blocked_users
+```
+
+Questo significa che parte della business logic sociale vive direttamente nel database tramite funzioni PostgreSQL.
+
+---
+
+# 33. Segnalazioni e moderazione
+
+Sono presenti:
+
+```text
+components/social/ReportModal.tsx
+/pages/impostazioni/segnalazioni.tsx
+```
+
+e un'ampia area amministrativa:
+
+```text
+/admin
+/admin/audit
+/admin/ricorsi
+/admin/segnalazioni
+/admin/sospensioni
+/admin/utenti
+```
+
+Il progetto dispone quindi già di un impianto di moderation/backoffice considerevole.
+
+---
+
+# 34. Area amministrativa
+
+La directory:
+
+```text
+pages/admin/
+```
+
+separa le principali funzioni amministrative.
+
+### `index.tsx`
+
+Dashboard amministrativa.
+
+### `utenti.tsx`
+
+Gestione utenti.
+
+### `segnalazioni.tsx`
+
+Gestione report/segnalazioni.
+
+### `sospensioni.tsx`
+
+Gestione sospensioni account.
+
+### `ricorsi.tsx`
+
+Gestione ricorsi.
+
+### `audit.tsx`
+
+Audit delle azioni amministrative.
+
+È inoltre presente:
+
+```text
+/api/admin/users/delete
+```
+
+per eliminazioni amministrative.
+
+---
+
+# 35. Eliminazione account
+
+Esiste una API specifica:
+
+```text
+/api/account/delete
+```
+
+che utilizza:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+Poiché questa è un'operazione altamente sensibile, deve continuare ad avere una verifica server-side molto forte dell'identità.
+
+---
+
+# 36. Styling
+
+Il progetto utilizza diversi approcci contemporaneamente.
+
+```text
+styles/globals.css
+styles/pages/auth.css
+styles/pages/home.css
+styles/pages/landing.css
+
+styles/token.ts
+styles/appStyles.ts
+styles/home.styles.ts
+```
+
+`token.ts` sembra rappresentare il design system più strutturato.
+
+La coesistenza di:
+
+* CSS globale;
+* CSS specifico per pagina;
+* oggetti di stile TypeScript;
+* grandi quantità di styling inline nelle pagine;
+
+rende però il frontend più difficile da mantenere.
+
+---
+
+# 37. Tipi TypeScript
+
+La directory:
+
+```text
+types/
+```
+
+contiene:
+
+```text
+index.ts
+stanza.ts
+```
+
+e centralizza parte dei modelli condivisi.
+
+Sono presenti tipi per entità come:
+
+```text
+Movie
+CurrentUser
+RoomUser
+SwipeState
+MatchEntry
+```
+
+Una parte consistente delle pagine usa però ancora `any`, soprattutto nella trasformazione delle risposte Supabase.
+
+È un'area che può essere migliorata introducendo tipi database generati automaticamente da Supabase.
+
+---
+
+# 38. Middleware
+
+Il progetto contiene:
+
+```text
+middleware.ts
+utils/supabase/middleware.ts
+```
+
+Il middleware utilizza il client SSR di Supabase e le variabili:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+```
+
+La finalità è mantenere/aggiornare correttamente la sessione attraverso le richieste Next.js.
+
+---
+
+# 39. Variabili ambiente individuate
+
+Senza riportare alcun valore sensibile, il codice fa riferimento almeno a:
+
+```text
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+
+TMDB_API_KEY
+
+VERCEL
+AWS_LAMBDA_FUNCTION_NAME
+```
+
+Altre variabili possono essere presenti, ma queste sono direttamente osservabili nel codice analizzato.
+
+---
+
+# 40. Problema critico del repository Git
+
+Attualmente risultano **versionati**:
+
+```text
+.env.local
+node_modules/
+.next/
+tsconfig.tsbuildinfo
+dev-server.log
+dev-server.err.log
+dev-server.out.log
+```
+
+oltre a molti file generati.
+
+Questo è un problema importante.
+
+Il `.gitignore` corrente contiene già correttamente:
+
+```text
+node_modules/
+.next/
+.vercel/
+out
+.DS_Store
+.env.local
+```
+
+Il fatto che `.next`, `node_modules` e `.env.local` risultino comunque nell'albero Git significa che sono stati aggiunti al repository **prima di essere ignorati** o comunque sono ancora tracked.
+
+Git continua infatti a tracciare un file già committato anche dopo che viene aggiunto a `.gitignore`.
+
+Questa è attualmente una delle priorità tecniche principali.
+
+---
+
+# 41. Rischio `.env.local`
+
+`.env.local` risulta versionato nell'albero del repository.
+
+Non è necessario leggere il contenuto per concludere che la situazione vada corretta.
+
+Se quel file ha mai contenuto:
+
+```text
+SUPABASE_SERVICE_ROLE_KEY
+TMDB_API_KEY
+altre credenziali
+```
+
+le chiavi devono essere considerate potenzialmente esposte.
+
+La procedura corretta è:
+
+1. rimuovere `.env.local` dal tracking;
+2. verificare la cronologia Git;
+3. ruotare tutte le chiavi sensibili che siano state committate;
+4. mantenere soltanto `.env.example`.
+
+---
+
+# 42. Repository estremamente gonfiato
+
+Sono versionati anche:
+
+```text
+node_modules
+.next
+```
+
+inclusi cache Webpack e bundle di diversi megabyte.
+
+Questo spiega le dimensioni molto elevate della repository.
+
+Questi file:
+
+* non appartengono al source code;
+* rallentano clone e fetch;
+* producono diff inutili;
+* aumentano il rischio di conflitti;
+* possono rendere più difficile code review e CI.
+
+Devono essere rimossi dalla history/tracking.
+
+---
+
+# 43. Dimensione delle pagine
+
+Alcuni file sono molto grandi.
+
+Dall'albero risultano, per esempio:
+
+```text
+pages/profilo.tsx        ~95 KB
+pages/home.tsx           ~93 KB
+pages/recensioni.tsx     ~89 KB
+pages/utente/[username]  ~68 KB
+pages/crea-stanza.tsx    ~66 KB
+pages/film/[id].tsx      ~53 KB
+```
+
+Questo suggerisce un elevato livello di logica UI e business logic concentrata direttamente nelle pagine.
+
+La direzione consigliata è suddividerle in:
+
+```text
+features/
+components/
+services/
+hooks/
+queries/
+```
+
+---
+
+# 44. Punti di forza dell'architettura
+
+Il progetto presenta diverse buone scelte.
+
+### DB come source of truth
+
+Nelle stanze il Realtime non viene trattato come stato permanente.
+
+### Match generalizzato
+
+Il sistema funziona anche per gruppi e soglie configurabili.
+
+### Identità guest separata
+
+Il guest è modellato esplicitamente, senza fingere che sia un account reale.
+
+### Catalogo canonico
+
+L'introduzione di `movie_catalog` elimina molti problemi di identificazione film.
+
+### Stato personale unico
+
+`user_movie_entries` evita entità duplicate per preferito/watchlist/voto/recensione.
+
+### Raccomandazioni spiegabili
+
+Ogni suggerimento può essere collegato al segnale che l'ha generato.
+
+### Autenticazione API "Per te"
+
+La route verifica il bearer token prima di usare la service role.
+
+---
+
+# 45. Debolezze principali
+
+## 45.1 Repository hygiene
+
+È il problema più immediato.
+
+Da rimuovere dal tracking:
+
+```text
+.env.local
+.next
+node_modules
+*.log
+tsconfig.tsbuildinfo
+```
+
+## 45.2 File monolitici
+
+Molte pagine sono diventate troppo grandi.
+
+## 45.3 Business logic distribuita
+
+Una parte della logica vive:
+
+* nei componenti;
+* nelle pagine;
+* nelle API;
+* nel database;
+* nelle RPC Supabase.
+
+Serve una documentazione formale dei confini.
+
+## 45.4 Uso di `any`
+
+Diverse query Supabase perdono la protezione TypeScript.
+
+## 45.5 Service role
+
+Le API che utilizzano service role devono essere sottoposte a un audit sistematico.
+
+## 45.6 Database non versionato completamente
+
+Nel repository compare soltanto:
+
+```text
+supabase/profile_mvp.sql
+```
+
+ma il codice utilizza molte più tabelle e RPC.
+
+Quindi lo schema di produzione non sembra essere completamente rappresentato da migration versionate.
+
+Questo è un importante rischio operativo.
+
+---
+
+# 46. Schema database desumibile dal codice
+
+Il codice fa riferimento almeno a entità equivalenti a:
+
+```text
+users
+
+movie_catalog
+user_movie_entries
+user_recommendation_feedback
+
+rooms
+room_participants
+room_swipes
+room_matches
+room_match_participants
+
+cinemas
+cinema_showings
+
+blocchi utenti
+segnalazioni
+moderazione
+```
+
+e potenzialmente altre tabelle usate dalle pagine admin/social.
+
+Il database Supabase dovrebbe diventare completamente riproducibile tramite migration.
+
+---
+
+# 47. Flusso principale — scelta del film
+
+Il flusso completo può essere rappresentato così:
+
+```text
+Utente
+  │
+  ├── login / guest
+  │
+  ▼
+Creazione o ingresso stanza
+  │
+  ▼
+room_participants
+  │
+  ▼
+Host avvia votazione
+  │
+  ▼
+Catalogo comune TMDB
+  │
+  ▼
+Swipe
+  │
+  ▼
+POST /api/swipes
+  │
+  ├── room_swipes
+  │
+  ├── calcolo consenso
+  │
+  └── room_matches
+        │
+        ▼
+       Match
+        │
+        ├── streaming / dettagli
+        │
+        └── cinema
+              │
+              ▼
+        selezione proiezione
+              │
+              ▼
+           piano finale
+```
+
+---
+
+# 48. Flusso personale
+
+```text
+Film TMDB
+   │
+   ▼
+/api/movie-catalog/ensure
+   │
+   ▼
+movie_catalog
+   │
+   ▼
+user_movie_entries
+   │
+   ├── rating
+   ├── review
+   ├── favorite
+   ├── watchlist
+   └── watched
+```
+
+Questa è probabilmente oggi la parte più importante del dominio persistente personale.
+
+---
+
+# 49. Flusso raccomandazioni
+
+```text
+user_movie_entries
+room_swipes
+room_matches
+rooms
+feedback esplicito
+favorite_genres
+        │
+        ▼
+costruzione seed
+        │
+        ▼
+pesi + recency
+        │
+        ▼
+profilo generi
+profilo attori
+        │
+        ▼
+TMDB similar/discover
+        │
+        ▼
+ranking
+        │
+        ▼
+pagina "Per te"
+```
+
+---
+
+# 50. Priorità tecniche consigliate
+
+Ordine consigliato degli interventi.
+
+### P0 — Sicurezza repository
+
+Rimuovere immediatamente dal tracking:
+
+```text
+.env.local
+node_modules
+.next
+log
+build info
+```
+
+e ruotare eventuali segreti già committati.
+
+### P0 — Audit API service role
+
+Individuare tutte le route che utilizzano:
+
+```text
+SUPABASE_SERVICE_ROLE_KEY
+```
+
+e verificare che ricavino l'identità dal token autenticato.
+
+### P1 — Migration Supabase complete
+
+Portare l'intero schema sotto version control:
+
+```text
+supabase/migrations/
+```
+
+incluse:
+
+* tabelle;
+* FK;
+* unique;
+* check;
+* indici;
+* trigger;
+* funzioni;
+* RPC;
+* RLS;
+* storage policies.
+
+### P1 — Refactoring delle pagine monolitiche
+
+Spezzare soprattutto:
+
+```text
+profilo
+home
+recensioni
+utente/[username]
+crea-stanza
+film/[id]
+cinema
+stanza
+```
+
+### P1 — Supabase generated types
+
+Generare i tipi TypeScript del database e ridurre progressivamente gli `any`.
+
+### P2 — Service layer
+
+Creare una struttura tipo:
+
+```text
+features/
+  auth/
+  rooms/
+  movies/
+  library/
+  recommendations/
+  cinema/
+  social/
+  moderation/
+```
+
+### P2 — Test
+
+Aggiungere test per:
+
+```text
+auth
+room creation
+joining
+approval
+swipe
+match threshold
+guest expiry
+library
+recommendations
+account deletion
+admin authorization
+```
+
+---
+
+# 51. Struttura target consigliata
+
+Una possibile evoluzione:
+
+```text
+src/
+├── components/
+│
+├── features/
+│   ├── auth/
+│   ├── rooms/
+│   ├── movies/
+│   ├── library/
+│   ├── recommendations/
+│   ├── cinema/
+│   ├── social/
+│   └── moderation/
+│
+├── hooks/
+│
+├── lib/
+│   ├── supabase/
+│   ├── tmdb/
+│   └── cinema/
+│
+├── styles/
+├── types/
+└── utils/
+```
+
+Non è necessario migrare subito all'App Router per ottenere benefici: prima conviene ridurre la complessità interna.
+
+---
+
+# 52. Valutazione complessiva
+
+CineDate non è più un semplice prototipo di swipe.
+
+Il codice contiene già le fondamenta di una vera piattaforma cinematografica sociale:
+
+```text
+discovery
++
+matching
++
+stanze realtime
++
+cinema
++
+profilo
++
+libreria
++
+recensioni
++
+raccomandazioni
++
+social
++
+moderazione
+```
+
+L'architettura di dominio sta diventando interessante e alcune evoluzioni recenti — in particolare `movie_catalog`, `user_movie_entries` e il motore `for-you` — vanno nella direzione corretta.
+
+Il principale limite attuale non è la mancanza di funzionalità.
+
+È il **debito strutturale accumulato mentre le funzionalità sono cresciute**.
+
+Le tre priorità assolute sono quindi:
+
+```text
+1. pulizia e sicurezza Git
+2. schema Supabase completamente versionato
+3. modularizzazione del frontend/backend
+```
+
+Una volta risolti questi punti, il progetto può evolvere in modo molto più controllato senza dover riscrivere l'app da zero.
+
+---
+
+# 53. Mappa rapida per un nuovo sviluppatore
+
+Se devi capire il progetto partendo da zero, l'ordine migliore di lettura è:
+
+```text
+package.json
+
+pages/_app.tsx
+context/AuthContext.tsx
+
+pages/stanza.tsx
+pages/api/rooms/index.ts
+pages/api/room-participants.ts
+pages/api/swipes.ts
+
+hooks/useSwipe.ts
+components/screens/SwipeCard.tsx
+components/screens/WelcomeRoom.tsx
+components/screens/MatchScreen.tsx
+
+utils/movieEntries.ts
+pages/film/[id].tsx
+pages/libreria.tsx
+pages/recensioni.tsx
+
+pages/api/recommendations/for-you.ts
+pages/per-te.tsx
+
+utils/supabase/browser.ts
+utils/supabase/server.ts
+utils/supabase/middleware.ts
+
+pages/cinema.tsx
+utils/cinema/*
+pages/api/cinema/*
+
+pages/profilo.tsx
+pages/utente/[username].tsx
+
+pages/admin/*
+```
+
+Seguendo questo ordine si passa progressivamente da:
+
+```text
+bootstrap
+→ identità
+→ core rooms
+→ swipe
+→ persistenza personale
+→ recommendation engine
+→ cinema
+→ social
+→ amministrazione
+```
+
+e si ottiene una visione quasi completa del prodotto senza dover leggere casualmente centinaia di file.

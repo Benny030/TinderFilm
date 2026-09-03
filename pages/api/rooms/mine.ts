@@ -17,7 +17,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const supabase = createClient();
+
+  // Aggiorna prima lo stato delle stanze pubbliche vuote/stale.
+  const { error: cleanupError } = await supabase.rpc('cleanup_empty_public_rooms');
+  if (cleanupError) {
+    console.error('Empty public rooms cleanup failed:', cleanupError.message);
+  }
+
   const now = new Date().toISOString();
+  const liveCutoff = new Date(Date.now() - 45 * 1000).toISOString();
 
   const { data: memberships, error: membershipsError } = await supabase
     .from('room_participants')
@@ -60,10 +68,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .in('id', roomIds),
       supabase
         .from('room_participants')
-        .select('room_id, actor_id, display_name, role, membership_status, expires_at')
+        .select('room_id, actor_id, display_name, role, membership_status, expires_at, last_seen_at')
         .in('room_id', roomIds)
         .eq('membership_status', 'active')
-        .or(`expires_at.is.null,expires_at.gt.${now}`),
+        .or(`expires_at.is.null,expires_at.gt.${now}`)
+        .gte('last_seen_at', liveCutoff),
     ]);
 
   if (roomsError) return res.status(500).json({ error: roomsError.message });
@@ -118,13 +127,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     .map(normalize)
     .filter(Boolean) as any[];
 
-  const active = normalizedActive.filter((room: any) => room.room_phase !== 'finished');
+  const active = normalizedActive.filter(
+    (room: any) => !['finished', 'expired'].includes(room.room_phase)
+  );
   const finished = normalizedActive.filter((room: any) => room.room_phase === 'finished');
+  const expired = normalizedActive.filter((room: any) => room.room_phase === 'expired');
 
   const pending = rows
     .filter((row: any) => row.membership_status === 'pending')
     .map(normalize)
     .filter(Boolean);
 
-  return res.status(200).json({ active, pending, finished });
+  return res.status(200).json({ active, pending, finished, expired });
 }

@@ -1,4 +1,4 @@
-'use client';
+
 
 import { type CSSProperties, type FormEvent, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
@@ -75,7 +75,7 @@ type Props = {
   minMembers: number;
   maxMembers: number;
   hostActorId: string | null;
-  roomPhase: 'waiting' | 'voting' | 'matched' | 'planning' | 'finished';
+  roomPhase: 'waiting' | 'voting' | 'matched' | 'planning' | 'finished' | 'expired';
   isRoomLocked: boolean;
   hostActionBusy: boolean;
   hostActionError: string;
@@ -136,6 +136,7 @@ export default function WelcomeRoom({
   const sessionStarted = roomPhase === 'voting' || roomPhase === 'matched' || roomPhase === 'planning';
   const isPending = membershipStatus === 'pending';
   const isFinished = roomPhase === 'finished';
+  const isExpired = roomPhase === 'expired';
 
   const userRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const prevUserIds = useRef<Set<string>>(new Set());
@@ -992,13 +993,15 @@ export default function WelcomeRoom({
           </div>
 
           <p className="wr-hint">
-            {sessionStarted
-              ? 'La votazione è iniziata · nuovi ingressi chiusi'
-              : isRoomLocked
-                ? `Ingressi chiusi · ${participantCount}/${maxMembers} partecipanti`
-                : isGroup
-                  ? `Condividi il codice con il gruppo · ${participantCount}/${maxMembers} partecipanti`
-                  : 'Condividi questo codice con il tuo partner'}
+            {isExpired
+              ? 'Questa stanza è scaduta perché è rimasta vuota troppo a lungo'
+              : sessionStarted
+                ? 'La votazione è iniziata · nuovi ingressi chiusi'
+                : isRoomLocked
+                  ? `Ingressi chiusi · ${participantCount}/${maxMembers} partecipanti`
+                  : isGroup
+                    ? `Condividi il codice con il gruppo · ${participantCount}/${maxMembers} partecipanti`
+                    : 'Condividi questo codice con il tuo partner'}
           </p>
 
           <button
@@ -1009,6 +1012,7 @@ export default function WelcomeRoom({
               isPending ||
               hostActionBusy ||
               isFinished ||
+              isExpired ||
               (roomPhase === 'waiting' && !isHost)
             }
           >
@@ -1018,9 +1022,11 @@ export default function WelcomeRoom({
                 ? 'Richiesta inviata'
                 : hostActionBusy
                   ? 'Operazione in corso...'
-                  : isFinished
-                    ? 'Stanza conclusa'
-                    : roomPhase === 'planning'
+                  : isExpired
+                    ? 'Stanza scaduta'
+                    : isFinished
+                      ? 'Stanza conclusa'
+                      : roomPhase === 'planning'
                       ? 'Vedi il piano dell’uscita'
                       : roomPhase === 'matched'
                         ? 'Vedi il film scelto'
@@ -1059,7 +1065,7 @@ export default function WelcomeRoom({
             </div>
           )}
 
-          {isHost && roomPhase !== 'finished' && (
+          {isHost && roomPhase !== 'finished' && roomPhase !== 'expired' && (
             <button
               type="button"
               onClick={onFinishRoom}
@@ -1220,7 +1226,7 @@ export default function WelcomeRoom({
               ))
             )}
 
-            {availableSpots > 0 && (
+            {availableSpots > 0 && !isExpired && (
               <div className="wr-waiting">
                 <div className="wr-waiting-avatar">
                   <div className="wr-waiting-dot" />

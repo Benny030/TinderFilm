@@ -1,4 +1,4 @@
-'use client';
+
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
@@ -122,9 +122,10 @@ export default function StanzePage() {
     if (!currentUser || currentUser.isGuest) return;
 
     let cancelled = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const load = async () => {
-      setLoading(true);
+    const load = async (showLoader = false) => {
+      if (showLoader) setLoading(true);
       setError('');
 
       try {
@@ -153,20 +154,35 @@ export default function StanzePage() {
           );
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && showLoader) setLoading(false);
       }
     };
 
-    void load();
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        void load(false);
+      }, 180);
+    };
+
+    void load(true);
+
+    const channel = supabase
+      .channel(`stanze-realtime-${currentUser.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, scheduleRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_participants' }, scheduleRefresh)
+      .subscribe();
 
     return () => {
       cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
     };
   }, [currentUser, supabase]);
 
   const visibleRooms = useMemo(() => {
     if (filter === 'attive') {
-      return rooms.filter((room) => room.room_phase !== 'finished');
+      return rooms.filter((room) => !['finished', 'expired'].includes(room.room_phase));
     }
 
     if (filter === 'concluse') {
@@ -176,7 +192,7 @@ export default function StanzePage() {
     return rooms;
   }, [filter, rooms]);
 
-  const activeCount = rooms.filter((room) => room.room_phase !== 'finished').length;
+  const activeCount = rooms.filter((room) => !['finished', 'expired'].includes(room.room_phase)).length;
   const finishedCount = rooms.filter((room) => room.room_phase === 'finished').length;
 
   if (
