@@ -476,6 +476,23 @@ export default function HomePage() {
 
     void loadPublicRooms(true);
 
+    // Refresh garantito: le stanze appena aperte compaiono anche se il
+    // realtime Supabase non consegna un evento al client.
+    const refreshInterval = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void loadPublicRooms(false);
+      }
+    }, 5000);
+
+    const refreshOnFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void loadPublicRooms(false);
+      }
+    };
+
+    window.addEventListener('focus', refreshOnFocus);
+    document.addEventListener('visibilitychange', refreshOnFocus);
+
     const channel = supabase
       .channel('home-public-rooms-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, scheduleRefresh)
@@ -485,6 +502,9 @@ export default function HomePage() {
     return () => {
       cancelled = true;
       if (refreshTimer) clearTimeout(refreshTimer);
+      window.clearInterval(refreshInterval);
+      window.removeEventListener('focus', refreshOnFocus);
+      document.removeEventListener('visibilitychange', refreshOnFocus);
       void supabase.removeChannel(channel);
     };
   }, [currentUser, isLoading, supabase]);
@@ -1172,10 +1192,10 @@ export default function HomePage() {
 
               {/* ─── RICERCA GLOBALE ───────────────────────────────────── */}
               <section
-              className={!isGuest ? 'home-search-account' : undefined}
-              style={{
-                padding: isGuest ? '8px 20px 18px' : undefined,
-              }}>
+                style={{
+                  padding: isGuest ? '8px 20px 18px' : '8px 20px 14px',
+                }}
+              >
                 <div
                   style={{
                     border: `1px solid ${isGuest ? `${P.gold}90` : P.border}`,
@@ -1493,6 +1513,226 @@ export default function HomePage() {
                   <div className="ticket-tear" style={{ background: P.bg }} />
                 </div>
               </div>
+
+
+              {/* ─── STANZE APERTE LIVE (mobile) ─────────────────────── */}
+              <section
+                className="mobile-only"
+                style={{ padding: '12px 20px 8px' }}
+              >
+                <div
+                  style={{
+                    borderTop: `1px solid ${P.border}`,
+                    borderBottom: `1px solid ${P.border}`,
+                    padding: '16px 0',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      marginBottom: 11,
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          color: P.pink,
+                          fontSize: 9,
+                          fontWeight: 900,
+                          textTransform: 'uppercase',
+                          letterSpacing: '.12em',
+                        }}
+                      >
+                        Live
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 3,
+                          color: P.text,
+                          fontFamily: FONT.display,
+                          fontSize: 20,
+                          fontWeight: 800,
+                          letterSpacing: '-.02em',
+                        }}
+                      >
+                        Entra in una stanza
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 3,
+                          color: P.textFaint,
+                          fontSize: 10.5,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        Le stanze appena aperte compaiono qui automaticamente.
+                      </div>
+                    </div>
+
+                    {!loadingPublicRooms && publicRooms.length > 0 && (
+                      <span
+                        style={{
+                          color: P.textFaint,
+                          fontSize: 9.5,
+                          fontWeight: 800,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {publicRooms.length} online
+                      </span>
+                    )}
+                  </div>
+
+                  {loadingPublicRooms ? (
+                    <div style={{ display: 'grid', gap: 7 }}>
+                      {[1, 2, 3].map((item) => (
+                        <div
+                          key={item}
+                          className="skeleton"
+                          style={{ height: 62, width: '100%' }}
+                        />
+                      ))}
+                    </div>
+                  ) : publicRooms.length === 0 ? (
+                    <div
+                      style={{
+                        border: `1px solid ${P.border}`,
+                        background: P.card,
+                        padding: '15px 13px',
+                        color: P.textFaint,
+                        fontSize: 11,
+                        textAlign: 'center',
+                      }}
+                    >
+                      Nessuna stanza pubblica disponibile in questo momento.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 7 }}>
+                      {publicRooms.slice(0, 4).map((room) => {
+                        const participants = Number(room.participant_count ?? 0);
+                        const maxMembers = Number(room.max_members ?? 2);
+                        const modeColor = roomModeColor(room);
+
+                        return (
+                          <button
+                            key={room.id}
+                            type="button"
+                            onClick={() => handleEnterRoom(room.id)}
+                            style={{
+                              width: '100%',
+                              border: `1px solid ${P.border}`,
+                              background: P.card,
+                              color: P.text,
+                              padding: '11px 10px',
+                              display: 'grid',
+                              gridTemplateColumns: '34px minmax(0,1fr) auto',
+                              alignItems: 'center',
+                              gap: 9,
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              fontFamily: FONT.sans,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 34,
+                                height: 34,
+                                display: 'grid',
+                                placeItems: 'center',
+                                background: `${modeColor}12`,
+                                border: `1px solid ${modeColor}30`,
+                              }}
+                            >
+                              <UsersThree
+                                size={16}
+                                color={modeColor}
+                                weight="fill"
+                              />
+                            </span>
+
+                            <span style={{ minWidth: 0 }}>
+                              <span
+                                style={{
+                                  display: 'block',
+                                  color: P.text,
+                                  fontSize: 11.5,
+                                  fontWeight: 850,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                <span style={{ color: modeColor }}>
+                                  {roomModeLabel(room)}
+                                </span>
+                                <span style={{ color: P.textFaint }}> · </span>
+                                {room.host_name || 'Utente'}
+                              </span>
+
+                              <span
+                                style={{
+                                  display: 'block',
+                                  marginTop: 3,
+                                  color: P.textFaint,
+                                  fontSize: 9.5,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {participants}/{maxMembers} partecipanti
+                                {room.city ? ` · ${room.city}` : ''}
+                              </span>
+                            </span>
+
+                            <span
+                              style={{
+                                color: P.pink,
+                                fontSize: 10,
+                                fontWeight: 900,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                              }}
+                            >
+                              Entra
+                              <ArrowRight size={11} weight="bold" />
+                            </span>
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        onClick={() => router.push('/stanze')}
+                        style={{
+                          marginTop: 3,
+                          border: 0,
+                          background: 'transparent',
+                          color: P.textMuted,
+                          padding: '5px 0 0',
+                          fontFamily: FONT.sans,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          cursor: 'pointer',
+                          justifySelf: 'start',
+                        }}
+                      >
+                        Vedi tutte le stanze
+                        <ArrowRight size={11} weight="bold" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </section>
 
               {/* ─── PER TE ──────────────────────────────────────────── */}
               {!isGuest && (
