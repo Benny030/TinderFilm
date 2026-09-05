@@ -6,6 +6,7 @@ import AppShell from '@/components/layout/AppShell';
 import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import { createBrowserClient } from '@/utils/supabase/browser';
+import { FONT, THEME } from '@/styles/token';
 import {
   BookmarkSimple,
   CheckCircle,
@@ -17,45 +18,6 @@ import {
   Star,
   X,
 } from '@phosphor-icons/react';
-
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  cardHover: '#241d19',
-  border: '#2d221c',
-  gold: '#f5b92f',
-  goldSoft: '#ffd875',
-  goldGlow: 'rgba(245,185,47,0.12)',
-  pink: '#ed3d73',
-  pinkGlow: 'rgba(237,61,115,0.15)',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-  success: '#22c55e',
-  danger: '#ef4444',
-};
-
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  cardHover: '#faf5ef',
-  border: '#d6cbbc',
-  gold: '#b8860b',
-  goldSoft: '#e8c84a',
-  goldGlow: 'rgba(184,134,11,0.10)',
-  pink: '#b83060',
-  pinkGlow: 'rgba(184,48,96,0.10)',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-  success: '#16a34a',
-  danger: '#dc2626',
-};
-
-const FONT = "'Inter','Helvetica Neue',sans-serif";
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
 
 type Tab = 'generale' | 'preferiti' | 'watchlist' | 'visti' | 'recensioni';
 type SortMode = 'recenti' | 'titolo' | 'anno';
@@ -105,14 +67,13 @@ export default function LibreriaPage() {
   const router = useRouter();
   const { currentUser, isGuest, isLoading } = useAuth();
   const { theme } = useTheme();
-  const P = theme === 'dark' ? D : L;
+  const P = theme === 'dark' ? THEME.dark : THEME.light;
   const supabase = useRef(createBrowserClient()).current;
 
   const [entries, setEntries] = useState<MovieEntry[]>([]);
   const [loadingEntries, setLoadingEntries] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
-
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortMode>('recenti');
 
@@ -157,7 +118,7 @@ export default function LibreriaPage() {
     if (isLoading) return;
 
     if (!currentUser || currentUser.isGuest || isGuest) {
-      router.replace('/auth');
+      void router.replace('/auth');
     }
   }, [currentUser, isGuest, isLoading, router]);
 
@@ -369,7 +330,7 @@ export default function LibreriaPage() {
     const movie = getMovie(entry);
 
     if (movie?.provider === 'tmdb') {
-      router.push(`/film/${movie.provider_movie_id}`);
+      void router.push(`/film/${movie.provider_movie_id}`);
     }
   };
 
@@ -387,10 +348,10 @@ export default function LibreriaPage() {
           placeItems: 'center',
           background: P.bg,
           color: P.textMuted,
-          fontFamily: FONT,
+          fontFamily: FONT.sans,
         }}
       >
-        <FilmSlate size={42} color={P.pink} weight="duotone" />
+        <FilmSlate size={42} color={P.primary} weight="duotone" />
       </div>
     );
   }
@@ -398,105 +359,93 @@ export default function LibreriaPage() {
   const tabs: {
     id: Tab;
     label: string;
+    description: string;
     icon: typeof Heart;
-    color: string;
+    tone: 'neutral' | 'pink' | 'gold' | 'green';
   }[] = [
     {
       id: 'generale',
-      label: 'Generale',
+      label: 'Tutto',
+      description: 'La tua raccolta',
       icon: FilmSlate,
-      color: P.text,
+      tone: 'neutral',
     },
     {
       id: 'preferiti',
       label: 'Preferiti',
+      description: 'Quelli che ami',
       icon: Heart,
-      color: P.pink,
+      tone: 'pink',
     },
     {
       id: 'watchlist',
       label: 'Watchlist',
+      description: 'Da vedere',
       icon: BookmarkSimple,
-      color: P.gold,
+      tone: 'gold',
     },
     {
       id: 'visti',
       label: 'Visti',
+      description: 'Già guardati',
       icon: Eye,
-      color: P.success,
+      tone: 'green',
     },
     {
       id: 'recensioni',
-      label: 'Voti e recensioni',
+      label: 'Recensioni',
+      description: 'Voti e opinioni',
       icon: Star,
-      color: P.gold,
+      tone: 'gold',
     },
   ];
 
   return (
     <AppShell activeNav="libreria">
       <main
-        style={{
-          minHeight: '100vh',
-          background: P.bg,
-          color: P.text,
-          fontFamily: FONT,
-          padding: '28px 18px 80px',
-        }}
+        className="cdr-library"
+        style={
+          {
+            '--cdr-library-bg': P.bg,
+            '--cdr-library-soft': P.bgSoft,
+            '--cdr-library-surface': P.surface,
+            '--cdr-library-hover': P.surfaceHover,
+            '--cdr-library-border': P.border,
+            '--cdr-library-text': P.text,
+            '--cdr-library-muted': P.textMuted,
+            '--cdr-library-faint': P.textFaint,
+            '--cdr-library-pink': P.primary,
+            '--cdr-library-pink-deep': P.primaryDeep,
+            '--cdr-library-pink-glow': P.primaryGlow,
+            '--cdr-library-gold': P.accent,
+            '--cdr-library-gold-soft': P.accentSoft,
+            '--cdr-library-gold-glow': P.accentGlow,
+          } as React.CSSProperties
+        }
       >
-        <div
-          style={{
-            width: '100%',
-            maxWidth: 1120,
-            margin: '0 auto',
-          }}
-        >
-          <header style={{ marginBottom: 22 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                color: P.textMuted,
-                fontSize: 12,
-              }}
-            >
-              <FilmSlate size={16} weight="fill" color={P.gold} />
-              La tua raccolta
+        <div className="cdr-library-shell">
+          <header className="cdr-library-header">
+            <div>
+              <div className="cdr-library-kicker">
+                <FilmSlate size={15} weight="fill" />
+                La tua raccolta
+              </div>
+
+              <h1>Libreria</h1>
+              <p>
+                Film che hai salvato, visto, votato o recensito.
+                Tutto in un posto, senza dover cercare ogni volta.
+              </p>
             </div>
 
-            <h1
-              style={{
-                margin: '7px 0 5px',
-                color: P.text,
-                fontFamily: FONT_DISPLAY,
-                fontSize: 'clamp(28px,4vw,38px)',
-              }}
-            >
-              Libreria
-            </h1>
-
-            <p
-              style={{
-                color: P.textMuted,
-                fontSize: 13,
-                margin: 0,
-              }}
-            >
-              Tutti i film che hai salvato, visto, votato o recensito.
-            </p>
+            <div className="cdr-library-total">
+              <span>Totale</span>
+              <strong>{counts.generale}</strong>
+              <small>film nella tua libreria</small>
+            </div>
           </header>
 
-          <div
-            className="library-tabs"
-            style={{
-              display: 'grid',
-              gridTemplateColumns:
-                'repeat(5,minmax(0,1fr))',
-              gap: 8,
-              marginBottom: 16,
-            }}
-          >
+          <section className="cdr-library-tabs" aria-label="Sezioni libreria">
             {tabs.map((item) => {
               const Icon = item.icon;
               const active = tab === item.id;
@@ -504,680 +453,891 @@ export default function LibreriaPage() {
               return (
                 <button
                   key={item.id}
+                  type="button"
+                  data-active={active ? 'true' : 'false'}
+                  data-tone={item.tone}
                   onClick={() => changeTab(item.id)}
-                  style={{
-                    border: `1px solid ${
-                      active ? item.color : P.border
-                    }`,
-                    background: active
-                      ? item.id === 'generale'
-                        ? P.bgSoft
-                        : item.id === 'preferiti'
-                        ? P.pinkGlow
-                        : item.id === 'visti'
-                        ? 'rgba(34,197,94,.10)'
-                        : P.goldGlow
-                      : P.card,
-                    color: active
-                      ? item.color
-                      : P.textMuted,
-                    minHeight: 74,
-                    padding: '12px 10px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    textAlign: 'left',
-                  }}
                 >
                   <Icon
-                    size={20}
+                    size={19}
                     weight={active ? 'fill' : 'regular'}
-                    style={{ flexShrink: 0 }}
                   />
 
-                  <div style={{ minWidth: 0 }}>
-                    <strong
-                      style={{
-                        display: 'block',
-                        color: active
-                          ? item.color
-                          : P.text,
-                        fontSize: 12,
-                      }}
-                    >
-                      {item.label}
-                    </strong>
+                  <span className="cdr-library-tab-copy">
+                    <strong>{item.label}</strong>
+                    <small>{item.description}</small>
+                  </span>
 
-                    <span
-                      style={{
-                        display: 'block',
-                        color: P.textFaint,
-                        fontSize: 10,
-                        marginTop: 3,
-                      }}
-                    >
-                      {counts[item.id]} film
-                    </span>
-                  </div>
+                  <span className="cdr-library-tab-count">
+                    {counts[item.id]}
+                  </span>
                 </button>
               );
             })}
-          </div>
+          </section>
 
-          <div
-            className="library-toolbar"
-            style={{
-              display: 'flex',
-              gap: 10,
-              alignItems: 'center',
-              marginBottom: 18,
-            }}
-          >
-            <div
-              style={{
-                flex: 1,
-                height: 42,
-                display: 'flex',
-                alignItems: 'center',
-                border: `1px solid ${P.border}`,
-                background: P.bgSoft,
-                padding: '0 12px',
-                color: P.textFaint,
-              }}
-            >
-              <MagnifyingGlass size={17} />
+          <section className="cdr-library-toolbar">
+            <label className="cdr-library-search">
+              <MagnifyingGlass size={18} />
               <input
                 value={search}
-                onChange={(event) =>
-                  setSearch(event.target.value)
-                }
-                placeholder="Cerca nella tua libreria..."
-                style={{
-                  flex: 1,
-                  height: '100%',
-                  background: 'transparent',
-                  border: 0,
-                  outline: 0,
-                  color: P.text,
-                  padding: '0 9px',
-                  fontFamily: FONT,
-                }}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Cerca per titolo, genere, anno o recensione..."
               />
 
               {search && (
                 <button
+                  type="button"
                   onClick={() => setSearch('')}
                   aria-label="Pulisci ricerca"
-                  style={{
-                    border: 0,
-                    background: 'transparent',
-                    color: P.textFaint,
-                    cursor: 'pointer',
-                    display: 'grid',
-                    placeItems: 'center',
-                  }}
                 >
                   <X size={14} />
                 </button>
               )}
-            </div>
+            </label>
 
-            <div
-              style={{
-                height: 42,
-                display: 'flex',
-                alignItems: 'center',
-                border: `1px solid ${P.border}`,
-                background: P.bgSoft,
-                paddingLeft: 11,
-                color: P.textFaint,
-              }}
-            >
+            <label className="cdr-library-sort">
               <SortAscending size={16} />
               <select
                 value={sort}
                 onChange={(event) =>
                   setSort(event.target.value as SortMode)
                 }
-                style={{
-                  height: '100%',
-                  border: 0,
-                  outline: 0,
-                  background: P.bgSoft,
-                  color: P.textMuted,
-                  padding: '0 11px 0 7px',
-                  fontFamily: FONT,
-                  cursor: 'pointer',
-                }}
               >
                 <option value="recenti">Più recenti</option>
                 <option value="titolo">Titolo</option>
                 <option value="anno">Anno</option>
               </select>
-            </div>
-          </div>
+            </label>
+          </section>
 
           {error && (
-            <div
-              style={{
-                marginBottom: 16,
-                border: `1px solid ${P.danger}45`,
-                background: 'rgba(239,68,68,.08)',
-                color: P.danger,
-                padding: '11px 13px',
-                fontSize: 12,
-              }}
-            >
+            <div className="cdr-library-error">
               {error}
             </div>
           )}
 
           {loadingEntries ? (
-            <div
-              style={{
-                border: `1px solid ${P.border}`,
-                background: P.card,
-                padding: 34,
-                textAlign: 'center',
-                color: P.textFaint,
-                fontSize: 12,
-              }}
-            >
-              Caricamento libreria...
+            <div className="cdr-library-state">
+              <FilmSlate size={28} weight="duotone" />
+              <strong>Sto caricando la tua libreria</strong>
+              <span>Un attimo...</span>
             </div>
           ) : filteredEntries.length === 0 ? (
-            <div
-              style={{
-                border: `1px dashed ${P.border}`,
-                background: P.card,
-                padding: '46px 20px',
-                textAlign: 'center',
-              }}
-            >
-              <div
-                style={{
-                  width: 54,
-                  height: 54,
-                  margin: '0 auto 12px',
-                  background: P.bgSoft,
-                  display: 'grid',
-                  placeItems: 'center',
-                  color: P.textFaint,
-                }}
-              >
-                {tab === 'generale' && (
-                  <FilmSlate size={24} />
-                )}
-                {tab === 'preferiti' && (
-                  <Heart size={24} />
-                )}
-                {tab === 'watchlist' && (
-                  <BookmarkSimple size={24} />
-                )}
-                {tab === 'visti' && (
-                  <Eye size={24} />
-                )}
-                {tab === 'recensioni' && (
-                  <Star size={24} />
-                )}
-              </div>
+            <div className="cdr-library-state">
+              {tab === 'generale' && <FilmSlate size={28} />}
+              {tab === 'preferiti' && <Heart size={28} />}
+              {tab === 'watchlist' && <BookmarkSimple size={28} />}
+              {tab === 'visti' && <Eye size={28} />}
+              {tab === 'recensioni' && <Star size={28} />}
 
-              <strong
-                style={{
-                  display: 'block',
-                  color: P.text,
-                  fontSize: 14,
-                }}
-              >
-                Nessun film qui
+              <strong>
+                {search ? 'Nessun risultato' : 'Ancora nessun film qui'}
               </strong>
 
-              <span
-                style={{
-                  display: 'block',
-                  color: P.textFaint,
-                  fontSize: 11,
-                  marginTop: 5,
-                }}
-              >
+              <span>
                 {search
-                  ? 'Nessun risultato corrisponde alla ricerca.'
-                  : 'Apri un film e aggiungilo da lì.'}
+                  ? 'Prova con un altro titolo, genere o anno.'
+                  : 'Apri la scheda di un film e aggiungilo alla tua raccolta.'}
               </span>
             </div>
           ) : (
-            <div className="library-grid">
-              {filteredEntries.map((entry) => {
-                const movie = getMovie(entry);
-                if (!movie) return null;
+            <>
+              <div className="cdr-library-results-head">
+                <div>
+                  <strong>
+                    {tabs.find((item) => item.id === tab)?.label}
+                  </strong>
+                  <span>
+                    {filteredEntries.length}{' '}
+                    {filteredEntries.length === 1 ? 'film' : 'film'}
+                  </span>
+                </div>
+              </div>
 
-                const busy = busyId === entry.id;
+              <div className="cdr-library-grid">
+                {filteredEntries.map((entry) => {
+                  const movie = getMovie(entry);
+                  if (!movie) return null;
 
-                return (
-                  <article
-                    key={entry.id}
-                    className="library-card"
-                    style={{
-                      border: `1px solid ${P.border}`,
-                      background: P.card,
-                      overflow: 'hidden',
-                      minWidth: 0,
-                    }}
-                  >
-                    <button
-                      onClick={() => openMovie(entry)}
-                      style={{
-                        width: '100%',
-                        aspectRatio: '2/3',
-                        border: 0,
-                        padding: 0,
-                        background: P.bgSoft,
-                        cursor:
-                          movie.provider === 'tmdb'
-                            ? 'pointer'
-                            : 'default',
-                        position: 'relative',
-                        display: 'block',
-                      }}
+                  const busy = busyId === entry.id;
+
+                  return (
+                    <article
+                      key={entry.id}
+                      className="cdr-library-card"
                     >
-                      {movie.cover ? (
-                        <img
-                          src={movie.cover}
-                          alt={movie.title}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                          }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            height: '100%',
-                            display: 'grid',
-                            placeItems: 'center',
-                            color: P.textFaint,
-                            fontSize: 30,
-                          }}
-                        >
-                          🎬
-                        </div>
-                      )}
-
-                      {entry.rating !== null && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            left: 8,
-                            bottom: 8,
-                            background:
-                              'rgba(0,0,0,.82)',
-                            color: P.gold,
-                            padding: '5px 7px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 4,
-                            fontWeight: 800,
-                            fontSize: 10,
-                          }}
-                        >
-                          <Star size={11} weight="fill" />
-                          {Number(entry.rating).toFixed(1)}
-                        </div>
-                      )}
-                    </button>
-
-                    <div style={{ padding: 11 }}>
-                      <strong
-                        style={{
-                          display: 'block',
-                          color: P.text,
-                          fontSize: 12,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
+                      <button
+                        type="button"
+                        className="cdr-library-poster"
+                        onClick={() => openMovie(entry)}
+                        disabled={movie.provider !== 'tmdb'}
+                        aria-label={`Apri ${movie.title}`}
                       >
-                        {movie.title}
-                      </strong>
-
-                      <span
-                        style={{
-                          display: 'block',
-                          color: P.textFaint,
-                          fontSize: 9,
-                          marginTop: 3,
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {[movie.year, movie.genre]
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </span>
-
-                      {tab === 'generale' && (
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: 4,
-                            marginTop: 7,
-                          }}
-                        >
-                          {entry.is_favorite && (
-                            <span
-                              style={{
-                                padding: '3px 5px',
-                                background: P.pinkGlow,
-                                color: P.pink,
-                                border: `1px solid ${P.pink}35`,
-                                fontSize: 8,
-                                fontWeight: 800,
-                              }}
-                            >
-                              ♥ Preferito
-                            </span>
-                          )}
-
-                          {entry.in_watchlist && (
-                            <span
-                              style={{
-                                padding: '3px 5px',
-                                background: P.goldGlow,
-                                color: P.gold,
-                                border: `1px solid ${P.gold}35`,
-                                fontSize: 8,
-                                fontWeight: 800,
-                              }}
-                            >
-                              🔖 Watchlist
-                            </span>
-                          )}
-
-                          {entry.watched_on && (
-                            <span
-                              style={{
-                                padding: '3px 5px',
-                                background: 'rgba(34,197,94,.08)',
-                                color: P.success,
-                                border: `1px solid ${P.success}35`,
-                                fontSize: 8,
-                                fontWeight: 800,
-                              }}
-                            >
-                              ✓ Visto
-                            </span>
-                          )}
-
-                          {(entry.rating !== null || entry.review_text) && (
-                            <span
-                              style={{
-                                padding: '3px 5px',
-                                background: P.goldGlow,
-                                color: P.gold,
-                                border: `1px solid ${P.gold}35`,
-                                fontSize: 8,
-                                fontWeight: 800,
-                              }}
-                            >
-                              ★ Voto/recensione
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {tab === 'visti' &&
-                        entry.watched_on && (
-                          <span
-                            style={{
-                              display: 'block',
-                              color: P.success,
-                              fontSize: 9,
-                              fontWeight: 700,
-                              marginTop: 6,
-                            }}
-                          >
-                            Visto il{' '}
-                            {formatDate(entry.watched_on)}
+                        {movie.cover ? (
+                          <img src={movie.cover} alt={movie.title} />
+                        ) : (
+                          <span className="cdr-library-poster-empty">
+                            <FilmSlate size={34} />
                           </span>
                         )}
 
-                      {tab === 'recensioni' &&
-                        entry.review_text && (
-                          <p
-                            style={{
-                              color: P.textMuted,
-                              fontSize: 9,
-                              lineHeight: 1.45,
-                              margin: '7px 0 0',
-                              display: '-webkit-box',
-                              WebkitLineClamp: 3,
-                              WebkitBoxOrient:
-                                'vertical',
-                              overflow: 'hidden',
-                            }}
-                          >
+                        {entry.rating !== null && (
+                          <span className="cdr-library-rating">
+                            <Star size={12} weight="fill" />
+                            {Number(entry.rating).toFixed(1)}
+                          </span>
+                        )}
+
+                        <span className="cdr-library-poster-open">
+                          Apri scheda
+                        </span>
+                      </button>
+
+                      <div className="cdr-library-card-copy">
+                        <div className="cdr-library-title-row">
+                          <div>
+                            <h2>{movie.title}</h2>
+                            <p>
+                              {[movie.year, movie.genre]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </p>
+                          </div>
+                        </div>
+
+                        {tab === 'generale' && (
+                          <div className="cdr-library-flags">
+                            {entry.is_favorite && (
+                              <span data-tone="pink">
+                                <Heart size={12} weight="fill" />
+                                Preferito
+                              </span>
+                            )}
+
+                            {entry.in_watchlist && (
+                              <span data-tone="gold">
+                                <BookmarkSimple size={12} weight="fill" />
+                                Watchlist
+                              </span>
+                            )}
+
+                            {entry.watched_on && (
+                              <span data-tone="green">
+                                <CheckCircle size={12} weight="fill" />
+                                Visto
+                              </span>
+                            )}
+
+                            {(entry.rating !== null || entry.review_text) && (
+                              <span data-tone="gold">
+                                <Star size={12} weight="fill" />
+                                Recensione
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {tab === 'visti' && entry.watched_on && (
+                          <div className="cdr-library-date">
+                            <CheckCircle size={13} weight="fill" />
+                            Visto il {formatDate(entry.watched_on)}
+                          </div>
+                        )}
+
+                        {tab === 'recensioni' && entry.review_text && (
+                          <p className="cdr-library-review">
                             {entry.review_text}
                           </p>
                         )}
 
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: 5,
-                          marginTop: 9,
-                        }}
-                      >
-                        {tab === 'generale' && (
-                          <button
-                            onClick={() => openMovie(entry)}
-                            style={{
-                              flex: 1,
-                              border: `1px solid ${P.border}`,
-                              background: P.bgSoft,
-                              color: P.textMuted,
-                              padding: '7px 5px',
-                              cursor: 'pointer',
-                              fontSize: 9,
-                              fontWeight: 800,
-                            }}
-                          >
-                            Apri film
-                          </button>
-                        )}
-
-                        {tab === 'preferiti' && (
-                          <button
-                            disabled={busy}
-                            onClick={() =>
-                              void patchEntry(entry, {
-                                is_favorite: false,
-                              })
-                            }
-                            style={{
-                              flex: 1,
-                              border: `1px solid ${P.pink}50`,
-                              background: P.pinkGlow,
-                              color: P.pink,
-                              padding: '7px 5px',
-                              cursor: busy
-                                ? 'wait'
-                                : 'pointer',
-                              fontSize: 9,
-                              fontWeight: 800,
-                            }}
-                          >
-                            <Heart
-                              size={12}
-                              weight="fill"
-                              style={{
-                                verticalAlign: -2,
-                                marginRight: 4,
-                              }}
-                            />
-                            Rimuovi
-                          </button>
-                        )}
-
-                        {tab === 'watchlist' && (
-                          <>
+                        <div className="cdr-library-actions">
+                          {tab === 'generale' && (
                             <button
+                              type="button"
+                              onClick={() => openMovie(entry)}
+                            >
+                              Apri film
+                            </button>
+                          )}
+
+                          {tab === 'preferiti' && (
+                            <button
+                              type="button"
+                              data-tone="pink"
                               disabled={busy}
                               onClick={() =>
                                 void patchEntry(entry, {
-                                  watched_on:
-                                    new Date()
+                                  is_favorite: false,
+                                })
+                              }
+                            >
+                              <Heart size={14} weight="fill" />
+                              Rimuovi dai preferiti
+                            </button>
+                          )}
+
+                          {tab === 'watchlist' && (
+                            <>
+                              <button
+                                type="button"
+                                data-tone="green"
+                                disabled={busy}
+                                onClick={() =>
+                                  void patchEntry(entry, {
+                                    watched_on: new Date()
                                       .toISOString()
                                       .slice(0, 10),
-                                })
-                              }
-                              style={{
-                                flex: 1,
-                                border: `1px solid ${P.success}50`,
-                                background:
-                                  'rgba(34,197,94,.08)',
-                                color: P.success,
-                                padding: '7px 5px',
-                                cursor: busy
-                                  ? 'wait'
-                                  : 'pointer',
-                                fontSize: 9,
-                                fontWeight: 800,
-                              }}
-                            >
-                              <CheckCircle
-                                size={12}
-                                weight="fill"
-                                style={{
-                                  verticalAlign: -2,
-                                  marginRight: 4,
-                                }}
-                              />
-                              Visto
-                            </button>
+                                  })
+                                }
+                              >
+                                <CheckCircle size={14} weight="fill" />
+                                Segna come visto
+                              </button>
 
+                              <button
+                                type="button"
+                                className="cdr-library-icon-action"
+                                disabled={busy}
+                                onClick={() =>
+                                  void patchEntry(entry, {
+                                    in_watchlist: false,
+                                  })
+                                }
+                                aria-label="Rimuovi dalla watchlist"
+                              >
+                                <X size={14} />
+                              </button>
+                            </>
+                          )}
+
+                          {tab === 'visti' && (
                             <button
+                              type="button"
                               disabled={busy}
                               onClick={() =>
                                 void patchEntry(entry, {
-                                  in_watchlist: false,
+                                  watched_on: null,
                                 })
                               }
-                              aria-label="Rimuovi dalla watchlist"
-                              style={{
-                                width: 34,
-                                border: `1px solid ${P.border}`,
-                                background: P.bgSoft,
-                                color: P.textFaint,
-                                cursor: busy
-                                  ? 'wait'
-                                  : 'pointer',
-                              }}
                             >
-                              <X size={13} />
+                              Non più visto
                             </button>
-                          </>
-                        )}
+                          )}
 
-                        {tab === 'visti' && (
-                          <button
-                            disabled={busy}
-                            onClick={() =>
-                              void patchEntry(entry, {
-                                watched_on: null,
-                              })
-                            }
-                            style={{
-                              flex: 1,
-                              border: `1px solid ${P.border}`,
-                              background: P.bgSoft,
-                              color: P.textMuted,
-                              padding: '7px 5px',
-                              cursor: busy
-                                ? 'wait'
-                                : 'pointer',
-                              fontSize: 9,
-                              fontWeight: 800,
-                            }}
-                          >
-                            Non visto
-                          </button>
-                        )}
-
-                        {tab === 'recensioni' && (
-                          <button
-                            onClick={() => openMovie(entry)}
-                            style={{
-                              flex: 1,
-                              border: `1px solid ${P.gold}55`,
-                              background: P.goldGlow,
-                              color: P.gold,
-                              padding: '7px 5px',
-                              cursor: 'pointer',
-                              fontSize: 9,
-                              fontWeight: 800,
-                            }}
-                          >
-                            Modifica
-                          </button>
-                        )}
+                          {tab === 'recensioni' && (
+                            <button
+                              type="button"
+                              data-tone="gold"
+                              onClick={() => openMovie(entry)}
+                            >
+                              <Star size={14} weight="fill" />
+                              Modifica recensione
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
 
         <style jsx global>{`
-          .library-grid {
-            display: grid;
-            grid-template-columns:
-              repeat(auto-fill,minmax(150px,1fr));
-            gap: 14px;
+          .cdr-library {
+            min-height:100vh;
+            background:var(--cdr-library-bg);
+            color:var(--cdr-library-text);
+            font-family:${FONT.sans};
+            padding:30px 22px 88px;
           }
 
-          .library-card {
-            transition:
-              transform .18s ease,
-              border-color .18s ease;
+          .cdr-library-shell {
+            width:min(1180px,100%);
+            margin:0 auto;
           }
 
-          .library-card:hover {
-            transform: translateY(-3px);
-            border-color: ${P.gold}55 !important;
+          .cdr-library-header {
+            display:grid;
+            grid-template-columns:minmax(0,1fr) 190px;
+            gap:24px;
+            align-items:end;
+            margin-bottom:24px;
           }
 
-          @media (max-width: 720px) {
-            .library-tabs {
-              grid-template-columns:
-                repeat(2,minmax(0,1fr)) !important;
-            }
+          .cdr-library-kicker {
+            display:flex;
+            align-items:center;
+            gap:8px;
+            color:var(--cdr-library-gold);
+            font-size:12px;
+            font-weight:850;
+            letter-spacing:.04em;
+          }
 
-            .library-tabs > button:first-child {
-              grid-column: 1 / -1;
-            }
+          .cdr-library-header h1 {
+            margin:8px 0 7px;
+            font-family:${FONT.display};
+            font-size:clamp(34px,5vw,52px);
+            line-height:1;
+            letter-spacing:-.025em;
+          }
 
-            .library-toolbar {
-              align-items: stretch !important;
-              flex-direction: column;
-            }
+          .cdr-library-header p {
+            max-width:620px;
+            margin:0;
+            color:var(--cdr-library-muted);
+            font-size:15px;
+            line-height:1.6;
+          }
 
-            .library-grid {
-              grid-template-columns:
-                repeat(2,minmax(0,1fr));
-              gap: 10px;
+          .cdr-library-total {
+            border-top:1px solid var(--cdr-library-border);
+            padding-top:10px;
+          }
+
+          .cdr-library-total span,
+          .cdr-library-total small {
+            display:block;
+            color:var(--cdr-library-faint);
+            font-size:11px;
+          }
+
+          .cdr-library-total strong {
+            display:block;
+            margin:2px 0;
+            font-family:${FONT.display};
+            font-size:32px;
+            line-height:1;
+          }
+
+          .cdr-library-tabs {
+            display:grid;
+            grid-template-columns:repeat(5,minmax(0,1fr));
+            gap:8px;
+            margin-bottom:14px;
+          }
+
+          .cdr-library-tabs > button {
+            min-height:76px;
+            display:grid;
+            grid-template-columns:22px minmax(0,1fr) auto;
+            gap:10px;
+            align-items:center;
+            padding:12px;
+            border:1px solid var(--cdr-library-border);
+            background:var(--cdr-library-surface);
+            color:var(--cdr-library-muted);
+            text-align:left;
+            cursor:pointer;
+            transition:border-color .16s ease, background .16s ease, transform .16s ease;
+          }
+
+          .cdr-library-tabs > button:hover {
+            transform:translateY(-1px);
+            border-color:var(--cdr-library-gold);
+          }
+
+          .cdr-library-tabs > button[data-active="true"] {
+            border-color:var(--cdr-library-text);
+            background:var(--cdr-library-soft);
+            color:var(--cdr-library-text);
+          }
+
+          .cdr-library-tabs > button[data-active="true"][data-tone="pink"] {
+            border-color:var(--cdr-library-pink);
+            background:var(--cdr-library-pink-glow);
+            color:var(--cdr-library-pink);
+          }
+
+          .cdr-library-tabs > button[data-active="true"][data-tone="gold"] {
+            border-color:var(--cdr-library-gold);
+            background:var(--cdr-library-gold-glow);
+            color:var(--cdr-library-gold);
+          }
+
+          .cdr-library-tabs > button[data-active="true"][data-tone="green"] {
+            border-color:#22c55e;
+            background:rgba(34,197,94,.08);
+            color:#22c55e;
+          }
+
+          .cdr-library-tab-copy {
+            min-width:0;
+          }
+
+          .cdr-library-tab-copy strong,
+          .cdr-library-tab-copy small {
+            display:block;
+          }
+
+          .cdr-library-tab-copy strong {
+            color:inherit;
+            font-size:13px;
+            line-height:1.2;
+          }
+
+          .cdr-library-tab-copy small {
+            margin-top:3px;
+            color:var(--cdr-library-faint);
+            font-size:10px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+          }
+
+          .cdr-library-tab-count {
+            min-width:25px;
+            text-align:right;
+            color:var(--cdr-library-faint);
+            font-size:11px;
+            font-weight:850;
+          }
+
+          .cdr-library-toolbar {
+            display:grid;
+            grid-template-columns:minmax(0,1fr) 190px;
+            gap:8px;
+            margin-bottom:22px;
+          }
+
+          .cdr-library-search,
+          .cdr-library-sort {
+            min-height:46px;
+            display:flex;
+            align-items:center;
+            border:1px solid var(--cdr-library-border);
+            background:var(--cdr-library-soft);
+            color:var(--cdr-library-faint);
+          }
+
+          .cdr-library-search {
+            padding:0 12px;
+          }
+
+          .cdr-library-search input {
+            min-width:0;
+            flex:1;
+            height:44px;
+            padding:0 10px;
+            border:0;
+            outline:0;
+            background:transparent;
+            color:var(--cdr-library-text);
+            font:inherit;
+            font-size:13px;
+          }
+
+          .cdr-library-search button {
+            width:30px;
+            height:30px;
+            display:grid;
+            place-items:center;
+            border:0;
+            background:transparent;
+            color:var(--cdr-library-faint);
+            cursor:pointer;
+          }
+
+          .cdr-library-sort {
+            padding-left:12px;
+          }
+
+          .cdr-library-sort select {
+            flex:1;
+            height:44px;
+            border:0;
+            outline:0;
+            background:transparent;
+            color:var(--cdr-library-muted);
+            padding:0 10px;
+            font:inherit;
+            font-size:12px;
+            cursor:pointer;
+          }
+
+          .cdr-library-error {
+            margin-bottom:16px;
+            padding:11px 13px;
+            border:1px solid rgba(239,68,68,.35);
+            background:rgba(239,68,68,.08);
+            color:#ef4444;
+            font-size:12px;
+          }
+
+          .cdr-library-state {
+            min-height:260px;
+            display:grid;
+            place-items:center;
+            align-content:center;
+            gap:8px;
+            border:1px solid var(--cdr-library-border);
+            background:var(--cdr-library-surface);
+            color:var(--cdr-library-faint);
+            text-align:center;
+            padding:34px;
+          }
+
+          .cdr-library-state strong {
+            margin-top:3px;
+            color:var(--cdr-library-text);
+            font-family:${FONT.display};
+            font-size:20px;
+          }
+
+          .cdr-library-state span {
+            max-width:420px;
+            font-size:12px;
+            line-height:1.5;
+          }
+
+          .cdr-library-results-head {
+            display:flex;
+            align-items:end;
+            justify-content:space-between;
+            margin-bottom:12px;
+          }
+
+          .cdr-library-results-head strong,
+          .cdr-library-results-head span {
+            display:block;
+          }
+
+          .cdr-library-results-head strong {
+            font-family:${FONT.display};
+            font-size:22px;
+          }
+
+          .cdr-library-results-head span {
+            margin-top:2px;
+            color:var(--cdr-library-faint);
+            font-size:11px;
+          }
+
+          .cdr-library-grid {
+            display:grid;
+            grid-template-columns:repeat(5,minmax(0,1fr));
+            gap:14px;
+          }
+
+          .cdr-library-card {
+            min-width:0;
+            overflow:hidden;
+            border:1px solid var(--cdr-library-border);
+            background:var(--cdr-library-surface);
+            transition:transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+          }
+
+          .cdr-library-card:hover {
+            transform:translateY(-3px);
+            border-color:var(--cdr-library-gold);
+            box-shadow:0 10px 24px rgba(0,0,0,.08);
+          }
+
+          .cdr-library-poster {
+            width:100%;
+            aspect-ratio:2/3;
+            position:relative;
+            display:block;
+            overflow:hidden;
+            border:0;
+            padding:0;
+            background:var(--cdr-library-soft);
+            cursor:pointer;
+          }
+
+          .cdr-library-poster:disabled {
+            cursor:default;
+          }
+
+          .cdr-library-poster img {
+            width:100%;
+            height:100%;
+            object-fit:cover;
+            display:block;
+            transition:transform .3s ease;
+          }
+
+          .cdr-library-card:hover .cdr-library-poster img {
+            transform:scale(1.02);
+          }
+
+          .cdr-library-poster-empty {
+            width:100%;
+            height:100%;
+            display:grid;
+            place-items:center;
+            color:var(--cdr-library-faint);
+          }
+
+          .cdr-library-rating {
+            position:absolute;
+            left:8px;
+            bottom:8px;
+            display:flex;
+            align-items:center;
+            gap:4px;
+            padding:5px 7px;
+            background:rgba(0,0,0,.82);
+            color:#f5b92f;
+            font-size:10px;
+            font-weight:900;
+          }
+
+          .cdr-library-poster-open {
+            position:absolute;
+            inset:auto 8px 8px auto;
+            padding:5px 7px;
+            background:rgba(0,0,0,.74);
+            color:#fff;
+            font-size:9px;
+            font-weight:800;
+            opacity:0;
+            transform:translateY(3px);
+            transition:opacity .16s ease, transform .16s ease;
+          }
+
+          .cdr-library-card:hover .cdr-library-poster-open {
+            opacity:1;
+            transform:translateY(0);
+          }
+
+          .cdr-library-card-copy {
+            padding:12px;
+          }
+
+          .cdr-library-title-row h2 {
+            margin:0;
+            font-family:${FONT.display};
+            font-size:15px;
+            line-height:1.25;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+          }
+
+          .cdr-library-title-row p {
+            margin:4px 0 0;
+            color:var(--cdr-library-faint);
+            font-size:10px;
+            white-space:nowrap;
+            overflow:hidden;
+            text-overflow:ellipsis;
+          }
+
+          .cdr-library-flags {
+            display:flex;
+            flex-wrap:wrap;
+            gap:5px;
+            margin-top:9px;
+          }
+
+          .cdr-library-flags span {
+            display:inline-flex;
+            align-items:center;
+            gap:4px;
+            padding:3px 5px;
+            border:1px solid var(--cdr-library-border);
+            color:var(--cdr-library-muted);
+            font-size:8px;
+            font-weight:800;
+          }
+
+          .cdr-library-flags span[data-tone="pink"] {
+            border-color:color-mix(in srgb, var(--cdr-library-pink) 35%, transparent);
+            background:var(--cdr-library-pink-glow);
+            color:var(--cdr-library-pink);
+          }
+
+          .cdr-library-flags span[data-tone="gold"] {
+            border-color:color-mix(in srgb, var(--cdr-library-gold) 35%, transparent);
+            background:var(--cdr-library-gold-glow);
+            color:var(--cdr-library-gold);
+          }
+
+          .cdr-library-flags span[data-tone="green"] {
+            border-color:rgba(34,197,94,.35);
+            background:rgba(34,197,94,.08);
+            color:#22c55e;
+          }
+
+          .cdr-library-date {
+            display:flex;
+            align-items:center;
+            gap:5px;
+            margin-top:8px;
+            color:#22c55e;
+            font-size:10px;
+            font-weight:750;
+          }
+
+          .cdr-library-review {
+            margin:9px 0 0;
+            padding-left:9px;
+            border-left:2px solid var(--cdr-library-gold);
+            color:var(--cdr-library-muted);
+            font-size:10.5px;
+            line-height:1.5;
+            display:-webkit-box;
+            -webkit-line-clamp:4;
+            -webkit-box-orient:vertical;
+            overflow:hidden;
+          }
+
+          .cdr-library-actions {
+            display:flex;
+            gap:6px;
+            margin-top:11px;
+          }
+
+          .cdr-library-actions button {
+            min-height:34px;
+            flex:1;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:5px;
+            border:1px solid var(--cdr-library-border);
+            background:var(--cdr-library-soft);
+            color:var(--cdr-library-muted);
+            font:inherit;
+            font-size:9px;
+            font-weight:850;
+            cursor:pointer;
+          }
+
+          .cdr-library-actions button[data-tone="pink"] {
+            border-color:color-mix(in srgb, var(--cdr-library-pink) 45%, transparent);
+            background:var(--cdr-library-pink-glow);
+            color:var(--cdr-library-pink);
+          }
+
+          .cdr-library-actions button[data-tone="gold"] {
+            border-color:color-mix(in srgb, var(--cdr-library-gold) 45%, transparent);
+            background:var(--cdr-library-gold-glow);
+            color:var(--cdr-library-gold);
+          }
+
+          .cdr-library-actions button[data-tone="green"] {
+            border-color:rgba(34,197,94,.4);
+            background:rgba(34,197,94,.08);
+            color:#22c55e;
+          }
+
+          .cdr-library-actions button:disabled {
+            opacity:.55;
+            cursor:wait;
+          }
+
+          .cdr-library-actions .cdr-library-icon-action {
+            flex:0 0 36px;
+          }
+
+          @media (max-width:1020px) {
+            .cdr-library-grid {
+              grid-template-columns:repeat(4,minmax(0,1fr));
             }
           }
 
-          @media (max-width: 380px) {
-            .library-grid {
-              grid-template-columns: 1fr;
+          @media (max-width:820px) {
+            .cdr-library-tabs {
+              grid-template-columns:repeat(3,minmax(0,1fr));
+            }
+
+            .cdr-library-grid {
+              grid-template-columns:repeat(3,minmax(0,1fr));
+            }
+          }
+
+          @media (max-width:640px) {
+            .cdr-library {
+              padding:22px 14px 88px;
+            }
+
+            .cdr-library-header {
+              grid-template-columns:1fr;
+              gap:14px;
+              margin-bottom:18px;
+            }
+
+            .cdr-library-header h1 {
+              font-size:36px;
+            }
+
+            .cdr-library-header p {
+              font-size:13px;
+              line-height:1.55;
+            }
+
+            .cdr-library-total {
+              display:grid;
+              grid-template-columns:auto auto 1fr;
+              gap:8px;
+              align-items:baseline;
+              padding-top:9px;
+            }
+
+            .cdr-library-total strong {
+              font-size:24px;
+            }
+
+            .cdr-library-total small {
+              text-align:right;
+            }
+
+            .cdr-library-tabs {
+              grid-template-columns:repeat(2,minmax(0,1fr));
+            }
+
+            .cdr-library-tabs > button:first-child {
+              grid-column:1 / -1;
+            }
+
+            .cdr-library-toolbar {
+              grid-template-columns:1fr;
+            }
+
+            .cdr-library-grid {
+              grid-template-columns:repeat(2,minmax(0,1fr));
+              gap:10px;
+            }
+
+            .cdr-library-card-copy {
+              padding:10px;
+            }
+
+            .cdr-library-title-row h2 {
+              font-size:14px;
+            }
+
+            .cdr-library-review {
+              font-size:10px;
+            }
+          }
+
+          @media (max-width:430px) {
+            .cdr-library {
+              padding-inline:12px;
+            }
+
+            .cdr-library-tabs > button {
+              min-height:68px;
+              padding:10px;
+            }
+
+            .cdr-library-tab-copy small {
+              display:none;
+            }
+
+            .cdr-library-grid {
+              gap:8px;
+            }
+
+            .cdr-library-actions button {
+              min-height:32px;
+              font-size:8.5px;
             }
           }
         `}</style>

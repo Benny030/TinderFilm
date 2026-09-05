@@ -1,71 +1,37 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/router';
-import AppShell from '@/components/layout/AppShell';
-import { useAuth } from '@/hooks/useAuth';
-import { useTheme } from '@/context/ThemeContext';
-import { createBrowserClient } from '@/utils/supabase/browser';
-import { ensureTmdbMovie } from '@/utils/movieEntries';
 import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
+import { useRouter } from 'next/router';
+import {
+  ArrowRight,
   BookmarkSimple,
   CaretRight,
   ChatCircle,
   Check,
-  PaperPlaneTilt,
-  Trash,
-  Funnel,
-  Heart,
   FilmSlate,
+  Heart,
   MagnifyingGlass,
+  PaperPlaneTilt,
   PencilSimple,
   Star,
+  Trash,
   UserCheck,
   UserPlus,
   X,
-  ArrowRight,
 } from '@phosphor-icons/react';
 
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  cardHover: '#241d19',
-  border: '#2d221c',
-  gold: '#f5b92f',
-  goldSoft: '#ffd875',
-  goldGlow: 'rgba(245,185,47,0.12)',
-  pink: '#ed3d73',
-  pinkDeep: '#8e1740',
-  pinkGlow: 'rgba(237,61,115,0.15)',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-  success: '#4ade80',
-  danger: '#fb7185',
-};
-
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  cardHover: '#faf5ef',
-  border: '#d6cbbc',
-  gold: '#b8860b',
-  goldSoft: '#e8c84a',
-  goldGlow: 'rgba(184,134,11,0.10)',
-  pink: '#b83060',
-  pinkDeep: '#8a1d44',
-  pinkGlow: 'rgba(184,48,96,0.10)',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-  success: '#16a34a',
-  danger: '#dc2626',
-};
-
-const FONT = "'Inter','Helvetica Neue',sans-serif";
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
+import AppShell from '@/components/layout/AppShell';
+import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/context/ThemeContext';
+import { FONT, THEME } from '@/styles/token';
+import { createBrowserClient } from '@/utils/supabase/browser';
+import { ensureTmdbMovie } from '@/utils/movieEntries';
 
 type PublicReview = {
   entry_id: string;
@@ -143,11 +109,9 @@ type AuthorSocial = {
 };
 
 function getCatalogMovie(row: WatchlistRow) {
-  if (Array.isArray(row.movie_catalog)) {
-    return row.movie_catalog[0] ?? null;
-  }
-
-  return row.movie_catalog;
+  return Array.isArray(row.movie_catalog)
+    ? row.movie_catalog[0] ?? null
+    : row.movie_catalog;
 }
 
 function formatRelativeDate(value: string) {
@@ -160,7 +124,9 @@ function formatRelativeDate(value: string) {
   if (hours < 24) return `${hours} ${hours === 1 ? 'ora' : 'ore'} fa`;
 
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} ${days === 1 ? 'giorno' : 'giorni'} fa`;
+  if (days < 7) {
+    return `${days} ${days === 1 ? 'giorno' : 'giorni'} fa`;
+  }
 
   return date.toLocaleDateString('it-IT', {
     day: '2-digit',
@@ -178,29 +144,26 @@ function Avatar({
   url: string | null;
   size?: number;
 }) {
+  const [failed, setFailed] = useState(false);
   const initial = (username || '?').charAt(0).toUpperCase();
+
+  useEffect(() => {
+    setFailed(false);
+  }, [url]);
 
   return (
     <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        overflow: 'hidden',
-        flexShrink: 0,
-        display: 'grid',
-        placeItems: 'center',
-        background: 'linear-gradient(135deg,#ed3d73,#8e1740)',
-        color: '#fff',
-        fontWeight: 800,
-        fontSize: Math.max(10, size * 0.4),
-      }}
+      className="cdr-community-avatar"
+      style={{ width: size, height: size }}
     >
-      {url ? (
+      {url && !failed ? (
         <img
           src={url}
           alt=""
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
         />
       ) : (
         initial
@@ -213,21 +176,31 @@ export default function RecensioniPage() {
   const router = useRouter();
   const { currentUser, isGuest, isLoading } = useAuth();
   const { theme } = useTheme();
-  const P = theme === 'dark' ? D : L;
+  const P = theme === 'dark' ? THEME.dark : THEME.light;
   const supabase = useRef(createBrowserClient()).current;
 
   const [reviews, setReviews] = useState<PublicReview[]>([]);
   const [followingReviews, setFollowingReviews] = useState<PublicReview[]>([]);
   const [watchlist, setWatchlist] = useState<WatchlistRow[]>([]);
   const [likedEntries, setLikedEntries] = useState<Set<string>>(new Set());
-  const [authorSocial, setAuthorSocial] = useState<Record<string, AuthorSocial>>({});
-  const [followingUserIds, setFollowingUserIds] = useState<Set<string>>(new Set());
+  const [authorSocial, setAuthorSocial] = useState<Record<string, AuthorSocial>>(
+    {}
+  );
+  const [followingUserIds, setFollowingUserIds] = useState<Set<string>>(
+    new Set()
+  );
   const [followBusyUserId, setFollowBusyUserId] = useState<string | null>(null);
 
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
-  const [openCommentsEntry, setOpenCommentsEntry] = useState<string | null>(null);
-  const [commentsByEntry, setCommentsByEntry] = useState<Record<string, ReviewComment[]>>({});
-  const [commentsLoadingEntry, setCommentsLoadingEntry] = useState<string | null>(null);
+  const [openCommentsEntry, setOpenCommentsEntry] = useState<string | null>(
+    null
+  );
+  const [commentsByEntry, setCommentsByEntry] = useState<
+    Record<string, ReviewComment[]>
+  >({});
+  const [commentsLoadingEntry, setCommentsLoadingEntry] = useState<
+    string | null
+  >(null);
   const [commentDraft, setCommentDraft] = useState('');
   const [commentSaving, setCommentSaving] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -255,7 +228,7 @@ export default function RecensioniPage() {
     if (isLoading) return;
 
     if (!currentUser || currentUser.isGuest || isGuest) {
-      router.replace('/auth');
+      void router.replace('/auth');
     }
   }, [currentUser, isGuest, isLoading, router]);
 
@@ -297,25 +270,32 @@ export default function RecensioniPage() {
       if (watchlistResult.error) throw watchlistResult.error;
       if (likesResult.error) throw likesResult.error;
 
-      const normalizedReviews =
-        ((reviewsResult.data ?? []) as PublicReview[]).map((review) => ({
-          ...review,
-          likes_count: Number(review.likes_count ?? 0),
-        }));
+      const normalizedReviews = (
+        (reviewsResult.data ?? []) as PublicReview[]
+      ).map((review) => ({
+        ...review,
+        likes_count: Number(review.likes_count ?? 0),
+      }));
+
+      const normalizedFollowingReviews = (
+        (followingReviewsResult.data ?? []) as PublicReview[]
+      ).map((review) => ({
+        ...review,
+        likes_count: Number(review.likes_count ?? 0),
+      }));
 
       setReviews(normalizedReviews);
-
-      const normalizedFollowingReviews =
-        ((followingReviewsResult.data ?? []) as PublicReview[]).map(
-          (review) => ({
-            ...review,
-            likes_count: Number(review.likes_count ?? 0),
-          })
-        );
-
       setFollowingReviews(normalizedFollowingReviews);
       setFollowingUserIds(
         new Set(normalizedFollowingReviews.map((review) => review.user_id))
+      );
+      setWatchlist((watchlistResult.data ?? []) as WatchlistRow[]);
+      setLikedEntries(
+        new Set(
+          ((likesResult.data ?? []) as { entry_id: string }[]).map(
+            (item) => item.entry_id
+          )
+        )
       );
 
       const authorIds = Array.from(
@@ -327,13 +307,16 @@ export default function RecensioniPage() {
       );
 
       if (authorIds.length > 0) {
-        const { data: socialRows, error: socialError } =
-          await supabase.rpc('get_people_compatibilities', {
-            p_user_ids: authorIds,
-          });
+        const { data: socialRows, error: socialError } = await supabase.rpc(
+          'get_people_compatibilities',
+          { p_user_ids: authorIds }
+        );
 
         if (socialError) {
-          console.error('Review author compatibility load failed:', socialError);
+          console.error(
+            'Review author compatibility load failed:',
+            socialError
+          );
           setAuthorSocial({});
         } else {
           const next: Record<string, AuthorSocial> = {};
@@ -343,8 +326,12 @@ export default function RecensioniPage() {
 
             next[row.user_id] = {
               compatibility_score: Number(row.compatibility_score ?? 0),
-              shared_favorites_count: Number(row.shared_favorites_count ?? 0),
-              shared_high_ratings_count: Number(row.shared_high_ratings_count ?? 0),
+              shared_favorites_count: Number(
+                row.shared_favorites_count ?? 0
+              ),
+              shared_high_ratings_count: Number(
+                row.shared_high_ratings_count ?? 0
+              ),
               shared_genres_count: Number(row.shared_genres_count ?? 0),
               follows_you: Boolean(row.follows_you),
             };
@@ -355,16 +342,6 @@ export default function RecensioniPage() {
       } else {
         setAuthorSocial({});
       }
-
-      setWatchlist((watchlistResult.data ?? []) as WatchlistRow[]);
-
-      setLikedEntries(
-        new Set(
-          ((likesResult.data ?? []) as { entry_id: string }[]).map(
-            (item) => item.entry_id
-          )
-        )
-      );
     } catch (error: any) {
       console.error('Reviews page load failed:', error);
       setFeedError(error.message ?? 'Impossibile caricare le recensioni.');
@@ -396,7 +373,6 @@ export default function RecensioniPage() {
           `/api/tmdb/search?q=${encodeURIComponent(movieQuery.trim())}`,
           { signal: controller.signal }
         );
-
         const data = await response.json();
 
         if (!response.ok) {
@@ -422,9 +398,12 @@ export default function RecensioniPage() {
   useEffect(() => {
     if (!router.isReady) return;
 
-    const q = typeof router.query.q === 'string' ? router.query.q.trim() : '';
+    const q =
+      typeof router.query.q === 'string' ? router.query.q.trim() : '';
     const movieParam =
-      typeof router.query.movie === 'string' ? Number(router.query.movie) : null;
+      typeof router.query.movie === 'string'
+        ? Number(router.query.movie)
+        : null;
 
     if (q) setSearch(q);
     setTargetMovieId(
@@ -499,9 +478,7 @@ export default function RecensioniPage() {
       const next: Record<string, number> = {};
 
       for (const row of data ?? []) {
-        if (
-          typeof row.entry_id === 'string'
-        ) {
+        if (typeof row.entry_id === 'string') {
           next[row.entry_id] = Number(row.comments_count ?? 0);
         }
       }
@@ -520,14 +497,11 @@ export default function RecensioniPage() {
     setCommentsLoadingEntry(entryId);
 
     try {
-      const { data, error } = await supabase.rpc(
-        'get_review_comments',
-        {
-          p_entry_id: entryId,
-          p_limit: 100,
-          p_offset: 0,
-        }
-      );
+      const { data, error } = await supabase.rpc('get_review_comments', {
+        p_entry_id: entryId,
+        p_limit: 100,
+        p_offset: 0,
+      });
 
       if (error) throw error;
 
@@ -608,9 +582,7 @@ export default function RecensioniPage() {
     try {
       const { error } = await supabase
         .from('user_movie_review_comments')
-        .update({
-          text: cleanText,
-        })
+        .update({ text: cleanText })
         .eq('id', commentId)
         .eq('user_id', currentUser.id);
 
@@ -632,11 +604,7 @@ export default function RecensioniPage() {
   ) => {
     if (!currentUser || currentUser.isGuest) return;
 
-    const confirmed = window.confirm(
-      'Vuoi eliminare questo commento?'
-    );
-
-    if (!confirmed) return;
+    if (!window.confirm('Vuoi eliminare questo commento?')) return;
 
     try {
       const { error } = await supabase
@@ -646,7 +614,6 @@ export default function RecensioniPage() {
         .eq('user_id', currentUser.id);
 
       if (error) throw error;
-
       await loadComments(entryId);
     } catch (error) {
       console.error('Review comment delete failed:', error);
@@ -727,22 +694,18 @@ export default function RecensioniPage() {
 
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('user_follows')
-          .insert({
-            follower_id: currentUser.id,
-            following_id: review.user_id,
-          });
+        const { error } = await supabase.from('user_follows').insert({
+          follower_id: currentUser.id,
+          following_id: review.user_id,
+        });
 
         if (error) throw error;
       }
 
       setFollowingUserIds((current) => {
         const next = new Set(current);
-
         if (alreadyFollowing) next.delete(review.user_id);
         else next.add(review.user_id);
-
         return next;
       });
     } catch (error) {
@@ -779,10 +742,8 @@ export default function RecensioniPage() {
 
       setLikedEntries((current) => {
         const next = new Set(current);
-
         if (liked) next.delete(review.entry_id);
         else next.add(review.entry_id);
-
         return next;
       });
 
@@ -889,22 +850,29 @@ export default function RecensioniPage() {
       await loadPage();
     } catch (error: any) {
       console.error('Review save failed:', error);
-      setModalError(error.message ?? 'Impossibile pubblicare la recensione.');
+      setModalError(
+        error.message ?? 'Impossibile pubblicare la recensione.'
+      );
     } finally {
       setSavingReview(false);
     }
   };
 
-  if (isLoading || !currentUser || currentUser.isGuest || isGuest) {
+  if (
+    isLoading ||
+    !currentUser ||
+    currentUser.isGuest ||
+    isGuest
+  ) {
     return (
       <div
         style={{
-          minHeight: '100vh',
+          minHeight: '100dvh',
           background: P.bg,
+          color: P.textMuted,
           display: 'grid',
           placeItems: 'center',
-          color: P.textMuted,
-          fontFamily: FONT,
+          fontFamily: FONT.sans,
         }}
       >
         Caricamento...
@@ -912,180 +880,1285 @@ export default function RecensioniPage() {
     );
   }
 
+  const vars = {
+    '--cdr-community-bg': P.bg,
+    '--cdr-community-soft': P.bgSoft,
+    '--cdr-community-surface': P.surface,
+    '--cdr-community-hover': P.surfaceHover,
+    '--cdr-community-border': P.border,
+    '--cdr-community-text': P.text,
+    '--cdr-community-muted': P.textMuted,
+    '--cdr-community-faint': P.textFaint,
+    '--cdr-community-pink': P.primary,
+    '--cdr-community-pink-glow': P.primaryGlow,
+    '--cdr-community-gold': P.accent,
+    '--cdr-community-gold-glow': P.accentGlow,
+  } as CSSProperties;
+
   return (
     <>
       <AppShell activeNav={'recensioni' as any}>
-        <main
-          className="reviews-page"
-          style={
-            {
-              '--r-bg': P.bg,
-              '--r-bg-soft': P.bgSoft,
-              '--r-card': P.card,
-              '--r-card-hover': P.cardHover,
-              '--r-border': P.border,
-              '--r-gold': P.gold,
-              '--r-gold-soft': P.goldSoft,
-              '--r-pink': P.pink,
-              '--r-pink-deep': P.pinkDeep,
-              '--r-text': P.text,
-              '--r-muted': P.textMuted,
-              '--r-faint': P.textFaint,
-              '--r-pink-glow': P.pinkGlow,
-              '--r-gold-glow': P.goldGlow,
-              minHeight: '100vh',
-              background: P.bg,
-              color: P.text,
-              fontFamily: FONT,
-            } as React.CSSProperties
-          }
-        >
-          <div className="reviews-wrap">
-            <section className="reviews-main">
-              <header className="page-header">
+        <main className="cdr-community" style={vars}>
+          <style>{`
+            .cdr-community {
+              width:100%;
+              min-height:100dvh;
+              overflow-x:hidden;
+              background:var(--cdr-community-bg);
+              color:var(--cdr-community-text);
+              font-family:${FONT.sans};
+            }
+            .cdr-community * { box-sizing:border-box; }
+
+            .cdr-community-wrap {
+              width:min(100%,1180px);
+              margin:0 auto;
+              padding:24px 24px 56px;
+              display:grid;
+              grid-template-columns:minmax(0,1fr) 250px;
+              gap:18px;
+            }
+
+            .cdr-community-main { min-width:0; }
+
+            .cdr-community-hero {
+              display:flex;
+              align-items:flex-end;
+              justify-content:space-between;
+              gap:18px;
+              margin-bottom:16px;
+            }
+
+            .cdr-community-kicker {
+              display:flex;
+              align-items:center;
+              gap:7px;
+              color:var(--cdr-community-pink);
+              font-size:11px;
+              font-weight:850;
+              letter-spacing:.11em;
+              text-transform:uppercase;
+            }
+
+            .cdr-community-title {
+              margin:6px 0 0;
+              font-family:${FONT.display};
+              font-size:clamp(36px,5vw,52px);
+              line-height:.98;
+              letter-spacing:-.035em;
+            }
+
+            .cdr-community-lead {
+              max-width:620px;
+              margin:9px 0 0;
+              color:var(--cdr-community-muted);
+              font-size:14px;
+              line-height:1.55;
+            }
+
+            .cdr-community-hero-actions {
+              display:flex;
+              gap:7px;
+              flex-wrap:wrap;
+              justify-content:flex-end;
+            }
+
+            .cdr-community-btn {
+              min-height:38px;
+              display:inline-flex;
+              align-items:center;
+              justify-content:center;
+              gap:6px;
+              padding:7px 10px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-surface);
+              color:var(--cdr-community-text);
+              font-size:12px;
+              font-weight:850;
+              cursor:pointer;
+            }
+
+            .cdr-community-btn.primary {
+              border-color:var(--cdr-community-pink);
+              background:var(--cdr-community-pink);
+              color:#fff;
+            }
+
+            .cdr-community-tabs {
+              display:flex;
+              gap:18px;
+              overflow-x:auto;
+              border-bottom:1px solid var(--cdr-community-border);
+              scrollbar-width:none;
+            }
+
+            .cdr-community-tabs::-webkit-scrollbar { display:none; }
+
+            .cdr-community-tabs button {
+              flex:0 0 auto;
+              padding:0 2px 9px;
+              border:0;
+              border-bottom:2px solid transparent;
+              background:transparent;
+              color:var(--cdr-community-muted);
+              font-size:13px;
+              cursor:pointer;
+            }
+
+            .cdr-community-tabs button.active {
+              color:var(--cdr-community-pink);
+              border-bottom-color:var(--cdr-community-pink);
+              font-weight:850;
+            }
+
+            .cdr-community-tabs button.disabled {
+              opacity:.5;
+            }
+
+            .cdr-community-toolbar {
+              display:grid;
+              grid-template-columns:minmax(0,1fr) auto;
+              gap:8px;
+              margin:12px 0 16px;
+            }
+
+            .cdr-community-search {
+              min-height:42px;
+              display:flex;
+              align-items:center;
+              gap:8px;
+              padding:0 11px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-surface);
+              color:var(--cdr-community-faint);
+            }
+
+            .cdr-community-search:focus-within {
+              border-color:var(--cdr-community-pink);
+              box-shadow:0 0 0 2px var(--cdr-community-pink-glow);
+            }
+
+            .cdr-community-search input {
+              min-width:0;
+              flex:1;
+              height:40px;
+              border:0;
+              outline:0;
+              background:transparent;
+              color:var(--cdr-community-text);
+              font:inherit;
+              font-size:13px;
+            }
+
+            .cdr-community-search button {
+              width:28px;
+              height:28px;
+              display:grid;
+              place-items:center;
+              border:0;
+              background:transparent;
+              color:var(--cdr-community-faint);
+              cursor:pointer;
+            }
+
+            .cdr-community-explore {
+              min-height:42px;
+              display:inline-flex;
+              align-items:center;
+              gap:6px;
+              padding:0 10px;
+              border:1px solid var(--cdr-community-gold);
+              background:var(--cdr-community-gold-glow);
+              color:var(--cdr-community-gold);
+              font-size:12px;
+              font-weight:850;
+              cursor:pointer;
+            }
+
+            .cdr-community-target {
+              margin-bottom:12px;
+              padding:9px 10px;
+              border:1px solid var(--cdr-community-gold);
+              background:var(--cdr-community-gold-glow);
+              display:flex;
+              align-items:center;
+              justify-content:space-between;
+              gap:10px;
+            }
+
+            .cdr-community-target strong {
+              display:block;
+              color:var(--cdr-community-gold);
+              font-size:8px;
+              text-transform:uppercase;
+              letter-spacing:.08em;
+            }
+
+            .cdr-community-target span {
+              display:block;
+              margin-top:2px;
+              font-size:10px;
+            }
+
+            .cdr-community-target button {
+              border:0;
+              background:transparent;
+              color:var(--cdr-community-muted);
+              font-size:9px;
+              font-weight:800;
+              cursor:pointer;
+            }
+
+            .cdr-community-section {
+              margin-top:18px;
+            }
+
+            .cdr-community-section-head {
+              min-height:30px;
+              display:flex;
+              align-items:center;
+              justify-content:space-between;
+              gap:10px;
+              margin-bottom:8px;
+            }
+
+            .cdr-community-section-title {
+              display:flex;
+              align-items:center;
+              gap:6px;
+              font-size:15px;
+              font-weight:850;
+            }
+
+            .cdr-community-section-meta {
+              color:var(--cdr-community-faint);
+              font-size:11px;
+            }
+
+            .cdr-community-featured {
+              display:grid;
+              grid-template-columns:repeat(3,minmax(0,1fr));
+              gap:7px;
+            }
+
+            .cdr-community-feature {
+              min-width:0;
+              display:grid;
+              grid-template-columns:54px minmax(0,1fr);
+              gap:9px;
+              padding:9px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-surface);
+            }
+
+            .cdr-community-feature:first-child {
+              border-color:var(--cdr-community-gold);
+            }
+
+            .cdr-community-poster {
+              overflow:hidden;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-soft);
+              cursor:pointer;
+            }
+
+            .cdr-community-poster img {
+              width:100%;
+              height:100%;
+              display:block;
+              object-fit:cover;
+            }
+
+            .cdr-community-feature-poster {
+              width:54px;
+              height:81px;
+            }
+
+            .cdr-community-feature strong {
+              display:block;
+              min-width:0;
+              overflow:hidden;
+              color:var(--cdr-community-text);
+              font-size:13px;
+              line-height:1.3;
+              text-overflow:ellipsis;
+              white-space:nowrap;
+            }
+
+            .cdr-community-rating {
+              display:inline-flex;
+              align-items:center;
+              gap:4px;
+              margin-top:5px;
+              color:var(--cdr-community-gold);
+              font-size:12px;
+              font-weight:850;
+            }
+
+            .cdr-community-feature p {
+              margin:5px 0 7px;
+              color:var(--cdr-community-muted);
+              font-size:11px;
+              line-height:1.48;
+              display:-webkit-box;
+              overflow:hidden;
+              -webkit-box-orient:vertical;
+              -webkit-line-clamp:3;
+            }
+
+            .cdr-community-user-link {
+              min-width:0;
+              display:inline-flex;
+              align-items:center;
+              gap:5px;
+              padding:0;
+              border:0;
+              background:transparent;
+              color:var(--cdr-community-muted);
+              font-size:11px;
+              cursor:pointer;
+            }
+
+            .cdr-community-avatar {
+              overflow:hidden;
+              flex:0 0 auto;
+              display:grid;
+              place-items:center;
+              border-radius:50%;
+              background:linear-gradient(135deg,var(--cdr-community-pink),#8e1740);
+              color:#fff;
+              font-weight:850;
+            }
+
+            .cdr-community-avatar img {
+              width:100%;
+              height:100%;
+              display:block;
+              object-fit:cover;
+            }
+
+            .cdr-community-list {
+              display:grid;
+              gap:7px;
+            }
+
+            .cdr-community-review {
+              display:grid;
+              grid-template-columns:64px minmax(0,1fr) 150px;
+              align-items:start;
+              gap:12px;
+              padding:11px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-surface);
+              transition:border-color .16s ease, background .16s ease;
+            }
+
+            .cdr-community-review:hover {
+              border-color:var(--cdr-community-pink);
+              background:var(--cdr-community-hover);
+            }
+
+            .cdr-community-review.target {
+              border-color:var(--cdr-community-pink);
+              box-shadow:0 0 0 1px var(--cdr-community-pink-glow);
+            }
+
+            .cdr-community-review-poster {
+              width:64px;
+              height:96px;
+            }
+
+            .cdr-community-review-copy {
+              min-width:0;
+              display:flex;
+              flex-direction:column;
+              align-self:stretch;
+              padding:2px 2px 1px;
+            }
+
+            .cdr-community-review-title {
+              display:flex;
+              align-items:flex-start;
+              justify-content:space-between;
+              gap:10px;
+              margin-bottom:4px;
+            }
+
+            .cdr-community-review-title strong {
+              min-width:0;
+              flex:1;
+              font-family:${FONT.display};
+              font-size:17px;
+              line-height:1.18;
+              letter-spacing:-.015em;
+            }
+
+            .cdr-community-film-label {
+              flex:0 0 auto;
+              margin-top:2px;
+              color:var(--cdr-community-pink);
+              font-size:9px;
+              font-weight:850;
+              text-transform:uppercase;
+              letter-spacing:.08em;
+            }
+
+            .cdr-community-review-copy .cdr-community-rating {
+              margin-top:2px;
+              margin-bottom:5px;
+            }
+
+            .cdr-community-review-text {
+              position:relative;
+              margin:3px 0 0;
+              padding-left:11px;
+              color:var(--cdr-community-muted);
+              font-size:13.5px;
+              line-height:1.58;
+              display:-webkit-box;
+              overflow:hidden;
+              -webkit-box-orient:vertical;
+              -webkit-line-clamp:4;
+            }
+
+            .cdr-community-review-text::before {
+              content:'';
+              position:absolute;
+              left:0;
+              top:3px;
+              bottom:3px;
+              width:2px;
+              background:var(--cdr-community-border);
+            }
+
+            .cdr-community-review:hover .cdr-community-review-text::before {
+              background:var(--cdr-community-pink);
+            }
+
+            .cdr-community-review-meta {
+              min-width:0;
+              display:grid;
+              justify-items:end;
+              gap:6px;
+            }
+
+            .cdr-community-follow {
+              min-height:27px;
+              display:inline-flex;
+              align-items:center;
+              justify-content:center;
+              gap:4px;
+              padding:4px 6px;
+              border:1px solid var(--cdr-community-pink);
+              background:var(--cdr-community-pink);
+              color:#fff;
+              font-size:14px;
+              font-weight:850;
+              cursor:pointer;
+            }
+
+            .cdr-community-follow.following {
+              border-color:var(--cdr-community-border);
+              background:var(--cdr-community-soft);
+              color:var(--cdr-community-muted);
+            }
+
+            .cdr-community-social-note {
+              color:var(--cdr-community-faint);
+              font-size:9px;
+              text-align:right;
+              line-height:1.35;
+            }
+
+            .cdr-community-social-actions {
+              display:flex;
+              align-items:center;
+              gap:4px;
+            }
+
+            .cdr-community-social-actions button {
+              min-height:28px;
+              display:inline-flex;
+              align-items:center;
+              gap:4px;
+              padding:4px 6px;
+              border:1px solid var(--cdr-community-border);
+              background:transparent;
+              color:var(--cdr-community-faint);
+              font-size:11px;
+              font-weight:800;
+              cursor:pointer;
+            }
+
+            .cdr-community-social-actions button.liked,
+            .cdr-community-social-actions button.active {
+              border-color:var(--cdr-community-pink);
+              color:var(--cdr-community-pink);
+              background:var(--cdr-community-pink-glow);
+            }
+
+            .cdr-community-time {
+              color:var(--cdr-community-faint);
+              font-size:10px;
+            }
+
+            .cdr-community-comments {
+              grid-column:1 / -1;
+              padding-top:9px;
+              border-top:1px solid var(--cdr-community-border);
+            }
+
+            .cdr-community-comment-list {
+              max-height:320px;
+              overflow-y:auto;
+              display:grid;
+              gap:7px;
+            }
+
+            .cdr-community-comment {
+              display:grid;
+              grid-template-columns:28px minmax(0,1fr);
+              gap:7px;
+            }
+
+            .cdr-community-comment-body {
+              padding:7px 8px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-soft);
+            }
+
+            .cdr-community-comment-head {
+              display:flex;
+              align-items:center;
+              justify-content:space-between;
+              gap:8px;
+              margin-bottom:4px;
+            }
+
+            .cdr-community-comment-head button {
+              padding:0;
+              border:0;
+              background:transparent;
+              color:var(--cdr-community-text);
+              font-size:11px;
+              font-weight:850;
+              cursor:pointer;
+            }
+
+            .cdr-community-comment-head span {
+              color:var(--cdr-community-faint);
+              font-size:9px;
+            }
+
+            .cdr-community-comment-body p {
+              margin:0;
+              color:var(--cdr-community-muted);
+              font-size:12px;
+              line-height:1.5;
+            }
+
+            .cdr-community-comment-actions {
+              display:flex;
+              gap:8px;
+              margin-top:5px;
+            }
+
+            .cdr-community-comment-actions button {
+              padding:0;
+              border:0;
+              background:transparent;
+              color:var(--cdr-community-faint);
+              font-size:10px;
+              font-weight:750;
+              cursor:pointer;
+            }
+
+            .cdr-community-comment-actions button.delete {
+              color:#ef4444;
+            }
+
+            .cdr-community-comment-edit textarea,
+            .cdr-community-compose textarea {
+              width:100%;
+              resize:vertical;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-bg);
+              color:var(--cdr-community-text);
+              outline:0;
+              font:inherit;
+              font-size:11px;
+            }
+
+            .cdr-community-comment-edit textarea {
+              min-height:58px;
+              padding:7px;
+            }
+
+            .cdr-community-comment-edit-actions {
+              display:flex;
+              justify-content:flex-end;
+              gap:5px;
+              margin-top:5px;
+            }
+
+            .cdr-community-comment-edit-actions button {
+              min-height:27px;
+              padding:4px 7px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-surface);
+              color:var(--cdr-community-muted);
+              font-size:7px;
+              font-weight:800;
+              cursor:pointer;
+            }
+
+            .cdr-community-comment-edit-actions button.save {
+              border-color:var(--cdr-community-gold);
+              color:var(--cdr-community-gold);
+            }
+
+            .cdr-community-compose {
+              display:grid;
+              grid-template-columns:minmax(0,1fr) 36px;
+              gap:6px;
+              margin-top:8px;
+            }
+
+            .cdr-community-compose textarea {
+              min-height:38px;
+              max-height:100px;
+              padding:8px;
+            }
+
+            .cdr-community-compose > button {
+              display:grid;
+              place-items:center;
+              border:1px solid var(--cdr-community-pink);
+              background:var(--cdr-community-pink);
+              color:#fff;
+              cursor:pointer;
+            }
+
+            .cdr-community-side {
+              padding-top:116px;
+              display:grid;
+              gap:12px;
+              align-content:start;
+            }
+
+            .cdr-community-side-card {
+              padding:12px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-surface);
+            }
+
+            .cdr-community-side-title {
+              display:flex;
+              align-items:center;
+              gap:6px;
+              margin-bottom:10px;
+              font-size:14px;
+              font-weight:850;
+            }
+
+            .cdr-community-watchlist {
+              display:grid;
+              gap:7px;
+            }
+
+            .cdr-community-watch-item {
+              width:100%;
+              display:grid;
+              grid-template-columns:36px minmax(0,1fr) 14px;
+              gap:7px;
+              align-items:center;
+              padding:0;
+              border:0;
+              background:transparent;
+              color:var(--cdr-community-text);
+              text-align:left;
+              cursor:pointer;
+            }
+
+            .cdr-community-watch-poster {
+              width:36px;
+              height:52px;
+              overflow:hidden;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-soft);
+            }
+
+            .cdr-community-watch-poster img {
+              width:100%;
+              height:100%;
+              object-fit:cover;
+            }
+
+            .cdr-community-watch-copy {
+              min-width:0;
+            }
+
+            .cdr-community-watch-copy strong,
+            .cdr-community-watch-copy span {
+              display:block;
+              overflow:hidden;
+              text-overflow:ellipsis;
+              white-space:nowrap;
+            }
+
+            .cdr-community-watch-copy strong {
+              font-size:11px;
+            }
+
+            .cdr-community-watch-copy span {
+              margin-top:2px;
+              color:var(--cdr-community-faint);
+              font-size:9px;
+            }
+
+            .cdr-community-side-link {
+              margin-top:10px;
+              display:inline-flex;
+              align-items:center;
+              gap:4px;
+              padding:0;
+              border:0;
+              background:transparent;
+              color:var(--cdr-community-gold);
+              font-size:11px;
+              font-weight:850;
+              cursor:pointer;
+            }
+
+            .cdr-community-opinion {
+              background:
+                radial-gradient(circle at 100% 0%,var(--cdr-community-pink-glow),transparent 44%),
+                var(--cdr-community-surface);
+            }
+
+            .cdr-community-opinion h3 {
+              margin:8px 0 5px;
+              font-family:${FONT.display};
+              font-size:18px;
+            }
+
+            .cdr-community-opinion p {
+              margin:0 0 10px;
+              color:var(--cdr-community-muted);
+              font-size:11px;
+              line-height:1.5;
+            }
+
+            .cdr-community-state {
+              min-height:150px;
+              display:grid;
+              place-items:center;
+              padding:18px;
+              border:1px dashed var(--cdr-community-border);
+              background:var(--cdr-community-surface);
+              color:var(--cdr-community-muted);
+              text-align:center;
+              font-size:12px;
+              line-height:1.5;
+            }
+
+            .cdr-community-error {
+              margin-bottom:10px;
+              padding:9px 10px;
+              border:1px solid rgba(239,68,68,.3);
+              background:rgba(239,68,68,.07);
+              color:#ef4444;
+              font-size:9px;
+            }
+
+            .cdr-community-modal-backdrop {
+              position:fixed;
+              inset:0;
+              z-index:10000;
+              display:grid;
+              place-items:center;
+              padding:16px;
+              background:rgba(0,0,0,.72);
+              backdrop-filter:blur(6px);
+            }
+
+            .cdr-community-modal {
+              width:min(560px,100%);
+              max-height:92dvh;
+              overflow-y:auto;
+              padding:16px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-surface);
+              color:var(--cdr-community-text);
+              box-shadow:0 28px 80px rgba(0,0,0,.42);
+            }
+
+            .cdr-community-modal-head {
+              display:flex;
+              align-items:flex-start;
+              justify-content:space-between;
+              gap:16px;
+              margin-bottom:14px;
+            }
+
+            .cdr-community-modal-kicker {
+              color:var(--cdr-community-pink);
+              font-size:8px;
+              font-weight:850;
+              text-transform:uppercase;
+              letter-spacing:.09em;
+            }
+
+            .cdr-community-modal h2 {
+              margin:3px 0 0;
+              font-family:${FONT.display};
+              font-size:24px;
+            }
+
+            .cdr-community-close {
+              width:32px;
+              height:32px;
+              display:grid;
+              place-items:center;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-soft);
+              color:var(--cdr-community-muted);
+              cursor:pointer;
+            }
+
+            .cdr-community-label {
+              display:flex;
+              justify-content:space-between;
+              margin:13px 0 6px;
+              color:var(--cdr-community-muted);
+              font-size:8px;
+              font-weight:850;
+              text-transform:uppercase;
+              letter-spacing:.06em;
+            }
+
+            .cdr-community-modal-search {
+              min-height:42px;
+              display:flex;
+              align-items:center;
+              gap:7px;
+              padding:0 10px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-soft);
+              color:var(--cdr-community-faint);
+            }
+
+            .cdr-community-modal-search input {
+              min-width:0;
+              flex:1;
+              height:40px;
+              border:0;
+              outline:0;
+              background:transparent;
+              color:var(--cdr-community-text);
+              font:inherit;
+              font-size:9px;
+            }
+
+            .cdr-community-results {
+              display:grid;
+              gap:5px;
+              margin-top:6px;
+            }
+
+            .cdr-community-movie-result,
+            .cdr-community-selected {
+              width:100%;
+              display:grid;
+              grid-template-columns:38px minmax(0,1fr) auto;
+              gap:8px;
+              align-items:center;
+              padding:6px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-soft);
+              color:var(--cdr-community-text);
+              text-align:left;
+              cursor:pointer;
+            }
+
+            .cdr-community-result-poster {
+              width:38px;
+              height:56px;
+              overflow:hidden;
+              background:var(--cdr-community-bg);
+            }
+
+            .cdr-community-result-poster img {
+              width:100%;
+              height:100%;
+              object-fit:cover;
+            }
+
+            .cdr-community-result-copy strong,
+            .cdr-community-result-copy span {
+              display:block;
+            }
+
+            .cdr-community-result-copy strong {
+              font-size:9px;
+            }
+
+            .cdr-community-result-copy span {
+              margin-top:2px;
+              color:var(--cdr-community-faint);
+              font-size:7px;
+            }
+
+            .cdr-community-rating-picker {
+              display:grid;
+              grid-template-columns:repeat(6,1fr);
+              gap:4px;
+            }
+
+            .cdr-community-rating-picker button {
+              min-height:32px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-soft);
+              color:var(--cdr-community-muted);
+              font-size:8px;
+              font-weight:750;
+              cursor:pointer;
+            }
+
+            .cdr-community-rating-picker button.selected {
+              border-color:var(--cdr-community-gold);
+              background:var(--cdr-community-gold);
+              color:#120d05;
+            }
+
+            .cdr-community-review-textarea {
+              width:100%;
+              min-height:120px;
+              resize:vertical;
+              padding:10px;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-soft);
+              color:var(--cdr-community-text);
+              outline:0;
+              font:inherit;
+              font-size:9px;
+              line-height:1.55;
+            }
+
+            .cdr-community-visibility {
+              display:flex;
+              align-items:flex-start;
+              gap:8px;
+              margin:11px 0;
+            }
+
+            .cdr-community-check {
+              width:20px;
+              height:20px;
+              flex:0 0 auto;
+              display:grid;
+              place-items:center;
+              padding:0;
+              border:1px solid var(--cdr-community-border);
+              background:var(--cdr-community-soft);
+              color:#120d05;
+              cursor:pointer;
+            }
+
+            .cdr-community-check.checked {
+              border-color:var(--cdr-community-gold);
+              background:var(--cdr-community-gold);
+            }
+
+            .cdr-community-visibility strong,
+            .cdr-community-visibility small {
+              display:block;
+            }
+
+            .cdr-community-visibility strong {
+              font-size:8px;
+            }
+
+            .cdr-community-visibility small {
+              margin-top:2px;
+              color:var(--cdr-community-faint);
+              font-size:7px;
+              line-height:1.4;
+            }
+
+            .cdr-community-publish {
+              width:100%;
+              min-height:38px;
+              border:1px solid var(--cdr-community-pink);
+              background:var(--cdr-community-pink);
+              color:#fff;
+              font-size:12px;
+              font-weight:850;
+              cursor:pointer;
+            }
+
+            .cdr-community-modal-error {
+              margin-top:9px;
+              padding:8px;
+              border:1px solid rgba(239,68,68,.3);
+              background:rgba(239,68,68,.07);
+              color:#ef4444;
+              font-size:8px;
+            }
+
+            @media (max-width:980px) {
+              .cdr-community-wrap {
+                grid-template-columns:1fr;
+              }
+              .cdr-community-side {
+                padding-top:0;
+                grid-template-columns:1fr 1fr;
+              }
+            }
+
+            @media (max-width:760px) {
+              .cdr-community-wrap {
+                padding:16px 12px 80px;
+              }
+              .cdr-community-hero {
+                align-items:flex-start;
+              }
+              .cdr-community-featured {
+                display:flex;
+                overflow-x:auto;
+                scroll-snap-type:x mandatory;
+              }
+              .cdr-community-feature {
+                min-width:260px;
+                scroll-snap-align:start;
+              }
+              .cdr-community-review {
+                grid-template-columns:56px minmax(0,1fr);
+                gap:9px;
+                padding:9px;
+              }
+              .cdr-community-review-poster {
+                width:56px;
+                height:84px;
+              }
+
+              .cdr-community-review-title strong {
+                font-size:16px;
+              }
+
+              .cdr-community-review-text {
+                font-size:12.5px;
+                line-height:1.52;
+                -webkit-line-clamp:5;
+              }
+              .cdr-community-review-meta {
+                grid-column:1 / -1;
+                display:flex;
+                align-items:center;
+                justify-content:flex-end;
+                flex-wrap:wrap;
+              }
+              .cdr-community-side {
+                grid-template-columns:1fr;
+              }
+            }
+
+            @media (max-width:560px) {
+              .cdr-community-wrap {
+                padding:10px 8px 76px;
+              }
+              .cdr-community-hero {
+                display:grid;
+                grid-template-columns:minmax(0,1fr) auto;
+                gap:10px;
+              }
+              .cdr-community-title {
+                font-size:30px;
+              }
+              .cdr-community-lead {
+                font-size:12px;
+                line-height:1.5;
+              }
+              .cdr-community-hero-actions {
+                display:grid;
+                grid-template-columns:36px 36px;
+                gap:5px;
+              }
+              .cdr-community-btn {
+                width:36px;
+                min-height:36px;
+                padding:0;
+                font-size:0;
+              }
+              .cdr-community-toolbar {
+                grid-template-columns:1fr 38px;
+              }
+              .cdr-community-explore {
+                width:38px;
+                padding:0;
+                justify-content:center;
+                font-size:0;
+              }
+              .cdr-community-tabs {
+                gap:14px;
+              }
+              .cdr-community-review {
+                gap:8px;
+                padding:8px;
+              }
+              .cdr-community-review-text {
+                -webkit-line-clamp:4;
+              }
+              .cdr-community-follow {
+                min-height:26px;
+              }
+              .cdr-community-rating-picker {
+                grid-template-columns:repeat(4,1fr);
+              }
+              .cdr-community-modal {
+                padding:12px;
+              }
+            }
+
+            @media (min-width:381px) and (max-width:460px) {
+              .cdr-community-wrap {
+                padding-inline:8px;
+              }
+              .cdr-community-title {
+                font-size:29px;
+              }
+              .cdr-community-review {
+                grid-template-columns:54px minmax(0,1fr);
+              }
+              .cdr-community-review-poster {
+                width:54px;
+                height:81px;
+              }
+            }
+
+            @media (max-width:380px) {
+              .cdr-community-title { font-size:27px; }
+              .cdr-community-review {
+                grid-template-columns:46px minmax(0,1fr);
+              }
+              .cdr-community-review-poster {
+                width:46px;
+                height:69px;
+              }
+            }
+          `}</style>
+
+          <div className="cdr-community-wrap">
+            <section className="cdr-community-main">
+              <header className="cdr-community-hero">
                 <div>
-                  <div className="title-row">
-                    <ChatCircle size={27} weight="fill" color={P.pink} />
-                    <h1>Recensioni</h1>
+                  <div className="cdr-community-kicker">
+                    <ChatCircle size={14} weight="fill" />
+                    Community Cinedate
                   </div>
-                  <p>
-                    Scopri cosa pensa la community e condividi le tue opinioni.
+                  <h1 className="cdr-community-title">Recensioni</h1>
+                  <p className="cdr-community-lead">
+                    Opinioni, gusti e conversazioni intorno ai film.
+                    Scopri cosa pensa la community e condividi il tuo punto
+                    di vista.
                   </p>
                 </div>
 
-                <div className="header-actions">
+                <div className="cdr-community-hero-actions">
                   <button
-                    className="discover-btn"
+                    type="button"
+                    className="cdr-community-btn"
                     onClick={() => router.push('/persone')}
+                    title="Scopri persone"
                   >
-                    <UserPlus size={16} weight="bold" />
+                    <UserPlus size={14} weight="bold" />
                     Scopri persone
                   </button>
 
                   <button
-                    className="write-btn"
+                    type="button"
+                    className="cdr-community-btn primary"
                     onClick={() => setModalOpen(true)}
+                    title="Scrivi recensione"
                   >
-                    <PencilSimple size={16} weight="bold" />
-                    Scrivi una recensione
+                    <PencilSimple size={14} weight="bold" />
+                    Scrivi recensione
                   </button>
                 </div>
               </header>
 
-              <div className="tabs">
-                <button
-                  className={tab === 'tutte' ? 'active' : ''}
-                  onClick={() => setTab('tutte')}
-                >
-                  Tutte
-                </button>
-                <button
-                  className={tab === 'seguiti' ? 'active' : ''}
-                  onClick={() => setTab('seguiti')}
-                >
-                  Seguiti
-                </button>
-                <button
-                  className={tab === 'film' ? 'active' : ''}
-                  onClick={() => setTab('film')}
-                >
-                  Film
-                </button>
-                <button
-                  className={tab === 'serie' ? 'active disabled-tab' : 'disabled-tab'}
-                  onClick={() => setTab('serie')}
-                  title="Il catalogo Serie TV non è ancora collegato"
-                >
-                  Serie TV
-                </button>
-                <button
-                  className={tab === 'animazione' ? 'active' : ''}
-                  onClick={() => setTab('animazione')}
-                >
-                  Animazione
-                </button>
-              </div>
+              <nav className="cdr-community-tabs">
+                {[
+                  ['tutte', 'Tutte'],
+                  ['seguiti', 'Seguiti'],
+                  ['film', 'Film'],
+                  ['serie', 'Serie TV'],
+                  ['animazione', 'Animazione'],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`${tab === key ? 'active' : ''} ${
+                      key === 'serie' ? 'disabled' : ''
+                    }`}
+                    onClick={() => setTab(key as Tab)}
+                    title={
+                      key === 'serie'
+                        ? 'Il catalogo Serie TV non è ancora collegato'
+                        : undefined
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </nav>
 
-              {!targetMovieId && (
-                <button
-                  type="button"
-                  onClick={()=>router.push('/esplora')}
-                  style={{
-                    width:'100%',
-                    marginBottom:10,
-                    border:`1px solid ${P.gold}60`,
-                    background:P.goldGlow,
-                    color:P.text,
-                    padding:'10px 12px',
-                    display:'flex',
-                    alignItems:'center',
-                    justifyContent:'space-between',
-                    gap:10,
-                    fontFamily:FONT,
-                    fontSize:10.5,
-                    fontWeight:850,
-                    cursor:'pointer',
-                  }}
-                >
-                  <span>Scopri un film e leggi cosa ne pensa la community</span>
-                  <ArrowRight size={13} color={P.gold} weight="bold"/>
-                </button>
-              )}
-
-              <div className="toolbar">
-                <div className="search-box">
-                  <MagnifyingGlass size={16} />
+              <div className="cdr-community-toolbar">
+                <div className="cdr-community-search">
+                  <MagnifyingGlass size={15} />
                   <input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Cerca recensioni..."
+                    placeholder="Cerca film, utenti o recensioni..."
                   />
                   {search && (
-                    <button onClick={() => setSearch('')} aria-label="Pulisci">
-                      <X size={13} />
+                    <button
+                      type="button"
+                      onClick={() => setSearch('')}
+                      aria-label="Pulisci ricerca"
+                    >
+                      <X size={12} />
                     </button>
                   )}
                 </div>
 
-                <button className="filter-btn" disabled>
-                  <Funnel size={16} />
-                  Filtri
-                </button>
+                {!targetMovieId && (
+                  <button
+                    type="button"
+                    className="cdr-community-explore"
+                    onClick={() => router.push('/esplora')}
+                    title="Scopri film"
+                  >
+                    Scopri film
+                    <ArrowRight size={12} weight="bold" />
+                  </button>
+                )}
               </div>
 
               {targetMovieId && (
-                <div style={{
-                  border:`1px solid ${P.gold}70`,
-                  background:P.goldGlow,
-                  padding:'11px 12px',
-                  marginBottom:12,
-                  display:'flex',
-                  alignItems:'center',
-                  justifyContent:'space-between',
-                  gap:10,
-                }}>
+                <div className="cdr-community-target">
                   <div>
-                    <div style={{fontSize:9,fontWeight:900,color:P.gold,textTransform:'uppercase',letterSpacing:'.1em'}}>
-                      Recensioni del film
-                    </div>
-                    <div style={{fontSize:11,color:P.text,marginTop:2}}>
-                      {search || 'Film selezionato'}
-                    </div>
+                    <strong>Recensioni del film</strong>
+                    <span>{search || 'Film selezionato'}</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => {
                       setTargetMovieId(null);
                       setSearch('');
-                      router.replace('/recensioni', undefined, { shallow: true });
-                    }}
-                    style={{
-                      border:0,
-                      background:'transparent',
-                      color:P.textMuted,
-                      fontSize:10,
-                      fontWeight:800,
-                      cursor:'pointer',
+                      void router.replace('/recensioni', undefined, {
+                        shallow: true,
+                      });
                     }}
                   >
                     Mostra tutto
@@ -1094,47 +2167,50 @@ export default function RecensioniPage() {
               )}
 
               {feedError && (
-                <div className="error-box">{feedError}</div>
+                <div className="cdr-community-error">{feedError}</div>
               )}
 
               {!loadingFeed && highlightedReviews.length > 0 && (
-                <section className="featured-section">
-                  <div className="section-heading">
-                    <span>
-                      <Star size={17} weight="fill" color={P.gold} />
+                <section className="cdr-community-section">
+                  <div className="cdr-community-section-head">
+                    <div className="cdr-community-section-title">
+                      <Star size={14} weight="fill" color={P.accent} />
                       In evidenza
-                    </span>
+                    </div>
                   </div>
 
-                  <div className="featured-grid">
+                  <div className="cdr-community-featured">
                     {highlightedReviews.map((review) => (
                       <article
                         key={`featured-${review.entry_id}`}
-                        className="featured-card"
+                        className="cdr-community-feature"
                       >
                         <div
-                          className="poster poster-small"
+                          className="cdr-community-poster cdr-community-feature-poster"
                           onClick={() =>
                             review.provider === 'tmdb' &&
-                            router.push(`/film/${review.provider_movie_id}`)
+                            router.push(
+                              `/film/${review.provider_movie_id}`
+                            )
                           }
                         >
                           {review.cover ? (
                             <img src={review.cover} alt={review.title} />
                           ) : (
-                            <FilmSlate size={22} color={P.textFaint} weight="duotone" />
+                            <FilmSlate
+                              size={20}
+                              color={P.textFaint}
+                              weight="duotone"
+                            />
                           )}
                         </div>
 
-                        <div className="featured-body">
-                          <div className="movie-title-line">
-                            <strong>{review.title}</strong>
-                            <span className="type-chip">Film</span>
-                          </div>
+                        <div>
+                          <strong>{review.title}</strong>
 
                           {review.rating !== null && (
-                            <div className="rating-line">
-                              <Star size={14} weight="fill" />
+                            <div className="cdr-community-rating">
+                              <Star size={11} weight="fill" />
                               {Number(review.rating).toFixed(1)}
                             </div>
                           )}
@@ -1143,19 +2219,22 @@ export default function RecensioniPage() {
 
                           <button
                             type="button"
-                            className="reviewer-line reviewer-link"
-                            onClick={() => {
-                              if (review.username) {
-                                router.push(`/utente/${encodeURIComponent(review.username)}`);
-                              }
-                            }}
+                            className="cdr-community-user-link"
+                            onClick={() =>
+                              review.username &&
+                              router.push(
+                                `/utente/${encodeURIComponent(
+                                  review.username
+                                )}`
+                              )
+                            }
                           >
                             <Avatar
                               username={review.username}
                               url={review.avatar_url}
-                              size={24}
+                              size={22}
                             />
-                            <span>@{review.username || 'utente'}</span>
+                            @{review.username || 'utente'}
                           </button>
                         </div>
                       </article>
@@ -1164,225 +2243,170 @@ export default function RecensioniPage() {
                 </section>
               )}
 
-              <section className="recent-section">
-                <div className="section-heading">
-                  <span>
-                    <ChatCircle size={17} weight="fill" color={P.gold} />
+              <section className="cdr-community-section">
+                <div className="cdr-community-section-head">
+                  <div className="cdr-community-section-title">
+                    <ChatCircle
+                      size={14}
+                      weight="fill"
+                      color={P.primary}
+                    />
                     Recensioni recenti
-                  </span>
-                  <span className="sort-label">Più recenti⌄</span>
+                  </div>
+                  <div className="cdr-community-section-meta">
+                    {filteredReviews.length}{' '}
+                    {filteredReviews.length === 1
+                      ? 'recensione'
+                      : 'recensioni'}
+                  </div>
                 </div>
 
                 {loadingFeed ? (
-                  <div className="empty-box">Caricamento recensioni...</div>
+                  <div className="cdr-community-state">
+                    Caricamento recensioni...
+                  </div>
                 ) : filteredReviews.length === 0 ? (
-                  <div className="empty-box">
-                    {tab === 'serie' ? (
-                      'Le Serie TV saranno disponibili quando collegheremo il catalogo TV.'
-                    ) : tab === 'seguiti' ? (
-                      <>
-                        <span>
-                          Non ci sono ancora recensioni pubbliche delle persone che segui.
-                        </span>
-                        <button
-                          className="empty-discover-btn"
-                          onClick={() => router.push('/persone')}
-                        >
-                          <UserPlus size={14} weight="bold" />
-                          Scopri persone
-                        </button>
-                      </>
-                    ) : (
-                      'Non ci sono ancora recensioni in questa sezione.'
-                    )}
+                  <div className="cdr-community-state">
+                    {tab === 'serie'
+                      ? 'Le Serie TV saranno disponibili quando collegheremo il catalogo TV.'
+                      : tab === 'seguiti'
+                        ? 'Non ci sono ancora recensioni pubbliche delle persone che segui.'
+                        : 'Non ci sono recensioni in questa sezione.'}
                   </div>
                 ) : (
-                  <div className="review-list">
+                  <div className="cdr-community-list">
                     {filteredReviews.map((review) => {
                       const liked = likedEntries.has(review.entry_id);
+                      const following = followingUserIds.has(
+                        review.user_id
+                      );
+                      const social = authorSocial[review.user_id];
 
                       return (
                         <article
                           id={`review-${review.entry_id}`}
-                          className={`review-row ${
+                          key={review.entry_id}
+                          className={`cdr-community-review ${
                             router.query.review === review.entry_id
-                              ? 'review-row-target'
+                              ? 'target'
                               : ''
                           }`}
-                          key={review.entry_id}
                         >
                           <div
-                            className="poster review-poster"
+                            className="cdr-community-poster cdr-community-review-poster"
                             onClick={() =>
                               review.provider === 'tmdb' &&
-                              router.push(`/film/${review.provider_movie_id}`)
+                              router.push(
+                                `/film/${review.provider_movie_id}`
+                              )
                             }
                           >
                             {review.cover ? (
-                              <img src={review.cover} alt={review.title} />
+                              <img
+                                src={review.cover}
+                                alt={review.title}
+                              />
                             ) : (
-                              <FilmSlate size={22} color={P.textFaint} weight="duotone" />
+                              <FilmSlate
+                                size={20}
+                                color={P.textFaint}
+                                weight="duotone"
+                              />
                             )}
                           </div>
 
-                          <div className="review-copy">
-                            <div className="review-top">
+                          <div className="cdr-community-review-copy">
+                            <div className="cdr-community-review-title">
                               <strong>{review.title}</strong>
-                              <span className="type-chip">Film</span>
+                              <span className="cdr-community-film-label">
+                                Film
+                              </span>
                             </div>
 
-                            <div className="review-mid">
-                              {review.rating !== null && (
-                                <span className="rating-line">
-                                  <Star size={13} weight="fill" />
-                                  {Number(review.rating).toFixed(1)}
-                                </span>
-                              )}
-                              <p>{review.review_text}</p>
-                            </div>
+                            {review.rating !== null && (
+                              <div className="cdr-community-rating">
+                                <Star size={11} weight="fill" />
+                                {Number(review.rating).toFixed(1)}
+                              </div>
+                            )}
+
+                            <p className="cdr-community-review-text">
+                              {review.review_text}
+                            </p>
                           </div>
 
-                          <div className="review-meta">
+                          <div className="cdr-community-review-meta">
                             <button
                               type="button"
-                              className="review-user reviewer-link"
-                              onClick={() => {
-                                if (review.username) {
-                                  router.push(`/utente/${encodeURIComponent(review.username)}`);
-                                }
-                              }}
+                              className="cdr-community-user-link"
+                              onClick={() =>
+                                review.username &&
+                                router.push(
+                                  `/utente/${encodeURIComponent(
+                                    review.username
+                                  )}`
+                                )
+                              }
                             >
                               <Avatar
                                 username={review.username}
                                 url={review.avatar_url}
-                                size={25}
+                                size={24}
                               />
-                              <span>@{review.username || 'utente'}</span>
+                              @{review.username || 'utente'}
                             </button>
 
-                            {currentUser?.id !== review.user_id && (
+                            {currentUser.id !== review.user_id && (
                               <button
                                 type="button"
-                                onClick={() => void toggleFollowAuthor(review)}
-                                disabled={followBusyUserId === review.user_id}
-                                style={{
-                                  border: `1px solid ${
-                                    followingUserIds.has(review.user_id)
-                                      ? P.border
-                                      : P.pink
-                                  }`,
-                                  background: followingUserIds.has(review.user_id)
-                                    ? P.bgSoft
-                                    : P.pinkGlow,
-                                  color: followingUserIds.has(review.user_id)
-                                    ? P.textMuted
-                                    : P.pink,
-                                  padding: '4px 7px',
-                                  cursor:
-                                    followBusyUserId === review.user_id
-                                      ? 'wait'
-                                      : 'pointer',
-                                  fontFamily: FONT,
-                                  fontSize: 8,
-                                  fontWeight: 850,
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                }}
+                                className={`cdr-community-follow ${
+                                  following ? 'following' : ''
+                                }`}
+                                disabled={
+                                  followBusyUserId === review.user_id
+                                }
+                                onClick={() =>
+                                  void toggleFollowAuthor(review)
+                                }
                               >
-                                {followingUserIds.has(review.user_id) ? (
+                                {following ? (
                                   <UserCheck size={10} weight="fill" />
                                 ) : (
                                   <UserPlus size={10} weight="bold" />
                                 )}
-                                {followingUserIds.has(review.user_id)
-                                  ? 'Segui già'
-                                  : 'Segui'}
+                                {following ? 'Segui già' : 'Segui'}
                               </button>
                             )}
 
-                            {currentUser?.id !== review.user_id && (
-                              <div
-                                style={{
-                                  display: 'flex',
-                                  gap: 5,
-                                  flexWrap: 'wrap',
-                                  alignItems: 'center',
-                                }}
-                              >
-                                {followingUserIds.has(review.user_id) && (
-                                  <span
-                                    style={{
-                                      border: `1px solid ${P.gold}55`,
-                                      background: P.goldGlow,
-                                      color: P.gold,
-                                      padding: '3px 6px',
-                                      fontSize: 8,
-                                      fontWeight: 850,
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      gap: 3,
-                                    }}
-                                  >
-                                    <UserCheck size={10} weight="fill" />
-                                    Segui
-                                  </span>
-                                )}
+                            {currentUser.id !== review.user_id &&
+                              (social?.compatibility_score ?? 0) > 0 && (
+                                <div className="cdr-community-social-note">
+                                  Affinità {social.compatibility_score}
+                                  {social.follows_you ? ' · Ti segue' : ''}
+                                </div>
+                              )}
 
-                                {authorSocial[review.user_id]?.follows_you && (
-                                  <span
-                                    style={{
-                                      border: `1px solid ${P.pink}55`,
-                                      background: P.pinkGlow,
-                                      color: P.pink,
-                                      padding: '3px 6px',
-                                      fontSize: 8,
-                                      fontWeight: 850,
-                                    }}
-                                  >
-                                    Ti segue
-                                  </span>
-                                )}
-
-                                {(authorSocial[review.user_id]?.compatibility_score ?? 0) > 0 && (
-                                  <span
-                                    title={`${authorSocial[review.user_id]?.shared_favorites_count ?? 0} preferiti, ${authorSocial[review.user_id]?.shared_high_ratings_count ?? 0} voti alti e ${authorSocial[review.user_id]?.shared_genres_count ?? 0} generi in comune`}
-                                    style={{
-                                      border: `1px solid ${P.border}`,
-                                      background: P.bgSoft,
-                                      color: P.textMuted,
-                                      padding: '3px 6px',
-                                      fontSize: 8,
-                                      fontWeight: 800,
-                                    }}
-                                  >
-                                    Affinità {authorSocial[review.user_id]?.compatibility_score}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-
-                            <span className="time">
+                            <span className="cdr-community-time">
                               {formatRelativeDate(
                                 review.review_updated_at ||
                                   review.created_at
                               )}
                             </span>
 
-                            <div className="review-social-actions">
+                            <div className="cdr-community-social-actions">
                               <button
-                                className={`comment-btn ${
+                                type="button"
+                                className={
                                   openCommentsEntry === review.entry_id
                                     ? 'active'
                                     : ''
-                                }`}
+                                }
                                 onClick={() =>
                                   void toggleComments(review.entry_id)
                                 }
-                                aria-label="Apri commenti"
                               >
                                 <ChatCircle
-                                  size={16}
+                                  size={13}
                                   weight={
                                     openCommentsEntry === review.entry_id
                                       ? 'fill'
@@ -1393,14 +2417,12 @@ export default function RecensioniPage() {
                               </button>
 
                               <button
-                                className={`like-btn ${liked ? 'liked' : ''}`}
+                                type="button"
+                                className={liked ? 'liked' : ''}
                                 onClick={() => void toggleLike(review)}
-                                aria-label={
-                                  liked ? 'Rimuovi like' : 'Metti like'
-                                }
                               >
                                 <Heart
-                                  size={16}
+                                  size={13}
                                   weight={liked ? 'fill' : 'regular'}
                                 />
                                 {review.likes_count}
@@ -1409,46 +2431,49 @@ export default function RecensioniPage() {
                           </div>
 
                           {openCommentsEntry === review.entry_id && (
-                            <div className="comments-panel">
+                            <div className="cdr-community-comments">
                               {commentsLoadingEntry === review.entry_id ? (
-                                <div className="comments-loading">
+                                <div className="cdr-community-state">
                                   Caricamento commenti...
                                 </div>
                               ) : (
                                 <>
-                                  <div className="comments-list">
-                                    {(commentsByEntry[review.entry_id] ?? [])
-                                      .length === 0 ? (
-                                      <div className="comments-empty">
-                                        Nessun commento. Puoi essere il primo.
+                                  <div className="cdr-community-comment-list">
+                                    {(
+                                      commentsByEntry[review.entry_id] ?? []
+                                    ).length === 0 ? (
+                                      <div className="cdr-community-state">
+                                        Nessun commento. Puoi essere il
+                                        primo.
                                       </div>
                                     ) : (
                                       (
-                                        commentsByEntry[review.entry_id] ?? []
+                                        commentsByEntry[review.entry_id] ??
+                                        []
                                       ).map((comment) => {
                                         const isMine =
-                                          currentUser?.id === comment.user_id;
+                                          currentUser.id ===
+                                          comment.user_id;
                                         const isEditing =
                                           editingCommentId ===
                                           comment.comment_id;
 
                                         return (
                                           <div
-                                            className="comment-row"
+                                            className="cdr-community-comment"
                                             key={comment.comment_id}
                                           >
                                             <button
                                               type="button"
-                                              className="comment-avatar"
-                                              onClick={() => {
-                                                if (comment.username) {
-                                                  router.push(
-                                                    `/utente/${encodeURIComponent(
-                                                      comment.username
-                                                    )}`
-                                                  );
-                                                }
-                                              }}
+                                              className="cdr-community-user-link"
+                                              onClick={() =>
+                                                comment.username &&
+                                                router.push(
+                                                  `/utente/${encodeURIComponent(
+                                                    comment.username
+                                                  )}`
+                                                )
+                                              }
                                             >
                                               <Avatar
                                                 username={comment.username}
@@ -1457,24 +2482,23 @@ export default function RecensioniPage() {
                                               />
                                             </button>
 
-                                            <div className="comment-body">
-                                              <div className="comment-head">
+                                            <div className="cdr-community-comment-body">
+                                              <div className="cdr-community-comment-head">
                                                 <button
                                                   type="button"
-                                                  className="comment-username"
-                                                  onClick={() => {
-                                                    if (comment.username) {
-                                                      router.push(
-                                                        `/utente/${encodeURIComponent(
-                                                          comment.username
-                                                        )}`
-                                                      );
-                                                    }
-                                                  }}
+                                                  onClick={() =>
+                                                    comment.username &&
+                                                    router.push(
+                                                      `/utente/${encodeURIComponent(
+                                                        comment.username
+                                                      )}`
+                                                    )
+                                                  }
                                                 >
-                                                  @{comment.username || 'utente'}
+                                                  @
+                                                  {comment.username ||
+                                                    'utente'}
                                                 </button>
-
                                                 <span>
                                                   {formatRelativeDate(
                                                     comment.updated_at ||
@@ -1484,9 +2508,11 @@ export default function RecensioniPage() {
                                               </div>
 
                                               {isEditing ? (
-                                                <div className="comment-edit">
+                                                <div className="cdr-community-comment-edit">
                                                   <textarea
-                                                    value={editingCommentText}
+                                                    value={
+                                                      editingCommentText
+                                                    }
                                                     maxLength={1000}
                                                     onChange={(event) =>
                                                       setEditingCommentText(
@@ -1494,8 +2520,7 @@ export default function RecensioniPage() {
                                                       )
                                                     }
                                                   />
-
-                                                  <div>
+                                                  <div className="cdr-community-comment-edit-actions">
                                                     <button
                                                       type="button"
                                                       onClick={() => {
@@ -1509,10 +2534,9 @@ export default function RecensioniPage() {
                                                     >
                                                       Annulla
                                                     </button>
-
                                                     <button
                                                       type="button"
-                                                      className="comment-save"
+                                                      className="save"
                                                       disabled={
                                                         commentSaving ||
                                                         !editingCommentText.trim()
@@ -1533,7 +2557,7 @@ export default function RecensioniPage() {
                                               )}
 
                                               {isMine && !isEditing && (
-                                                <div className="comment-own-actions">
+                                                <div className="cdr-community-comment-actions">
                                                   <button
                                                     type="button"
                                                     onClick={() => {
@@ -1547,10 +2571,9 @@ export default function RecensioniPage() {
                                                   >
                                                     Modifica
                                                   </button>
-
                                                   <button
                                                     type="button"
-                                                    className="comment-delete"
+                                                    className="delete"
                                                     onClick={() =>
                                                       void deleteComment(
                                                         review.entry_id,
@@ -1558,10 +2581,7 @@ export default function RecensioniPage() {
                                                       )
                                                     }
                                                   >
-                                                    <Trash
-                                                      size={11}
-                                                      weight="bold"
-                                                    />
+                                                    <Trash size={9} />
                                                     Elimina
                                                   </button>
                                                 </div>
@@ -1573,7 +2593,7 @@ export default function RecensioniPage() {
                                     )}
                                   </div>
 
-                                  <div className="comment-compose">
+                                  <div className="cdr-community-compose">
                                     <textarea
                                       value={commentDraft}
                                       maxLength={1000}
@@ -1587,11 +2607,12 @@ export default function RecensioniPage() {
                                           !event.shiftKey
                                         ) {
                                           event.preventDefault();
-                                          void submitComment(review.entry_id);
+                                          void submitComment(
+                                            review.entry_id
+                                          );
                                         }
                                       }}
                                     />
-
                                     <button
                                       type="button"
                                       disabled={
@@ -1604,7 +2625,7 @@ export default function RecensioniPage() {
                                       aria-label="Pubblica commento"
                                     >
                                       <PaperPlaneTilt
-                                        size={16}
+                                        size={14}
                                         weight="fill"
                                       />
                                     </button>
@@ -1621,56 +2642,65 @@ export default function RecensioniPage() {
               </section>
             </section>
 
-            <aside className="reviews-side">
-              <section className="watchlist-card">
-                <div className="side-title">
-                  <BookmarkSimple size={18} weight="fill" color={P.gold} />
+            <aside className="cdr-community-side">
+              <section className="cdr-community-side-card">
+                <div className="cdr-community-side-title">
+                  <BookmarkSimple
+                    size={15}
+                    weight="fill"
+                    color={P.accent}
+                  />
                   I tuoi film da vedere
                 </div>
 
                 {watchlist.length === 0 ? (
-                  <div className="watchlist-empty">
+                  <div className="cdr-community-state">
                     La tua watchlist è ancora vuota.
                   </div>
                 ) : (
-                  <div className="watchlist-items">
+                  <div className="cdr-community-watchlist">
                     {watchlist.slice(0, 6).map((row) => {
                       const movie = getCatalogMovie(row);
                       if (!movie) return null;
 
                       return (
                         <button
-                          className="watchlist-item"
+                          type="button"
+                          className="cdr-community-watch-item"
                           key={row.id}
-                          onClick={() => {
-                            if (movie.provider === 'tmdb') {
-                              router.push(
-                                `/film/${movie.provider_movie_id}`
-                              );
-                            }
-                          }}
+                          onClick={() =>
+                            movie.provider === 'tmdb' &&
+                            router.push(
+                              `/film/${movie.provider_movie_id}`
+                            )
+                          }
                         >
-                          <div className="watchlist-poster">
+                          <div className="cdr-community-watch-poster">
                             {movie.cover ? (
-                              <img src={movie.cover} alt={movie.title} />
+                              <img
+                                src={movie.cover}
+                                alt={movie.title}
+                              />
                             ) : (
-                              <FilmSlate size={22} color={P.textFaint} weight="duotone" />
+                              <FilmSlate
+                                size={18}
+                                color={P.textFaint}
+                                weight="duotone"
+                              />
                             )}
                           </div>
-
-                          <div className="watchlist-copy">
+                          <div className="cdr-community-watch-copy">
                             <strong>{movie.title}</strong>
                             <span>
                               {[movie.year, movie.genre]
                                 .filter(Boolean)
-                                .join(', ')}
+                                .join(' · ')}
                             </span>
                           </div>
-
                           <BookmarkSimple
-                            size={17}
+                            size={13}
                             weight="fill"
-                            color={P.gold}
+                            color={P.accent}
                           />
                         </button>
                       );
@@ -1679,22 +2709,30 @@ export default function RecensioniPage() {
                 )}
 
                 <button
-                  className="view-all"
-                  onClick={() => router.push('/libreria?tab=watchlist')}
+                  type="button"
+                  className="cdr-community-side-link"
+                  onClick={() =>
+                    router.push('/libreria?tab=watchlist')
+                  }
                 >
                   Vedi tutti
-                  <CaretRight size={14} />
+                  <CaretRight size={11} />
                 </button>
               </section>
 
-              <section className="opinion-card">
-                <Star size={22} weight="fill" />
-                <h3>La tua opinione conta!</h3>
+              <section className="cdr-community-side-card cdr-community-opinion">
+                <Star size={18} weight="fill" color={P.accent} />
+                <h3>La tua opinione conta</h3>
                 <p>
-                  Scrivi una recensione e aiuta altri utenti a scegliere cosa
-                  guardare.
+                  Condividi cosa hai pensato di un film e aiuta la
+                  community a scegliere cosa guardare.
                 </p>
-                <button onClick={() => setModalOpen(true)}>
+                <button
+                  type="button"
+                  className="cdr-community-btn primary"
+                  onClick={() => setModalOpen(true)}
+                >
+                  <PencilSimple size={12} />
                   Scrivi ora
                 </button>
               </section>
@@ -1704,40 +2742,39 @@ export default function RecensioniPage() {
       </AppShell>
 
       {modalOpen && (
-        <div className="modal-backdrop" onMouseDown={closeModal}>
+        <div
+          className="cdr-community-modal-backdrop"
+          style={vars}
+          onMouseDown={closeModal}
+        >
           <div
-            className="review-modal"
+            className="cdr-community-modal"
             onMouseDown={(event) => event.stopPropagation()}
-            style={
-              {
-                '--r-bg': P.bg,
-                '--r-bg-soft': P.bgSoft,
-                '--r-card': P.card,
-                '--r-card-hover': P.cardHover,
-                '--r-border': P.border,
-                '--r-gold': P.gold,
-                '--r-pink': P.pink,
-                '--r-text': P.text,
-                '--r-muted': P.textMuted,
-                '--r-faint': P.textFaint,
-              } as React.CSSProperties
-            }
           >
-            <div className="modal-head">
+            <div className="cdr-community-modal-head">
               <div>
-                <span>La tua recensione</span>
+                <div className="cdr-community-modal-kicker">
+                  La tua recensione
+                </div>
                 <h2>Scrivi cosa ne pensi</h2>
               </div>
-              <button onClick={closeModal} disabled={savingReview}>
-                <X size={19} />
+              <button
+                type="button"
+                className="cdr-community-close"
+                disabled={savingReview}
+                onClick={closeModal}
+              >
+                <X size={16} />
               </button>
             </div>
 
             {!selectedMovie ? (
               <>
-                <label className="field-label">Cerca il film</label>
-                <div className="modal-search">
-                  <MagnifyingGlass size={17} />
+                <label className="cdr-community-label">
+                  Cerca il film
+                </label>
+                <div className="cdr-community-modal-search">
+                  <MagnifyingGlass size={14} />
                   <input
                     autoFocus
                     value={movieQuery}
@@ -1749,36 +2786,43 @@ export default function RecensioniPage() {
                   />
                 </div>
 
-                <div className="movie-results">
+                <div className="cdr-community-results">
                   {movieSearching && (
-                    <div className="result-message">Ricerca...</div>
+                    <div className="cdr-community-state">
+                      Ricerca...
+                    </div>
                   )}
 
                   {!movieSearching &&
                     movieQuery.trim().length >= 2 &&
                     movieResults.length === 0 && (
-                      <div className="result-message">
+                      <div className="cdr-community-state">
                         Nessun film trovato.
                       </div>
                     )}
 
                   {movieResults.map((movie) => (
                     <button
+                      type="button"
                       key={movie.id}
-                      className="movie-result"
+                      className="cdr-community-movie-result"
                       onClick={() => {
                         setSelectedMovie(movie);
                         setModalError('');
                       }}
                     >
-                      <div className="result-poster">
+                      <div className="cdr-community-result-poster">
                         {movie.cover ? (
                           <img src={movie.cover} alt={movie.title} />
                         ) : (
-                          <FilmSlate size={22} color={P.textFaint} weight="duotone" />
+                          <FilmSlate
+                            size={18}
+                            color={P.textFaint}
+                            weight="duotone"
+                          />
                         )}
                       </div>
-                      <div>
+                      <div className="cdr-community-result-copy">
                         <strong>{movie.title}</strong>
                         <span>
                           {[movie.year || null, movie.genre]
@@ -1786,7 +2830,7 @@ export default function RecensioniPage() {
                             .join(' · ')}
                         </span>
                       </div>
-                      <CaretRight size={16} />
+                      <CaretRight size={14} />
                     </button>
                   ))}
                 </div>
@@ -1794,37 +2838,52 @@ export default function RecensioniPage() {
             ) : (
               <>
                 <button
-                  className="selected-movie"
+                  type="button"
+                  className="cdr-community-selected"
                   onClick={() => setSelectedMovie(null)}
                 >
-                  <div className="result-poster">
+                  <div className="cdr-community-result-poster">
                     {selectedMovie.cover ? (
                       <img
                         src={selectedMovie.cover}
                         alt={selectedMovie.title}
                       />
                     ) : (
-                      <FilmSlate size={22} color={P.textFaint} weight="duotone" />
+                      <FilmSlate
+                        size={18}
+                        color={P.textFaint}
+                        weight="duotone"
+                      />
                     )}
                   </div>
-                  <div>
-                    <span>Film scelto</span>
+                  <div className="cdr-community-result-copy">
                     <strong>{selectedMovie.title}</strong>
-                    <small>
+                    <span>
                       {[selectedMovie.year || null, selectedMovie.genre]
                         .filter(Boolean)
                         .join(' · ')}
-                    </small>
+                    </span>
                   </div>
-                  <span className="change-film">Cambia</span>
+                  <span
+                    style={{
+                      color: P.accent,
+                      fontSize: 8,
+                      fontWeight: 850,
+                    }}
+                  >
+                    Cambia
+                  </span>
                 </button>
 
-                <label className="field-label">Il tuo voto</label>
-                <div className="rating-picker">
+                <label className="cdr-community-label">
+                  Il tuo voto
+                </label>
+                <div className="cdr-community-rating-picker">
                   {[0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map(
                     (value) => (
                       <button
                         key={value}
+                        type="button"
                         className={rating === value ? 'selected' : ''}
                         onClick={() => setRating(value)}
                       >
@@ -1833,47 +2892,57 @@ export default function RecensioniPage() {
                     )
                   )}
                   <button
-                    className={rating === null ? 'selected clear-rating' : 'clear-rating'}
+                    type="button"
+                    className={rating === null ? 'selected' : ''}
                     onClick={() => setRating(null)}
                   >
                     —
                   </button>
                 </div>
 
-                <label className="field-label">
-                  Recensione
+                <label className="cdr-community-label">
+                  <span>Recensione</span>
                   <span>{reviewText.length}/3000</span>
                 </label>
                 <textarea
+                  className="cdr-community-review-textarea"
                   value={reviewText}
                   onChange={(event) =>
                     setReviewText(event.target.value.slice(0, 3000))
                   }
                   placeholder="Cosa ti è piaciuto? Cosa non ti ha convinto?"
-                  rows={6}
                 />
 
-                <label className="visibility-toggle">
+                <div className="cdr-community-visibility">
                   <button
                     type="button"
-                    className={publishRating ? 'checked' : ''}
-                    onClick={() => setPublishRating((value) => !value)}
+                    className={`cdr-community-check ${
+                      publishRating ? 'checked' : ''
+                    }`}
+                    onClick={() =>
+                      setPublishRating((value) => !value)
+                    }
                   >
-                    {publishRating && <Check size={13} weight="bold" />}
+                    {publishRating && (
+                      <Check size={11} weight="bold" />
+                    )}
                   </button>
-                  <span>
-                    <strong>Mostra pubblicamente anche il voto</strong>
+                  <div>
+                    <strong>
+                      Mostra pubblicamente anche il voto
+                    </strong>
                     <small>
-                      La recensione sarà pubblica; watchlist, preferiti e data
-                      di visione restano privati.
+                      La recensione sarà pubblica; watchlist,
+                      preferiti e data di visione restano privati.
                     </small>
-                  </span>
-                </label>
+                  </div>
+                </div>
 
                 <button
-                  className="publish-btn"
-                  onClick={() => void submitReview()}
+                  type="button"
+                  className="cdr-community-publish"
                   disabled={savingReview}
+                  onClick={() => void submitReview()}
                 >
                   {savingReview
                     ? 'Pubblicazione...'
@@ -1883,1135 +2952,13 @@ export default function RecensioniPage() {
             )}
 
             {modalError && (
-              <div className="modal-error">{modalError}</div>
+              <div className="cdr-community-modal-error">
+                {modalError}
+              </div>
             )}
           </div>
         </div>
       )}
-
-      <style jsx global>{`
-        .reviews-page * {
-          box-sizing: border-box;
-        }
-
-        .reviews-page button,
-        .review-modal button,
-        .review-modal input,
-        .review-modal textarea {
-          font-family: ${FONT};
-        }
-
-        .reviews-wrap {
-          width: 100%;
-          max-width: 1180px;
-          margin: 0 auto;
-          padding: 30px 24px 50px;
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) 250px;
-          gap: 26px;
-        }
-
-        .reviews-main {
-          min-width: 0;
-        }
-
-        .page-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 24px;
-          margin-bottom: 22px;
-        }
-
-        .title-row {
-          display: flex;
-          align-items: center;
-          gap: 11px;
-        }
-
-        .page-header h1 {
-          margin: 0;
-          font-family: ${FONT_DISPLAY};
-          font-size: 30px;
-          line-height: 1;
-          color: var(--r-text);
-        }
-
-        .page-header p {
-          margin: 8px 0 0;
-          color: var(--r-muted);
-          font-size: 12px;
-        }
-
-        .header-actions {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex-wrap: wrap;
-          justify-content: flex-end;
-        }
-
-        .discover-btn {
-          border: 1px solid var(--r-border);
-          background: var(--r-card);
-          color: var(--r-text);
-          font-weight: 800;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 11px 14px;
-        }
-
-        .discover-btn:hover {
-          border-color: var(--r-pink);
-          color: var(--r-pink);
-          background: var(--r-pink-glow);
-        }
-
-        .write-btn,
-        .opinion-card button,
-        .publish-btn {
-          border: 1px solid rgba(245,185,47,.65);
-          background: linear-gradient(180deg,var(--r-gold),#e99b16);
-          color: #120d05;
-          font-weight: 800;
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          padding: 11px 16px;
-          box-shadow: 0 5px 22px rgba(245,185,47,.13);
-        }
-
-        .tabs {
-          display: flex;
-          gap: 24px;
-          border-bottom: 1px solid var(--r-border);
-          margin-bottom: 18px;
-        }
-
-        .tabs button {
-          background: transparent;
-          color: var(--r-muted);
-          border: 0;
-          border-bottom: 2px solid transparent;
-          padding: 0 5px 10px;
-          cursor: pointer;
-          font-size: 12px;
-        }
-
-        .tabs button.active {
-          color: var(--r-pink);
-          border-bottom-color: var(--r-pink);
-          font-weight: 700;
-        }
-
-        .tabs .disabled-tab {
-          opacity: .55;
-        }
-
-        .toolbar {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 26px;
-        }
-
-        .search-box {
-          width: min(430px,100%);
-          height: 40px;
-          border: 1px solid var(--r-border);
-          background: var(--r-bg-soft);
-          display: flex;
-          align-items: center;
-          padding: 0 12px;
-          color: var(--r-faint);
-        }
-
-        .search-box input {
-          flex: 1;
-          min-width: 0;
-          height: 100%;
-          border: 0;
-          outline: 0;
-          background: transparent;
-          color: var(--r-text);
-          padding: 0 9px;
-          font-size: 12px;
-        }
-
-        .search-box button {
-          border: 0;
-          background: transparent;
-          color: var(--r-faint);
-          cursor: pointer;
-        }
-
-        .filter-btn {
-          height: 40px;
-          border: 1px solid var(--r-border);
-          background: var(--r-bg-soft);
-          color: var(--r-muted);
-          padding: 0 14px;
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          opacity: .55;
-        }
-
-        .section-heading {
-          min-height: 34px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 10px;
-        }
-
-        .section-heading > span:first-child {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
-          color: var(--r-text);
-          font-weight: 800;
-          font-size: 13px;
-        }
-
-        .sort-label {
-          color: var(--r-faint);
-          font-size: 10px;
-        }
-
-        .featured-section {
-          margin-bottom: 30px;
-        }
-
-        .featured-grid {
-          display: grid;
-          grid-template-columns: repeat(3,minmax(0,1fr));
-          gap: 12px;
-        }
-
-        .featured-card {
-          border: 1px solid var(--r-border);
-          background: linear-gradient(145deg,var(--r-card),var(--r-bg-soft));
-          padding: 11px;
-          display: grid;
-          grid-template-columns: 58px minmax(0,1fr);
-          gap: 12px;
-          min-height: 148px;
-        }
-
-        .featured-card:first-child {
-          border-color: rgba(245,185,47,.48);
-          box-shadow: inset 0 0 35px rgba(245,185,47,.035);
-        }
-
-        .poster {
-          background: var(--r-card-hover);
-          border: 1px solid var(--r-border);
-          overflow: hidden;
-          display: grid;
-          place-items: center;
-          color: var(--r-faint);
-          cursor: pointer;
-        }
-
-        .poster img,
-        .watchlist-poster img,
-        .result-poster img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .poster-small {
-          width: 58px;
-          height: 88px;
-        }
-
-        .featured-body {
-          min-width: 0;
-        }
-
-        .movie-title-line,
-        .review-top {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 8px;
-        }
-
-        .movie-title-line strong,
-        .review-top strong {
-          color: var(--r-text);
-          font-size: 12px;
-          line-height: 1.35;
-        }
-
-        .type-chip {
-          border: 1px solid rgba(237,61,115,.55);
-          color: var(--r-pink);
-          padding: 2px 5px;
-          font-size: 8px;
-          white-space: nowrap;
-        }
-
-        .rating-line {
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          color: var(--r-gold);
-          font-size: 11px;
-          font-weight: 800;
-          margin-top: 7px;
-        }
-
-        .featured-body p {
-          color: var(--r-muted);
-          font-size: 10px;
-          line-height: 1.5;
-          margin: 7px 0 9px;
-          display: -webkit-box;
-          -webkit-line-clamp: 3;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-
-        .reviewer-line {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-          color: var(--r-muted);
-          font-size: 9px;
-        }
-
-        .reviewer-link {
-          border: 0;
-          background: transparent;
-          padding: 0;
-          cursor: pointer;
-          text-align: left;
-          font-family: inherit;
-        }
-
-        .reviewer-link:hover {
-          color: var(--r-pink);
-        }
-
-        .review-list {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .review-row {
-          border: 1px solid var(--r-border);
-          background: var(--r-card);
-          display: grid;
-          grid-template-columns: 52px minmax(0,1fr) auto;
-          align-items: center;
-          gap: 12px;
-          padding: 9px;
-          transition: border-color .2s,background .2s;
-        }
-
-        .review-row-target {
-          border-color: var(--r-pink) !important;
-          box-shadow: 0 0 0 1px var(--r-pink-glow);
-        }
-
-
-        .review-row:hover {
-          background: var(--r-card-hover);
-          border-color: rgba(245,185,47,.22);
-        }
-
-        .review-poster {
-          width: 52px;
-          height: 69px;
-        }
-
-        .review-copy {
-          min-width: 0;
-        }
-
-        .review-mid {
-          margin-top: 5px;
-          display: flex;
-          gap: 11px;
-          align-items: flex-start;
-        }
-
-        .review-mid .rating-line {
-          margin-top: 1px;
-          flex-shrink: 0;
-        }
-
-        .review-mid p {
-          color: var(--r-muted);
-          font-size: 10px;
-          line-height: 1.5;
-          margin: 0;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-
-        .review-meta {
-          display: grid;
-          grid-template-columns: auto auto;
-          align-items: center;
-          gap: 6px 10px;
-          min-width: 138px;
-        }
-
-        .review-user {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          color: var(--r-muted);
-          font-size: 9px;
-        }
-
-        .time {
-          color: var(--r-faint);
-          font-size: 9px;
-          white-space: nowrap;
-        }
-
-        .like-btn {
-          grid-column: 1 / -1;
-          justify-self: end;
-          border: 1px solid var(--r-border);
-          background: transparent;
-          color: var(--r-faint);
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          padding: 4px 7px;
-          cursor: pointer;
-          font-size: 9px;
-        }
-
-        .like-btn.liked {
-          color: var(--r-pink);
-          border-color: rgba(237,61,115,.4);
-          background: var(--r-pink-glow);
-        }
-
-        .review-social-actions {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-        }
-
-        .comment-btn {
-          border: 0;
-          background: transparent;
-          color: var(--r-faint);
-          padding: 4px 5px;
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          cursor: pointer;
-          font-size: 9px;
-          font-weight: 800;
-        }
-
-        .comment-btn:hover,
-        .comment-btn.active {
-          color: var(--r-gold);
-        }
-
-        .comments-panel {
-          grid-column: 1 / -1;
-          margin-top: 11px;
-          padding-top: 11px;
-          border-top: 1px solid var(--r-border);
-        }
-
-        .comments-loading,
-        .comments-empty {
-          color: var(--r-faint);
-          font-size: 10px;
-          padding: 10px 0;
-        }
-
-        .comments-list {
-          display: grid;
-          gap: 9px;
-          max-height: 330px;
-          overflow-y: auto;
-          padding-right: 3px;
-        }
-
-        .comment-row {
-          display: grid;
-          grid-template-columns: 30px minmax(0,1fr);
-          gap: 8px;
-        }
-
-        .comment-avatar,
-        .comment-username {
-          border: 0;
-          background: transparent;
-          padding: 0;
-          cursor: pointer;
-        }
-
-        .comment-body {
-          min-width: 0;
-          background: var(--r-soft);
-          border: 1px solid var(--r-border);
-          padding: 8px 9px;
-        }
-
-        .comment-head {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 8px;
-          margin-bottom: 4px;
-        }
-
-        .comment-username {
-          color: var(--r-text);
-          font-size: 9px;
-          font-weight: 800;
-        }
-
-        .comment-head > span {
-          color: var(--r-faint);
-          font-size: 8px;
-        }
-
-        .comment-body p {
-          margin: 0;
-          color: var(--r-muted);
-          font-size: 10px;
-          line-height: 1.5;
-          white-space: pre-wrap;
-          overflow-wrap: anywhere;
-        }
-
-        .comment-own-actions {
-          display: flex;
-          gap: 8px;
-          margin-top: 6px;
-        }
-
-        .comment-own-actions button {
-          border: 0;
-          background: transparent;
-          padding: 0;
-          color: var(--r-faint);
-          cursor: pointer;
-          font-size: 8px;
-          font-weight: 700;
-          display: inline-flex;
-          align-items: center;
-          gap: 3px;
-        }
-
-        .comment-own-actions .comment-delete {
-          color: var(--r-danger);
-        }
-
-        .comment-edit textarea,
-        .comment-compose textarea {
-          width: 100%;
-          box-sizing: border-box;
-          border: 1px solid var(--r-border);
-          background: var(--r-bg);
-          color: var(--r-text);
-          resize: vertical;
-          outline: 0;
-          font-family: inherit;
-        }
-
-        .comment-edit textarea {
-          min-height: 62px;
-          padding: 8px;
-          font-size: 10px;
-        }
-
-        .comment-edit > div {
-          display: flex;
-          justify-content: flex-end;
-          gap: 6px;
-          margin-top: 5px;
-        }
-
-        .comment-edit button {
-          border: 1px solid var(--r-border);
-          background: var(--r-card);
-          color: var(--r-muted);
-          padding: 5px 7px;
-          cursor: pointer;
-          font-size: 8px;
-          font-weight: 800;
-        }
-
-        .comment-edit .comment-save {
-          border-color: var(--r-gold);
-          color: var(--r-gold);
-        }
-
-        .comment-compose {
-          display: grid;
-          grid-template-columns: minmax(0,1fr) 38px;
-          gap: 7px;
-          margin-top: 10px;
-          align-items: stretch;
-        }
-
-        .comment-compose textarea {
-          min-height: 42px;
-          max-height: 110px;
-          padding: 9px 10px;
-          font-size: 10px;
-        }
-
-        .comment-compose > button {
-          border: 1px solid var(--r-pink);
-          background: var(--r-pink);
-          color: #fff;
-          cursor: pointer;
-          display: grid;
-          place-items: center;
-        }
-
-        .comment-compose > button:disabled,
-        .comment-edit button:disabled {
-          opacity: .45;
-          cursor: default;
-        }
-
-        .reviews-side {
-          padding-top: 164px;
-          display: flex;
-          flex-direction: column;
-          gap: 18px;
-        }
-
-        .watchlist-card {
-          border: 1px solid var(--r-border);
-          background: var(--r-card);
-          padding: 16px;
-        }
-
-        .side-title {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-          font-size: 12px;
-          font-weight: 800;
-          color: var(--r-text);
-          margin-bottom: 13px;
-        }
-
-        .watchlist-items {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .watchlist-item {
-          width: 100%;
-          border: 0;
-          background: transparent;
-          color: inherit;
-          padding: 0;
-          display: grid;
-          grid-template-columns: 38px minmax(0,1fr) 18px;
-          align-items: center;
-          gap: 9px;
-          text-align: left;
-          cursor: pointer;
-        }
-
-        .watchlist-poster {
-          width: 38px;
-          height: 54px;
-          background: var(--r-card-hover);
-          border: 1px solid var(--r-border);
-          display: grid;
-          place-items: center;
-          overflow: hidden;
-        }
-
-        .watchlist-copy {
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-
-        .watchlist-copy strong {
-          color: var(--r-text);
-          font-size: 10px;
-          overflow: hidden;
-          white-space: nowrap;
-          text-overflow: ellipsis;
-        }
-
-        .watchlist-copy span {
-          color: var(--r-faint);
-          font-size: 8px;
-          overflow: hidden;
-          white-space: nowrap;
-          text-overflow: ellipsis;
-        }
-
-        .view-all {
-          margin-top: 14px;
-          border: 0;
-          background: transparent;
-          color: var(--r-gold);
-          font-size: 10px;
-          font-weight: 800;
-          padding: 0;
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-          cursor: pointer;
-        }
-
-        .watchlist-empty {
-          color: var(--r-faint);
-          font-size: 10px;
-          line-height: 1.5;
-          padding: 10px 0;
-        }
-
-        .opinion-card {
-          border: 1px solid rgba(237,61,115,.45);
-          background:
-            radial-gradient(circle at 100% 0%,rgba(237,61,115,.22),transparent 34%),
-            linear-gradient(135deg,#5c0626,#260612);
-          padding: 18px;
-          color: #fff;
-        }
-
-        .opinion-card > svg {
-          color: var(--r-gold);
-        }
-
-        .opinion-card h3 {
-          font-size: 14px;
-          margin: 12px 0 7px;
-        }
-
-        .opinion-card p {
-          font-size: 10px;
-          line-height: 1.55;
-          opacity: .82;
-          margin: 0 0 14px;
-        }
-
-        .opinion-card button {
-          padding: 8px 13px;
-          font-size: 10px;
-        }
-
-        .empty-box,
-        .error-box {
-          border: 1px solid var(--r-border);
-          background: var(--r-card);
-          color: var(--r-faint);
-          padding: 24px;
-          text-align: center;
-          font-size: 11px;
-        }
-
-        .empty-box {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .empty-discover-btn {
-          border: 1px solid rgba(237,61,115,.45);
-          background: var(--r-pink-glow);
-          color: var(--r-pink);
-          padding: 8px 11px;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          cursor: pointer;
-          font-size: 10px;
-          font-weight: 800;
-        }
-
-        .error-box {
-          color: #fb7185;
-          border-color: rgba(251,113,133,.3);
-          margin-bottom: 18px;
-        }
-
-        .modal-backdrop {
-          position: fixed;
-          inset: 0;
-          z-index: 10000;
-          background: rgba(0,0,0,.75);
-          backdrop-filter: blur(6px);
-          display: grid;
-          place-items: center;
-          padding: 20px;
-        }
-
-        .review-modal {
-          width: min(560px,100%);
-          max-height: min(760px,92vh);
-          overflow-y: auto;
-          border: 1px solid var(--r-border);
-          background: var(--r-card);
-          color: var(--r-text);
-          box-shadow: 0 30px 100px rgba(0,0,0,.55);
-          padding: 22px;
-        }
-
-        .modal-head {
-          display: flex;
-          justify-content: space-between;
-          gap: 20px;
-          align-items: flex-start;
-          margin-bottom: 20px;
-        }
-
-        .modal-head span {
-          color: var(--r-pink);
-          text-transform: uppercase;
-          letter-spacing: .12em;
-          font-size: 9px;
-          font-weight: 800;
-        }
-
-        .modal-head h2 {
-          margin: 4px 0 0;
-          font-family: ${FONT_DISPLAY};
-          font-size: 23px;
-        }
-
-        .modal-head > button {
-          width: 32px;
-          height: 32px;
-          border: 1px solid var(--r-border);
-          background: var(--r-bg-soft);
-          color: var(--r-muted);
-          display: grid;
-          place-items: center;
-          cursor: pointer;
-        }
-
-        .field-label {
-          color: var(--r-muted);
-          font-size: 10px;
-          font-weight: 800;
-          text-transform: uppercase;
-          letter-spacing: .07em;
-          display: flex;
-          justify-content: space-between;
-          margin: 16px 0 7px;
-        }
-
-        .modal-search {
-          height: 44px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          border: 1px solid var(--r-border);
-          background: var(--r-bg-soft);
-          padding: 0 12px;
-          color: var(--r-faint);
-        }
-
-        .modal-search input {
-          flex: 1;
-          border: 0;
-          outline: 0;
-          background: transparent;
-          color: var(--r-text);
-          height: 100%;
-        }
-
-        .movie-results {
-          margin-top: 8px;
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-        }
-
-        .movie-result,
-        .selected-movie {
-          width: 100%;
-          border: 1px solid var(--r-border);
-          background: var(--r-bg-soft);
-          color: var(--r-text);
-          display: grid;
-          grid-template-columns: 38px minmax(0,1fr) auto;
-          align-items: center;
-          gap: 10px;
-          text-align: left;
-          padding: 7px;
-          cursor: pointer;
-        }
-
-        .movie-result:hover {
-          border-color: var(--r-gold);
-          background: var(--r-card-hover);
-        }
-
-        .result-poster {
-          width: 38px;
-          height: 55px;
-          overflow: hidden;
-          background: var(--r-card-hover);
-          display: grid;
-          place-items: center;
-        }
-
-        .movie-result strong,
-        .selected-movie strong {
-          display: block;
-          font-size: 11px;
-          margin-bottom: 4px;
-        }
-
-        .movie-result span,
-        .selected-movie small {
-          color: var(--r-faint);
-          font-size: 9px;
-        }
-
-        .selected-movie > div:nth-child(2) > span {
-          display: block;
-          color: var(--r-pink);
-          font-size: 8px;
-          text-transform: uppercase;
-          letter-spacing: .08em;
-          margin-bottom: 2px;
-        }
-
-        .change-film {
-          color: var(--r-gold) !important;
-          font-weight: 800;
-        }
-
-        .result-message {
-          padding: 18px;
-          text-align: center;
-          color: var(--r-faint);
-          font-size: 10px;
-        }
-
-        .rating-picker {
-          display: grid;
-          grid-template-columns: repeat(6,1fr);
-          gap: 5px;
-        }
-
-        .rating-picker button {
-          height: 34px;
-          border: 1px solid var(--r-border);
-          background: var(--r-bg-soft);
-          color: var(--r-muted);
-          cursor: pointer;
-          font-size: 10px;
-          font-weight: 700;
-        }
-
-        .rating-picker button.selected {
-          color: #120d05;
-          background: var(--r-gold);
-          border-color: var(--r-gold);
-        }
-
-        .review-modal textarea {
-          width: 100%;
-          resize: vertical;
-          border: 1px solid var(--r-border);
-          background: var(--r-bg-soft);
-          color: var(--r-text);
-          outline: 0;
-          padding: 12px;
-          line-height: 1.55;
-          min-height: 125px;
-        }
-
-        .review-modal textarea:focus,
-        .modal-search:focus-within {
-          border-color: var(--r-gold);
-        }
-
-        .visibility-toggle {
-          margin: 14px 0;
-          display: flex;
-          align-items: flex-start;
-          gap: 10px;
-          cursor: pointer;
-        }
-
-        .visibility-toggle > button {
-          width: 20px;
-          height: 20px;
-          border: 1px solid var(--r-border);
-          background: var(--r-bg-soft);
-          color: #120d05;
-          display: grid;
-          place-items: center;
-          cursor: pointer;
-          flex-shrink: 0;
-        }
-
-        .visibility-toggle > button.checked {
-          background: var(--r-gold);
-          border-color: var(--r-gold);
-        }
-
-        .visibility-toggle span {
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-        }
-
-        .visibility-toggle strong {
-          color: var(--r-text);
-          font-size: 10px;
-        }
-
-        .visibility-toggle small {
-          color: var(--r-faint);
-          font-size: 9px;
-          line-height: 1.45;
-        }
-
-        .publish-btn {
-          width: 100%;
-          margin-top: 4px;
-        }
-
-        .publish-btn:disabled {
-          opacity: .55;
-          cursor: wait;
-        }
-
-        .modal-error {
-          margin-top: 12px;
-          padding: 9px 11px;
-          color: #fb7185;
-          border: 1px solid rgba(251,113,133,.28);
-          background: rgba(251,113,133,.07);
-          font-size: 10px;
-        }
-
-        @media (max-width: 980px) {
-          .reviews-wrap {
-            grid-template-columns: 1fr;
-          }
-
-          .reviews-side {
-            padding-top: 0;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-
-        @media (max-width: 720px) {
-          .reviews-wrap {
-            padding: 20px 14px 90px;
-          }
-
-          .page-header {
-            align-items: flex-start;
-          }
-
-          .page-header h1 {
-            font-size: 25px;
-          }
-
-          .header-actions {
-            gap: 6px;
-          }
-
-          .discover-btn {
-            font-size: 0;
-            width: 42px;
-            height: 42px;
-            padding: 0;
-            flex-shrink: 0;
-          }
-
-          .write-btn {
-            font-size: 0;
-            width: 42px;
-            height: 42px;
-            padding: 0;
-            flex-shrink: 0;
-          }
-
-          .discover-btn svg,
-          .write-btn svg {
-            width: 18px;
-            height: 18px;
-          }
-
-          .tabs {
-            gap: 13px;
-            overflow-x: auto;
-          }
-
-          .tabs button {
-            white-space: nowrap;
-          }
-
-          .featured-grid {
-            display: flex;
-            overflow-x: auto;
-            scroll-snap-type: x mandatory;
-            padding-bottom: 6px;
-          }
-
-          .featured-card {
-            min-width: 285px;
-            scroll-snap-align: start;
-          }
-
-          .review-row {
-            grid-template-columns: 46px minmax(0,1fr);
-          }
-
-          .review-poster {
-            width: 46px;
-            height: 64px;
-          }
-
-          .review-meta {
-            grid-column: 1 / -1;
-            display: flex;
-            justify-content: flex-end;
-            flex-wrap: wrap;
-            min-width: 0;
-          }
-
-          .like-btn {
-            grid-column: auto;
-          }
-
-          .reviews-side {
-            grid-template-columns: 1fr;
-          }
-
-          .rating-picker {
-            grid-template-columns: repeat(4,1fr);
-          }
-        }
-      `}</style>
     </>
   );
 }

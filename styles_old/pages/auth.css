@@ -1,0 +1,477 @@
+/* ============================================
+   AUTH PAGE — CineDate
+   Stile cinematografico, elegante e minimale
+   Compatibile con tema chiaro/scuro
+============================================ */
+
+/* Variabili (derivate da token.ts) */
+:root {
+  --auth-bg: #FAF7F3;
+  --auth-card-bg: #FFFFFF;
+  --auth-primary: #E8386D;
+  --auth-primary-hover: #D42E60;
+  --auth-primary-light: #FFE8EF;
+  --auth-primary-faint: #FFF4F7;
+  --auth-ink: #1F1A17;
+  --auth-muted: #6E6258;
+  --auth-faint: #A89F95;
+  --auth-border: #E9DED2;
+  --auth-error: #EF4444;
+  --auth-error-light: #FEE2E2;
+  --auth-success: #22C55E;
+  --auth-success-light: #DCFCE7;
+  --auth-white: #FFFFFF;
+  --auth-font: 'Inter', 'Helvetica Neue', sans-serif;
+  --auth-radius: 28px;
+  --auth-radius-sm: 14px;
+  --auth-radius-full: 999px;
+  --auth-shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+  --auth-space-xs: 4px;
+  --auth-space-sm: 8px;
+  --auth-space-md: 16px;
+  --auth-space-lg: 24px;
+  --auth-space-xl: 32px;
+  --auth-transition: 0.2s ease;
+}
+
+/* Layout */
+.auth-page {
+  min-height: 100vh;
+  background: var(--auth-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--auth-space-md);
+  font-family: var(--auth-font);
+}
+
+/* Card principale */
+.auth-card {
+  background: var(--auth-card-bg);
+  border-radius: var(--auth-radius);
+  padding: var(--auth-space-xl) var(--auth-space-lg);
+  width: 100%;
+  max-width: 420px;
+  box-shadow: var(--auth-shadow-lg);
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  position: relative;
+}
+
+.auth-card.mounted {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Pulsante chiusura (torna alla home) */
+.auth-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--auth-muted);
+  padding: 4px;
+  transition: opacity var(--auth-transition);
+}
+.auth-close-btn:hover {
+  opacity: 0.7;
+}
+
+/* Brand e sottotitolo */
+.auth-brand {
+  text-align: center;
+  margin-bottom: var(--auth-space-lg);
+}
+.auth-logo {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--auth-primary);
+  letter-spacing: 1px;
+}
+.auth-subtitle {
+  font-size: 13px;
+  color: var(--auth-muted);
+  margin-top: var(--auth-space-xs);
+}
+
+/* Tabs (Accedi / Registrati) */
+.auth-tabs {
+  display: flex;
+  border-radius: var(--auth-radius-full);
+  overflow: hidden;
+  border: 1.5px solid var(--auth-border);
+  margin-bottom: var(--auth-space-lg);
+}
+.auth-tab-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: var(--auth-card-bg);
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--auth-muted);
+  transition: background var(--auth-transition), color var(--auth-transition);
+  font-family: var(--auth-font);
+}
+.auth-tab-btn:first-child {
+  border-radius: var(--auth-radius-full) 0 0 var(--auth-radius-full);
+}
+.auth-tab-btn:last-child {
+  border-radius: 0 var(--auth-radius-full) var(--auth-radius-full) 0;
+}
+.auth-tab-active {
+  background: var(--auth-primary) !important;
+  color: var(--auth-white) !important;
+}
+
+/* Pulsanti social */
+.auth-social-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 24px;
+  border: 1.5px solid var(--auth-border);
+  border-radius: var(--auth-radius-full);
+  background: var(--auth-card-bg);
+  color: var(--auth-ink);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--auth-font);
+  transition: background var(--auth-transition), border-color var(--auth-transition);
+  margin-bottom: var(--auth-space-sm);
+}
+.auth-social-btn:hover {
+  background: var(--auth-bg);
+}
+.auth-social-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Divisore "oppure" */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--auth-space-sm);
+  margin-bottom: var(--auth-space-lg);
+}
+.auth-divider-line {
+  flex: 1;
+  border-top: 1px solid var(--auth-border);
+}
+.auth-divider-text {
+  font-size: 11px;
+  color: var(--auth-faint);
+}
+
+/* Form */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--auth-space-sm);
+  transition: transform 0.3s ease;
+}
+.auth-form.shake {
+  animation: auth-shake 0.5s ease;
+}
+
+/* Input generici */
+.auth-input {
+  padding: 13px 16px;
+  border: 1.5px solid var(--auth-border);
+  border-radius: var(--auth-radius-sm);
+  font-size: 15px;
+  font-family: var(--auth-font);
+  color: var(--auth-ink);
+  background: var(--auth-card-bg);
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color var(--auth-transition);
+}
+.auth-input:focus {
+  border-color: var(--auth-primary);
+}
+
+/* Input con validazione */
+.auth-input-error {
+  border-color: var(--auth-error);
+}
+.auth-input-success {
+  border-color: var(--auth-success);
+}
+
+/* Wrapper password con icona */
+.auth-password-wrapper {
+  position: relative;
+}
+.auth-password-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  color: var(--auth-faint);
+  transition: color var(--auth-transition);
+}
+.auth-password-toggle:hover {
+  color: var(--auth-ink);
+}
+.auth-password-toggle.active {
+  color: var(--auth-primary);
+}
+
+/* Checklist password (register) */
+.auth-checklist {
+  background: var(--auth-bg);
+  border-radius: var(--auth-radius-sm);
+  padding: var(--auth-space-sm);
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: auth-fadeIn 0.2s ease;
+}
+.auth-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  transition: color 0.2s;
+}
+.auth-checklist-ok {
+  color: var(--auth-success);
+}
+.auth-checklist-pending {
+  color: var(--auth-faint);
+}
+
+/* Messaggi di errore/successo */
+.auth-message {
+  border-radius: var(--auth-radius-sm);
+  padding: 10px 14px;
+  font-size: 13px;
+  animation: auth-fadeIn 0.2s ease;
+}
+.auth-error {
+  background: var(--auth-error-light);
+  color: var(--auth-error);
+}
+.auth-success {
+  background: var(--auth-success-light);
+  color: var(--auth-success);
+}
+
+/* Pulsante submit */
+.auth-submit-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background: var(--auth-primary);
+  color: var(--auth-white);
+  border: none;
+  border-radius: var(--auth-radius-full);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--auth-font);
+  transition: opacity var(--auth-transition);
+  margin-top: var(--auth-space-xs);
+}
+.auth-submit-btn:hover {
+  opacity: 0.9;
+}
+.auth-submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Link cambio modalità */
+.auth-mode-toggle {
+  text-align: center;
+  margin-top: var(--auth-space-md);
+}
+.auth-mode-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--auth-muted);
+  font-family: var(--auth-font);
+}
+.auth-mode-link {
+  color: var(--auth-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+.auth-mode-link:hover {
+  text-decoration: underline;
+}
+
+/* Pulsante ospite */
+.auth-guest-btn {
+  width: 100%;
+  padding: 13px 24px;
+  background: none;
+  color: var(--auth-muted);
+  border: 1px solid var(--auth-border);
+  border-radius: var(--auth-radius-full);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--auth-font);
+  transition: background var(--auth-transition);
+}
+.auth-guest-btn:hover {
+  background: var(--auth-bg);
+}
+
+/* Disclaimer */
+.auth-disclaimer {
+  font-size: 11px;
+  color: var(--auth-faint);
+  text-align: center;
+  margin-top: var(--auth-space-sm);
+  line-height: 1.5;
+}
+
+/* Schermata "email inviata" */
+.auth-email-sent-wrapper {
+  min-height: 100vh;
+  background: var(--auth-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--auth-space-lg);
+}
+.auth-email-card {
+  background: var(--auth-card-bg);
+  border-radius: var(--auth-radius);
+  padding: var(--auth-space-xl);
+  max-width: 400px;
+  width: 100%;
+  text-align: center;
+  box-shadow: var(--auth-shadow-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--auth-space-md);
+}
+.auth-email-icon {
+  font-size: 64px;
+  animation: auth-pulse 2s ease infinite;
+}
+.auth-email-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--auth-ink);
+}
+.auth-email-subtitle {
+  font-size: 13px;
+  color: var(--auth-muted);
+  line-height: 1.6;
+}
+.auth-email-address {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--auth-primary);
+  background: var(--auth-primary-light);
+  padding: 8px 20px;
+  border-radius: var(--auth-radius-full);
+  word-break: break-all;
+}
+.auth-email-steps {
+  background: var(--auth-bg);
+  border-radius: var(--auth-radius-sm);
+  padding: var(--auth-space-md);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--auth-space-sm);
+}
+.auth-email-step {
+  display: flex;
+  gap: var(--auth-space-sm);
+  align-items: center;
+  font-size: 13px;
+  color: var(--auth-muted);
+}
+.auth-email-resend {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--auth-muted);
+  font-size: 13px;
+  font-family: var(--auth-font);
+  transition: color var(--auth-transition);
+  padding: 4px 8px;
+}
+.auth-email-resend:hover {
+  color: var(--auth-primary);
+}
+.auth-email-back {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--auth-faint);
+  font-family: var(--auth-font);
+}
+.auth-email-back:hover {
+  text-decoration: underline;
+}
+
+/* Animazioni */
+@keyframes auth-fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes auth-fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes auth-shake {
+  0%,100%{ transform: translateX(0); }
+  20%   { transform: translateX(-8px); }
+  40%   { transform: translateX(8px); }
+  60%   { transform: translateX(-6px); }
+  80%   { transform: translateX(6px); }
+}
+@keyframes auth-pulse {
+  0%,100%{ transform: scale(1); }
+  50%   { transform: scale(1.08); }
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .auth-card {
+    padding: var(--auth-space-lg) var(--auth-space-md);
+  }
+  .auth-logo {
+    font-size: 20px;
+  }
+  .auth-tab-btn {
+    font-size: 14px;
+    padding: 8px;
+  }
+  .auth-social-btn {
+    padding: 12px 16px;
+    font-size: 14px;
+  }
+  .auth-input {
+    padding: 12px 14px;
+  }
+  .auth-submit-btn {
+    padding: 13px;
+  }
+}

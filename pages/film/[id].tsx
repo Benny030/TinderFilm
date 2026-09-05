@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '@/components/layout/AppShell';
+import BackButton from '@/components/ui/BackButton';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/hooks/useAuth';
 import { createBrowserClient } from '@/utils/supabase/browser';
+import { FONT, THEME } from '@/styles/token';
 import {
   getMovieEntry,
   setFavorite,
@@ -16,7 +18,6 @@ import {
   type UserMovieEntry,
 } from '@/utils/movieEntries';
 import {
-  ArrowLeft,
   BookmarkSimple,
   CalendarBlank,
   CheckCircle,
@@ -84,63 +85,61 @@ function getYouTubeKey(url?: string | null) {
   return null;
 }
 
-// ─── Palette dark ─────────────────────────────────────────────────────
+// ─── Cinedate design system ────────────────────────────────────────────
+//
+// Manteniamo la struttura originale della pagina e adattiamo i token
+// condivisi alle chiavi già usate nel componente.
 
 const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  cardHover: '#241d19',
-  border: '#2d221c',
+  bg: THEME.dark.bg,
+  bgSoft: THEME.dark.bgSoft,
+  card: THEME.dark.surface,
+  cardHover: THEME.dark.surfaceHover,
+  border: THEME.dark.border,
 
-  gold: '#f5b92f',
-  goldSoft: '#ffd875',
-  goldGlow: 'rgba(245,185,47,0.12)',
+  gold: THEME.dark.accent,
+  goldSoft: THEME.dark.accentSoft,
+  goldGlow: THEME.dark.accentGlow,
 
-  pink: '#ed3d73',
-  pinkDeep: '#8e1740',
-  pinkGlow: 'rgba(237,61,115,0.15)',
+  pink: THEME.dark.primary,
+  pinkDeep: THEME.dark.primaryDeep,
+  pinkGlow: THEME.dark.primaryGlow,
 
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
+  text: THEME.dark.text,
+  textMuted: THEME.dark.textMuted,
+  textFaint: THEME.dark.textFaint,
 
-  overlayDark: 'rgba(10,8,6,0.74)',
-  overlayMid: 'rgba(10,8,6,0.26)',
-  overlayLight: 'rgba(10,8,6,0.04)',
+  overlayDark: 'rgba(10,8,6,0.78)',
+  overlayMid: 'rgba(10,8,6,0.32)',
+  overlayLight: 'rgba(10,8,6,0.05)',
 };
 
-// ─── Palette light ────────────────────────────────────────────────────
-
 const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  cardHover: '#faf5ef',
-  border: '#d6cbbc',
+  bg: THEME.light.bg,
+  bgSoft: THEME.light.bgSoft,
+  card: THEME.light.surface,
+  cardHover: THEME.light.surfaceHover,
+  border: THEME.light.border,
 
-  gold: '#b8860b',
-  goldSoft: '#e8c84a',
-  goldGlow: 'rgba(184,134,11,0.10)',
+  gold: THEME.light.accent,
+  goldSoft: THEME.light.accentSoft,
+  goldGlow: THEME.light.accentGlow,
 
-  pink: '#b83060',
-  pinkDeep: '#8a1d44',
-  pinkGlow: 'rgba(184,48,96,0.10)',
+  pink: THEME.light.primary,
+  pinkDeep: THEME.light.primaryDeep,
+  pinkGlow: THEME.light.primaryGlow,
 
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
+  text: THEME.light.text,
+  textMuted: THEME.light.textMuted,
+  textFaint: THEME.light.textFaint,
 
-  overlayDark: 'rgba(31,26,22,0.74)',
-  overlayMid: 'rgba(31,26,22,0.26)',
+  overlayDark: 'rgba(31,26,22,0.76)',
+  overlayMid: 'rgba(31,26,22,0.28)',
   overlayLight: 'rgba(31,26,22,0.04)',
 };
 
-const FONT_SANS =
-  "'Inter','Helvetica Neue',sans-serif";
-
-const FONT_DISPLAY =
-  "'Playfair Display','Georgia',serif";
+const FONT_SANS = FONT.sans;
+const FONT_DISPLAY = FONT.display;
 
 type SimilarMovie = {
   tmdb_id: number;
@@ -188,6 +187,17 @@ type WatchProvider = {
   name: string;
   logo: string | null;
   url?: string | null;
+};
+
+type CommunityReview = {
+  entry_id: string;
+  user_id: string;
+  username: string;
+  avatar_url: string | null;
+  rating: number | null;
+  review_text: string | null;
+  likes_count: number;
+  review_updated_at: string | null;
 };
 
 type CinemaShowing = {
@@ -400,6 +410,9 @@ export default function FilmDetailPage() {
     reviewHoverRating,
     setReviewHoverRating,
   ] = useState<number | null>(null);
+
+  const [communityReviews, setCommunityReviews] = useState<CommunityReview[]>([]);
+  const [communityReviewsLoading, setCommunityReviewsLoading] = useState(false);
 
   const movieId =
     typeof router.query.id === 'string'
@@ -745,6 +758,72 @@ export default function FilmDetailPage() {
     isGuest,
     supabase,
   ]);
+
+  // ─────────────────────────────────────────────
+  // RECENSIONI COMMUNITY
+  // ─────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!movie?.tmdb_id) return;
+
+    let cancelled = false;
+
+    const loadCommunityReviews = async () => {
+      setCommunityReviewsLoading(true);
+
+      try {
+        const { data, error } = await supabase.rpc('get_public_reviews', {
+          p_limit: 100,
+          p_offset: 0,
+        });
+
+        if (error) throw error;
+
+        const rows = (Array.isArray(data) ? data : []) as any[];
+
+        const reviews = rows
+          .filter((row) => {
+            const provider = String(row.provider ?? '').toLowerCase();
+            const providerMovieId = String(row.provider_movie_id ?? '');
+
+            return (
+              provider === 'tmdb' &&
+              providerMovieId === String(movie.tmdb_id) &&
+              typeof row.review_text === 'string' &&
+              row.review_text.trim().length > 0
+            );
+          })
+          .map((row) => ({
+            entry_id: String(row.entry_id ?? row.id ?? ''),
+            user_id: String(row.user_id ?? ''),
+            username: String(row.username ?? 'Utente CineDate'),
+            avatar_url: row.avatar_url ?? null,
+            rating:
+              row.rating === null || row.rating === undefined
+                ? null
+                : Number(row.rating),
+            review_text: row.review_text ?? null,
+            likes_count: Number(row.likes_count ?? 0),
+            review_updated_at:
+              row.review_updated_at ?? row.updated_at ?? null,
+          }))
+          .slice(0, 6);
+
+        if (!cancelled) setCommunityReviews(reviews);
+      } catch (error) {
+        console.error('Community reviews load failed:', error);
+        if (!cancelled) setCommunityReviews([]);
+      } finally {
+        if (!cancelled) setCommunityReviewsLoading(false);
+      }
+    };
+
+    void loadCommunityReviews();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [movie?.tmdb_id, supabase]);
 
   // ─────────────────────────────────────────────
   // TRAILER
@@ -1625,6 +1704,7 @@ export default function FilmDetailPage() {
   return (
     <AppShell activeNav="home">
       <main
+        className="cdr-film-cinedate-scope"
         style={{
           paddingBottom: 96,
 
@@ -1663,69 +1743,27 @@ export default function FilmDetailPage() {
               'center',
           }}
         >
-          <button
-            onClick={() =>
-              router.back()
-            }
-            aria-label="Torna indietro"
+          <div
             style={{
-              position:
-                'absolute',
-
-              top:
-                isMobile
-                  ? 10
-                  : 18,
-
-              left:
-                isMobile
-                  ? 10
-                  : 18,
-
+              position: 'absolute',
+              top: isMobile ? 10 : 18,
+              left: isMobile ? 10 : 18,
               zIndex: 3,
-
-              width:
-                isMobile
-                  ? 34
-                  : 42,
-
-              height:
-                isMobile
-                  ? 34
-                  : 42,
-
-              border: 0,
-
-              borderRadius:
-                '50%',
-
-              background:
-                'rgba(0,0,0,0.72)',
-
-              color:
-                '#fff',
-
-              display:
-                'grid',
-
-              placeItems:
-                'center',
-
-              cursor:
-                'pointer',
-
-              backdropFilter:
-                'blur(8px)',
             }}
           >
-            <ArrowLeft
-              size={
-                isMobile
-                  ? 18
-                  : 21
-              }
+            <BackButton
+              onClick={() => {
+                if (
+                  typeof window !== 'undefined' &&
+                  window.history.length > 1
+                ) {
+                  router.back();
+                } else {
+                  void router.push('/home');
+                }
+              }}
             />
-          </button>
+          </div>
 
           <div
             style={{
@@ -1770,10 +1808,10 @@ export default function FilmDetailPage() {
 
                 fontSize:
                   isMobile
-                    ? 10
+                    ? 11
                     : 12,
 
-                fontWeight: 700,
+                fontWeight: 800,
 
                 border:
                   `1px solid ${P.pink}`,
@@ -1888,10 +1926,10 @@ export default function FilmDetailPage() {
                     ? 'center'
                     : 'start',
 
-                borderRadius: 20,
+                borderRadius: 8,
 
                 boxShadow:
-                  '0 8px 32px rgba(0,0,0,0.2)',
+                  '0 12px 34px rgba(0,0,0,0.18)',
 
                 background:
                   P.bgSoft,
@@ -2585,7 +2623,7 @@ export default function FilmDetailPage() {
                   overflow:
                     'hidden',
 
-                  borderRadius: 12,
+                  borderRadius: 8,
                 }}
               >
                 <p
@@ -2596,9 +2634,9 @@ export default function FilmDetailPage() {
                     fontSize:
                       isMobile
                         ? 14
-                        : 15,
+                        : 15.5,
 
-                    lineHeight: 1.7,
+                    lineHeight: 1.72,
 
                     margin: 0,
 
@@ -3320,7 +3358,7 @@ export default function FilmDetailPage() {
                                   border:
                                     `1px solid ${P.border}`,
 
-                                  borderRadius: 7,
+                                  borderRadius: 6,
 
                                   background:
                                     P.bgSoft,
@@ -3475,7 +3513,7 @@ export default function FilmDetailPage() {
                             border:
                               `1px solid ${P.border}`,
 
-                            borderRadius: 7,
+                            borderRadius: 6,
 
                             background:
                               P.card,
@@ -3509,117 +3547,237 @@ export default function FilmDetailPage() {
             )}
           </section>
 
-          {/* ───────────────── COMMUNITY ───────────────── */}
+          {/* ───────────────── RECENSIONI COMMUNITY ───────────────── */}
 
-          <section
-            id="community-section"
-            style={{
-              marginTop: 20,
-            }}
-          >
-            <button
-              type="button"
-              onClick={() =>
-                router.push(
-                  `/recensioni?movie=${movie.tmdb_id}&q=${encodeURIComponent(
-                    movie.title
-                  )}`
-                )
-              }
+          <section id="community-section" style={{ marginTop: 30 }}>
+            <div
               style={{
-                width:
-                  '100%',
-
-                border:
-                  `1px solid ${P.border}`,
-
-                background:
-                  P.card,
-
-                color:
-                  P.text,
-
-                padding:
-                  isMobile
-                    ? '14px'
-                    : '16px 18px',
-
-                display:
-                  'flex',
-
-                alignItems:
-                  'center',
-
-                justifyContent:
-                  'space-between',
-
+                display: 'flex',
+                alignItems: 'flex-end',
+                justifyContent: 'space-between',
                 gap: 12,
-
-                textAlign:
-                  'left',
-
-                cursor:
-                  'pointer',
-
-                fontFamily:
-                  FONT_SANS,
+                marginBottom: 12,
               }}
             >
               <div>
                 <div
                   style={{
-                    color:
-                      P.pink,
-
+                    color: P.pink,
                     fontSize: 9,
-
                     fontWeight: 900,
-
-                    textTransform:
-                      'uppercase',
-
-                    letterSpacing:
-                      '.1em',
+                    textTransform: 'uppercase',
+                    letterSpacing: '.12em',
+                    marginBottom: 4,
                   }}
                 >
                   Community
                 </div>
 
-                <div
+                <h2
                   style={{
-                    fontSize: 13,
-
-                    fontWeight: 900,
-
-                    marginTop: 3,
+                    margin: 0,
+                    color: P.text,
+                    fontFamily: FONT_DISPLAY,
+                    fontSize: isMobile ? 20 : 23,
+                    fontWeight: 800,
                   }}
                 >
-                  Cosa ne pensa la
-                  community?
-                </div>
-
-                <div
-                  style={{
-                    fontSize: 10,
-
-                    color:
-                      P.textMuted,
-
-                    marginTop: 3,
-                  }}
-                >
-                  Leggi recensioni e
-                  opinioni su{' '}
-                  {movie.title}
-                </div>
+                  Recensioni degli utenti
+                </h2>
               </div>
 
-              <ArrowRight
-                size={16}
-                color={P.pink}
-                weight="bold"
-              />
-            </button>
+              {communityReviews.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(
+                      `/recensioni?movie=${movie.tmdb_id}&q=${encodeURIComponent(movie.title)}`
+                    )
+                  }
+                  style={{
+                    border: 0,
+                    background: 'transparent',
+                    color: P.pink,
+                    padding: 0,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    fontFamily: FONT_SANS,
+                    fontSize: 10,
+                    fontWeight: 850,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Vedi tutte
+                  <ArrowRight size={12} weight="bold" />
+                </button>
+              )}
+            </div>
+
+            {communityReviewsLoading ? (
+              <div
+                style={{
+                  border: `1px solid ${P.border}`,
+                  background: P.card,
+                  padding: 18,
+                  color: P.textMuted,
+                  fontSize: 12,
+                }}
+              >
+                Carico le recensioni…
+              </div>
+            ) : communityReviews.length === 0 ? (
+              <div
+                style={{
+                  border: `1px solid ${P.border}`,
+                  background: P.card,
+                  padding: isMobile ? 16 : 18,
+                }}
+              >
+                <div
+                  style={{
+                    color: P.text,
+                    fontFamily: FONT_DISPLAY,
+                    fontSize: 16,
+                    fontWeight: 800,
+                  }}
+                >
+                  Ancora nessuna recensione
+                </div>
+                <div
+                  style={{
+                    marginTop: 4,
+                    color: P.textMuted,
+                    fontSize: 11,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Puoi essere tra i primi a lasciare un'opinione su {movie.title}.
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {communityReviews.map((review) => (
+                  <article
+                    key={review.entry_id || `${review.user_id}-${review.username}`}
+                    style={{
+                      border: `1px solid ${P.border}`,
+                      background: P.card,
+                      padding: isMobile ? 14 : '16px 18px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 38,
+                          height: 38,
+                          flexShrink: 0,
+                          overflow: 'hidden',
+                          borderRadius: '50%',
+                          border: `1px solid ${P.border}`,
+                          background: P.bgSoft,
+                          display: 'grid',
+                          placeItems: 'center',
+                          color: P.textMuted,
+                          fontWeight: 900,
+                          fontSize: 13,
+                        }}
+                      >
+                        {review.avatar_url ? (
+                          <img
+                            src={review.avatar_url}
+                            alt=""
+                            referrerPolicy="no-referrer"
+                            loading="lazy"
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              display: 'block',
+                            }}
+                          />
+                        ) : (
+                          review.username.charAt(0).toUpperCase()
+                        )}
+                      </div>
+
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            review.username &&
+                            router.push(
+                              `/utente/${encodeURIComponent(review.username)}`
+                            )
+                          }
+                          style={{
+                            border: 0,
+                            background: 'transparent',
+                            padding: 0,
+                            color: P.text,
+                            fontFamily: FONT_SANS,
+                            fontSize: 15,
+                            fontWeight: 900,
+                            cursor: review.user_id ? 'pointer' : 'default',
+                          }}
+                        >
+                          @{review.username}
+                        </button>
+
+                        {review.rating !== null && (
+                          <div
+                            style={{
+                              marginTop: 3,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              color: P.gold,
+                              fontSize: 12,
+                              fontWeight: 850,
+                            }}
+                          >
+                            <Star size={11} weight="fill" />
+                            {review.rating.toFixed(1)}/5
+                          </div>
+                        )}
+                      </div>
+
+                      {review.likes_count > 0 && (
+                        <div
+                          style={{
+                            color: P.textFaint,
+                            fontSize: 15,
+                            fontWeight: 750,
+                          }}
+                        >
+                          {review.likes_count} ♥
+                        </div>
+                      )}
+                    </div>
+
+                    <p
+                      style={{
+                        margin: '12px 0 0',
+                        paddingLeft: 12,
+                        borderLeft: `2px solid ${P.pink}`,
+                        color: P.text,
+                        fontSize: isMobile ? 12.5 : 13.5,
+                        lineHeight: 1.62,
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      {review.review_text}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* ───────────────── TRAILER ───────────────── */}
@@ -3662,10 +3820,10 @@ export default function FilmDetailPage() {
 
                   border: 0,
 
-                  borderRadius: 20,
+                  borderRadius: 8,
 
                   boxShadow:
-                    '0 4px 16px rgba(0,0,0,0.2)',
+                    '0 10px 28px rgba(0,0,0,0.16)',
 
                   background:
                     '#201B18',
@@ -3686,7 +3844,7 @@ export default function FilmDetailPage() {
                   border:
                     `1.5px dashed ${P.border}`,
 
-                  borderRadius: 20,
+                  borderRadius: 8,
 
                   display:
                     'grid',
@@ -3826,7 +3984,7 @@ export default function FilmDetailPage() {
                           : P.border
                       }`,
 
-                    borderRadius: 7,
+                    borderRadius: 6,
 
                     background:
                       showCast
@@ -3939,7 +4097,7 @@ export default function FilmDetailPage() {
                           overflow:
                             'hidden',
 
-                          borderRadius: 12,
+                          borderRadius: 8,
 
                           background:
                             P.bgSoft,
@@ -4196,7 +4354,7 @@ export default function FilmDetailPage() {
                       border:
                         `1px solid ${P.border}`,
 
-                      borderRadius: 7,
+                      borderRadius: 6,
 
                       background:
                         P.card,
@@ -4291,7 +4449,7 @@ export default function FilmDetailPage() {
                       border:
                         `1px solid ${P.border}`,
 
-                      borderRadius: 7,
+                      borderRadius: 6,
 
                       background:
                         P.card,
@@ -4479,10 +4637,10 @@ export default function FilmDetailPage() {
                             objectFit:
                               'cover',
 
-                            borderRadius: 14,
+                            borderRadius: 8,
 
                             boxShadow:
-                              '0 1px 4px rgba(0,0,0,0.2)',
+                              '0 6px 18px rgba(0,0,0,0.12)',
 
                             display:
                               'block',
@@ -5491,6 +5649,12 @@ export default function FilmDetailPage() {
             </div>
           </div>
         )}
+        <style jsx global>{`
+          .cdr-film-cinedate-scope ::selection {
+            background: ${P.pinkGlow};
+            color: ${P.text};
+          }
+        `}</style>
       </main>
     </AppShell>
   );

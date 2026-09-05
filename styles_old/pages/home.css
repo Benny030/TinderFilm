@@ -586,12 +586,3 @@
 .animate-in-delay-1 { animation-delay: 0.05s; opacity: 0; }
 .animate-in-delay-2 { animation-delay: 0.1s; opacity: 0; }
 .animate-in-delay-3 { animation-delay: 0.15s; opacity: 0; }
-.home-search-account {
-  padding: 8px 0 14px;
-}
-
-@media (max-width: 1023px) {
-  .home-search-account {
-    padding: 8px 20px 14px;
-  }
-}

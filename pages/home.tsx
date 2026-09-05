@@ -8,6 +8,7 @@ import { normalizeRoomCode } from '@/utils/roomCode';
 import AppShell from '@/components/layout/AppShell';
 import GlobalSearchBox from '@/components/search/globalSearchBox';
 import { useTheme } from '@/context/ThemeContext';
+import { THEME, FONT } from '@/styles/token';
 
 import {
   Bell, FilmSlate, House, ArrowRight,
@@ -20,49 +21,41 @@ import {
   MapPin,
 } from '@phosphor-icons/react';
 
-// ─── Palette dark "cinema elegante" ──────────────────────────────────────
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  cardHover: '#241d19',
-  border: '#2d221c',
-  gold: '#f5b92f',
-  goldSoft: '#ffd875',
-  goldGlow: 'rgba(245,185,47,0.12)',
-  pink: '#ed3d73',
-  pinkDeep: '#8e1740',
-  pinkGlow: 'rgba(237,61,115,0.15)',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-  success: '#22c55e',
-  purple: '#8b5cf6',
+// ─── Cinedate design-system adapter ──────────────────────────────────────
+// La Home usa ora la palette centralizzata di styles/token.ts.
+// Manteniamo i nomi P.* già usati nel markup per rendere questo passaggio
+// puramente visivo e non toccare la business logic.
+const alpha = (hex: string, opacity: number) => {
+  const clean = hex.replace('#', '');
+  const full = clean.length === 3
+    ? clean.split('').map((char) => char + char).join('')
+    : clean;
+
+  const value = Number.parseInt(full, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 };
 
-// ─── Palette light "cinema elegante" ──────────────────────────────────────
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  cardHover: '#faf5ef',
-  border: '#d6cbbc',
-  gold: '#b8860b',
-  goldSoft: '#e8c84a',
-  goldGlow: 'rgba(184,134,11,0.10)',
-  pink: '#b83060',
-  pinkDeep: '#8a1d44',
-  pinkGlow: 'rgba(184,48,96,0.10)',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-  success: '#16a34a',
-  purple: '#7c3aed',
-};
+const shadeHex = (hex: string, amount: number) => {
+  const clean = hex.replace('#', '');
+  const full = clean.length === 3
+    ? clean.split('').map((char) => char + char).join('')
+    : clean;
 
-const FONT = "'Inter','Helvetica Neue',sans-serif";
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
-const FONT_MONO = "'JetBrains Mono','Courier New',monospace";
+  const value = Number.parseInt(full, 16);
+  const clamp = (channel: number) => Math.max(0, Math.min(255, channel + amount));
+
+  const r = clamp((value >> 16) & 255);
+  const g = clamp((value >> 8) & 255);
+  const b = clamp(value & 255);
+
+  return `#${[r, g, b]
+    .map((channel) => channel.toString(16).padStart(2, '0'))
+    .join('')}`;
+};
 
 const convertHexToRgb = (hex: string) => {
   const clean = hex.replace('#', '');
@@ -171,7 +164,25 @@ const SUGGESTIONS = [
 export default function HomePage() {
   const { theme, toggleTheme } = useTheme();
   const isDark = theme === 'dark';
-  const P = isDark ? D : L;
+  const T = isDark ? THEME.dark : THEME.light;
+  const P = {
+    bg: T.bg,
+    bgSoft: T.bgSoft,
+    card: T.surface,
+    cardHover: T.surfaceHover,
+    border: T.border,
+    gold: T.accent,
+    goldSoft: T.accent,
+    goldGlow: alpha(T.accent, isDark ? 0.12 : 0.10),
+    pink: T.primary,
+    pinkDeep: shadeHex(T.primary, isDark ? -82 : -46),
+    pinkGlow: alpha(T.primary, isDark ? 0.15 : 0.10),
+    text: T.text,
+    textMuted: T.textMuted,
+    textFaint: T.textFaint,
+    success: isDark ? '#22c55e' : '#16a34a',
+    purple: isDark ? '#8b5cf6' : '#7c3aed',
+  };
 
   const router = useRouter();
   const { currentUser, isGuest, isLoading, guestName } = useAuth();
@@ -695,7 +706,7 @@ export default function HomePage() {
               background: 'transparent',
               color: P.textFaint,
               cursor: 'pointer',
-              fontFamily: FONT,
+              fontFamily: FONT.sans,
               fontSize: 10,
               fontWeight: 800,
               display: 'inline-flex',
@@ -731,7 +742,7 @@ export default function HomePage() {
                 color: P.text,
                 textAlign: 'left',
                 cursor: 'pointer',
-                fontFamily: FONT,
+                fontFamily: FONT.sans,
                 overflow: 'hidden',
               }}
             >
@@ -1004,7 +1015,7 @@ export default function HomePage() {
               </div>
 
               <div style={{
-                fontFamily: FONT_DISPLAY,
+                fontFamily: FONT.display,
                 fontSize: '38px',
                 fontWeight: '800',
                 color: P.text,
@@ -1104,7 +1115,7 @@ export default function HomePage() {
                       fontSize: 8,
                       lineHeight: 1,
                       fontWeight: 900,
-                      fontFamily: FONT,
+                      fontFamily: FONT.sans,
                     }}
                   >
                     {unreadNotifications > 99 ? '99+' : unreadNotifications}
@@ -1161,10 +1172,10 @@ export default function HomePage() {
 
               {/* ─── RICERCA GLOBALE ───────────────────────────────────── */}
               <section
-                style={{
-                  padding: isGuest ? '8px 20px 18px' : '8px 20px 14px',
-                }}
-              >
+              className={!isGuest ? 'home-search-account' : undefined}
+              style={{
+                padding: isGuest ? '8px 20px 18px' : undefined,
+              }}>
                 <div
                   style={{
                     border: `1px solid ${isGuest ? `${P.gold}90` : P.border}`,
@@ -1190,7 +1201,7 @@ export default function HomePage() {
 
                   <div
                     style={{
-                      fontFamily: FONT_DISPLAY,
+                      fontFamily: FONT.display,
                       color: P.text,
                       fontSize: isGuest ? 24 : 20,
                       fontWeight: 800,
@@ -1222,7 +1233,7 @@ export default function HomePage() {
                       background: 'transparent',
                       color: P.textMuted,
                       padding: 0,
-                      fontFamily: FONT,
+                      fontFamily: FONT.sans,
                       fontSize: 10,
                       fontWeight: 750,
                       cursor: 'pointer',
@@ -1269,7 +1280,7 @@ export default function HomePage() {
                         padding: '14px 12px',
                         textAlign: 'left',
                         cursor: 'pointer',
-                        fontFamily: FONT,
+                        fontFamily: FONT.sans,
                       }}
                     >
                       <MagnifyingGlass size={18} color={P.gold} />
@@ -1291,7 +1302,7 @@ export default function HomePage() {
                         padding: '14px 12px',
                         textAlign: 'left',
                         cursor: 'pointer',
-                        fontFamily: FONT,
+                        fontFamily: FONT.sans,
                       }}
                     >
                       <MapPin size={18} color={P.pink} weight="fill" />
@@ -1313,7 +1324,7 @@ export default function HomePage() {
                         padding: '14px 12px',
                         textAlign: 'left',
                         cursor: 'pointer',
-                        fontFamily: FONT,
+                        fontFamily: FONT.sans,
                       }}
                     >
                       <UsersThree size={18} color={P.success} weight="fill" />
@@ -1354,7 +1365,7 @@ export default function HomePage() {
                           alignItems:'center',
                           gap:8,
                           cursor:'pointer',
-                          fontFamily:FONT,
+                          fontFamily:FONT.sans,
                           fontSize:10.5,
                           fontWeight:850,
                           textAlign:'left',
@@ -1420,7 +1431,7 @@ export default function HomePage() {
                     <div style={{
                       fontSize: '18px',
                       fontWeight: '800',
-                      fontFamily: FONT_DISPLAY,
+                      fontFamily: FONT.display,
                       marginBottom: '4px',
                       letterSpacing: '-0.01em',
                     }}>
@@ -1439,7 +1450,7 @@ export default function HomePage() {
                         fontSize: '13px',
                         fontWeight: '700',
                         cursor: 'pointer',
-                        fontFamily: FONT,
+                        fontFamily: FONT.sans,
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: '6px',
@@ -1543,7 +1554,7 @@ export default function HomePage() {
                           fontWeight: 850,
                           whiteSpace: 'nowrap',
                           cursor: 'pointer',
-                          fontFamily: FONT,
+                          fontFamily: FONT.sans,
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: 4,
@@ -1590,7 +1601,7 @@ export default function HomePage() {
                             color: P.text,
                             textAlign: 'left',
                             cursor: 'pointer',
-                            fontFamily: FONT,
+                            fontFamily: FONT.sans,
                             overflow: 'hidden',
                           }}
                         >
@@ -1813,7 +1824,7 @@ export default function HomePage() {
                       </div>
                       <div
                         style={{
-                          fontFamily: FONT_DISPLAY,
+                          fontFamily: FONT.display,
                           color: P.text,
                           fontSize: 21,
                           fontWeight: 800,
@@ -1834,7 +1845,7 @@ export default function HomePage() {
                         border: 'none',
                         background: 'transparent',
                         color: P.gold,
-                        fontFamily: FONT,
+                        fontFamily: FONT.sans,
                         fontSize: 11,
                         fontWeight: 800,
                         cursor: 'pointer',
@@ -1886,7 +1897,7 @@ export default function HomePage() {
                               background: P.card,
                               color: P.text,
                               padding: 13,
-                              fontFamily: FONT,
+                              fontFamily: FONT.sans,
                               textAlign: 'left',
                               cursor: 'pointer',
                               display: 'flex',
@@ -2003,7 +2014,7 @@ export default function HomePage() {
                         background: P.bgSoft,
                         color: P.textMuted,
                         padding: 16,
-                        fontFamily: FONT,
+                        fontFamily: FONT.sans,
                         fontSize: 12,
                         cursor: 'pointer',
                       }}
@@ -2028,7 +2039,7 @@ export default function HomePage() {
                         background: P.card,
                         color: P.text,
                         padding: '11px 12px',
-                        fontFamily: FONT,
+                        fontFamily: FONT.sans,
                         fontSize: 11,
                         fontWeight: 800,
                         cursor: 'pointer',
@@ -2049,7 +2060,7 @@ export default function HomePage() {
                         background: P.card,
                         color: P.text,
                         padding: '11px 12px',
-                        fontFamily: FONT,
+                        fontFamily: FONT.sans,
                         fontSize: 11,
                         fontWeight: 800,
                         cursor: 'pointer',
@@ -2090,7 +2101,7 @@ export default function HomePage() {
 
                     <div
                       style={{
-                        fontFamily: FONT_DISPLAY,
+                        fontFamily: FONT.display,
                         color: P.text,
                         fontSize: 19,
                         fontWeight: 800,
@@ -2129,7 +2140,7 @@ export default function HomePage() {
                           color: P.text,
                           padding: '10px 11px',
                           cursor: 'pointer',
-                          fontFamily: FONT,
+                          fontFamily: FONT.sans,
                           textAlign: 'left',
                         }}
                       >
@@ -2151,7 +2162,7 @@ export default function HomePage() {
                           color: P.text,
                           padding: '10px 11px',
                           cursor: 'pointer',
-                          fontFamily: FONT,
+                          fontFamily: FONT.sans,
                           textAlign: 'left',
                         }}
                       >
@@ -2174,7 +2185,7 @@ export default function HomePage() {
                         background: 'transparent',
                         color: P.pink,
                         padding: 0,
-                        fontFamily: FONT,
+                        fontFamily: FONT.sans,
                         fontSize: 10,
                         fontWeight: 900,
                         cursor: 'pointer',
@@ -2200,7 +2211,7 @@ export default function HomePage() {
                         onClick={clearRecentFilms}
                         style={{
                           border:0,background:'transparent',color:P.textFaint,
-                          fontFamily:FONT,fontSize:9.5,fontWeight:800,cursor:'pointer',padding:0,
+                          fontFamily:FONT.sans,fontSize:9.5,fontWeight:800,cursor:'pointer',padding:0,
                         }}
                       >
                         Cancella
@@ -2231,7 +2242,7 @@ export default function HomePage() {
                           padding:0,
                           textAlign:'left',
                           cursor:'pointer',
-                          fontFamily:FONT,
+                          fontFamily:FONT.sans,
                           minWidth:0,
                           overflow:'hidden',
                         }}
@@ -2424,7 +2435,7 @@ export default function HomePage() {
                         onClick={() => handleSuggestionClick(s.key)}
                         style={{
                           textAlign: 'left',
-                          fontFamily: FONT,
+                          fontFamily: FONT.sans,
                           cursor: 'pointer',
                         }}
                       >
@@ -2512,7 +2523,7 @@ export default function HomePage() {
                     <div style={{
                       fontSize: '20px',
                       fontWeight: '800',
-                      fontFamily: FONT_DISPLAY,
+                      fontFamily: FONT.display,
                       color: '#fff',
                       marginBottom: '4px',
                       letterSpacing: '-0.01em',
@@ -2538,7 +2549,7 @@ export default function HomePage() {
                         fontSize: '13px',
                         fontWeight: '700',
                         cursor: 'pointer',
-                        fontFamily: FONT,
+                        fontFamily: FONT.sans,
                         boxShadow: `0 4px 20px ${P.gold}30`,
                         transition: 'transform 0.2s, box-shadow 0.3s',
                         letterSpacing: '0.02em',
@@ -2575,7 +2586,7 @@ export default function HomePage() {
                   fontSize: '13.5px',
                   fontWeight: '700',
                   cursor: 'pointer',
-                  fontFamily: FONT,
+                  fontFamily: FONT.sans,
                   boxShadow: `0 4px 16px ${P.gold}25`,
                   display: 'flex',
                   alignItems: 'center',
@@ -2607,7 +2618,7 @@ export default function HomePage() {
                   fontSize: '13px',
                   fontWeight: '600',
                   cursor: 'pointer',
-                  fontFamily: FONT,
+                  fontFamily: FONT.sans,
                   marginTop: '-8px',
                   display: 'flex',
                   alignItems: 'center',
@@ -2790,7 +2801,7 @@ export default function HomePage() {
                   border: `1px solid ${P.pink}30`,
                   color: '#fff',
                 }}>
-                  <div style={{ fontSize: '15px', fontWeight: '800', fontFamily: FONT_DISPLAY, marginBottom: '4px' }}>
+                  <div style={{ fontSize: '15px', fontWeight: '800', fontFamily: FONT.display, marginBottom: '4px' }}>
                     Registrati
                   </div>
                   <div style={{ fontSize: '12px', opacity: 0.85, lineHeight: 1.5, marginBottom: '14px' }}>
@@ -2806,7 +2817,7 @@ export default function HomePage() {
                       fontSize: '12.5px',
                       fontWeight: '700',
                       cursor: 'pointer',
-                      fontFamily: FONT,
+                      fontFamily: FONT.sans,
                       transition: 'transform 0.2s',
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; }}
@@ -2829,7 +2840,7 @@ export default function HomePage() {
                 border: `1px solid ${P.pink}30`,
                 color: '#fff',
               }}>
-                <div style={{ fontSize: '16px', fontWeight: '800', fontFamily: FONT_DISPLAY, marginBottom: '4px' }}>
+                <div style={{ fontSize: '16px', fontWeight: '800', fontFamily: FONT.display, marginBottom: '4px' }}>
                   Registrati per fare di più
                 </div>
                 <div style={{ fontSize: '13px', opacity: 0.85, lineHeight: 1.5, marginBottom: '14px' }}>
@@ -2845,7 +2856,7 @@ export default function HomePage() {
                     fontSize: '13px',
                     fontWeight: '700',
                     cursor: 'pointer',
-                    fontFamily: FONT,
+                    fontFamily: FONT.sans,
                     transition: 'transform 0.2s',
                   }}
                   onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; }}
@@ -2867,7 +2878,7 @@ export default function HomePage() {
                   fontWeight: '800',
                   color: P.text,
                   marginBottom: '10px',
-                  fontFamily: FONT_DISPLAY,
+                  fontFamily: FONT.display,
                   letterSpacing: '-0.01em',
                 }}>
                   CINE<span style={{ color: P.pink }}>DATE</span>

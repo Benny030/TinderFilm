@@ -1,70 +1,22 @@
-
-
-import { type CSSProperties, type FormEvent, useState, useEffect, useRef } from 'react';
+import { type CSSProperties, type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  Door,
+  FilmSlate,
+  Lock,
+  LockOpen,
+  ShareNetwork,
+  Users,
+  X,
+} from '@phosphor-icons/react';
+
 import { useTheme } from '@/context/ThemeContext';
-import { FilmSlate, Users, Door, Copy, Share, Check, ArrowLeft, Lock, LockOpen, X } from '@phosphor-icons/react';
+import { createBrowserClient } from '@/utils/supabase/browser';
+import { C, FONT, R, THEME } from '@/styles/token';
 import type { RoomUser } from '@/types';
-
-// ─── Palette dark "cinema elegante" ──────────────────────────────────────
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  cardHover: '#241d19',
-  border: '#2d221c',
-  gold: '#f5b92f',
-  goldSoft: '#ffd875',
-  goldGlow: 'rgba(245,185,47,0.12)',
-  pink: '#ed3d73',
-  pinkDeep: '#8e1740',
-  pinkGlow: 'rgba(237,61,115,0.15)',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-  codeBg: '#090706',
-  badgeBg: '#1f1812',
-  badgeBorder: '#3a2d26',
-};
-
-// ─── Palette light "cinema elegante" ──────────────────────────────────────
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#faf6f0',
-  card: '#ffffff',
-  cardHover: '#f8f2ea',
-  border: '#d6cbbc',
-  gold: '#b8860b',
-  goldSoft: '#e9c55a',
-  goldGlow: 'rgba(184,134,11,0.10)',
-  pink: '#b83060',
-  pinkDeep: '#7d1f43',
-  pinkGlow: 'rgba(184,48,96,0.12)',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-  codeBg: '#efe7dd',
-  badgeBg: '#f4e6d8',
-  badgeBorder: '#e3cbb5',
-};
-
-const FONT_SANS = "'Inter','Helvetica Neue',sans-serif";
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
-const FONT_MONO = "'JetBrains Mono','Courier New',monospace";
-
-const convertHexToRgb = (hex: string) => {
-  const clean = hex.replace('#', '');
-  const full = clean.length === 3
-    ? clean.split('').map((char) => char + char).join('')
-    : clean;
-
-  const value = Number.parseInt(full, 16);
-  const r = (value >> 16) & 255;
-  const g = (value >> 8) & 255;
-  const b = value & 255;
-
-  return `${r}, ${g}, ${b}`;
-};
 
 type Props = {
   roomId: string;
@@ -94,6 +46,10 @@ type Props = {
   onAddFilms: () => void;
 };
 
+function initials(name: string) {
+  return (name || '?').trim().charAt(0).toUpperCase();
+}
+
 export default function WelcomeRoom({
   roomId,
   roomUsers,
@@ -122,1234 +78,1592 @@ export default function WelcomeRoom({
 }: Props) {
   const router = useRouter();
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
-  const P = isDark ? D : L;
+  const P = theme === 'dark' ? THEME.dark : THEME.light;
 
-  const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
-  const codeValid = codeInput.trim().length >= 4;
+  const [shared, setShared] = useState(false);
+  const [autoStartCountdown, setAutoStartCountdown] = useState<number | null>(null);
+  const [avatarUrls, setAvatarUrls] = useState<Record<string, string>>({});
+  const autoStartRef = useRef(false);
+  const supabase = useMemo(() => createBrowserClient(), []);
+
   const participantCount = roomUsers.length;
   const availableSpots = Math.max(0, maxMembers - participantCount);
+  const missingForStart = Math.max(0, minMembers - participantCount);
   const isGroup = maxMembers > 2;
-  const isGroupReady = participantCount >= minMembers;
+  const isReady = participantCount >= minMembers;
   const isHost = currentUserId === hostActorId;
-  const sessionStarted = roomPhase === 'voting' || roomPhase === 'matched' || roomPhase === 'planning';
   const isPending = membershipStatus === 'pending';
   const isFinished = roomPhase === 'finished';
   const isExpired = roomPhase === 'expired';
+  const sessionStarted =
+    roomPhase === 'voting' ||
+    roomPhase === 'matched' ||
+    roomPhase === 'planning';
 
-  const userRefs = useRef<Map<string, HTMLDivElement>>(new Map());
-  const prevUserIds = useRef<Set<string>>(new Set());
-  const isInitialMount = useRef(true);
-  const cardRef = useRef<HTMLDivElement>(null);
+  const status = useMemo(() => {
+    if (isExpired) {
+      return {
+        label: 'Stanza scaduta',
+        detail: 'Questa stanza non è più attiva.',
+        tone: 'muted',
+      };
+    }
+
+    if (isFinished) {
+      return {
+        label: 'Stanza conclusa',
+        detail: 'La sessione è terminata.',
+        tone: 'muted',
+      };
+    }
+
+    if (isPending) {
+      return {
+        label: 'Richiesta inviata',
+        detail: 'L’host deve approvare il tuo ingresso.',
+        tone: 'gold',
+      };
+    }
+
+    if (roomPhase === 'planning') {
+      return {
+        label: 'Piano pronto',
+        detail: 'Il film è stato scelto. Ora organizziamo la visione.',
+        tone: 'pink',
+      };
+    }
+
+    if (roomPhase === 'matched') {
+      return {
+        label: 'Match trovato',
+        detail: 'Avete trovato un film in comune.',
+        tone: 'pink',
+      };
+    }
+
+    if (roomPhase === 'voting') {
+      return {
+        label: 'Votazione in corso',
+        detail: 'La stanza è attiva: continua con gli swipe.',
+        tone: 'pink',
+      };
+    }
+
+    if (isRoomLocked) {
+      return {
+        label: 'Ingressi chiusi',
+        detail: `${participantCount}/${maxMembers} partecipanti nella stanza.`,
+        tone: 'gold',
+      };
+    }
+
+    if (isReady) {
+      return {
+        label: 'Pronti a scegliere',
+        detail: `${participantCount}/${maxMembers} partecipanti collegati.`,
+        tone: 'pink',
+      };
+    }
+
+    return {
+      label: isGroup ? 'Aspettiamo il gruppo' : 'Aspettiamo il partner',
+      detail: isGroup
+        ? `Mancano ${missingForStart} ${missingForStart === 1 ? 'persona' : 'persone'} per iniziare.`
+        : 'Condividi il codice per iniziare insieme.',
+      tone: 'gold',
+    };
+  }, [
+    isExpired,
+    isFinished,
+    isPending,
+    roomPhase,
+    isRoomLocked,
+    participantCount,
+    maxMembers,
+    isReady,
+    isGroup,
+    missingForStart,
+  ]);
+
+  const primaryLabel =
+    isPending
+      ? 'Richiesta inviata'
+      : hostActionBusy
+        ? 'Operazione in corso...'
+        : isExpired
+          ? 'Stanza scaduta'
+          : isFinished
+            ? 'Stanza conclusa'
+            : roomPhase === 'planning'
+              ? 'Vedi il piano dell’uscita'
+              : roomPhase === 'matched'
+                ? 'Vedi il film scelto'
+                : roomPhase === 'voting'
+                  ? 'Entra nella votazione'
+                  : isHost
+                    ? 'Avvia la votazione'
+                    : 'In attesa dell’host';
+
+  const primaryDisabled =
+    isPending ||
+    hostActionBusy ||
+    isFinished ||
+    isExpired ||
+    (roomPhase === 'waiting' && !isHost);
+
+  // Manteniamo sempre l'ultima versione di onEnter senza usarla come
+  // dipendenza del timer: il parent può ricreare la callback a ogni render.
+  const onEnterRef = useRef(onEnter);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    onEnterRef.current = onEnter;
+  }, [onEnter]);
 
-  // ============================================================
-  // FUNZIONE DI DIGITAZIONE DEL NOME
-  // ============================================================
-  const typeName = (nameEl: HTMLElement, originalText: string) => {
-    if (nameEl.dataset.typing === 'true') return;
+  // Recupera le foto profilo reali degli utenti della stanza.
+  // I guest non hanno una riga in public.users e continueranno a mostrare l'iniziale.
+  useEffect(() => {
+    let cancelled = false;
 
-    nameEl.dataset.typing = 'true';
-    nameEl.textContent = '';
-    nameEl.style.overflow = 'hidden';
-    nameEl.style.whiteSpace = 'nowrap';
-    nameEl.style.display = 'inline-block';
-    nameEl.style.borderRight = `1.5px solid ${P.gold}`;
+    const loadAvatars = async () => {
+      const actorIds = Array.from(
+        new Set(
+          [...roomUsers, ...pendingRequests]
+            .map((user) => user.id)
+            .filter(Boolean)
+        )
+      );
 
-    let index = 0;
-
-    const baseDelay =
-      originalText.length <= 5 ? 70 :
-      originalText.length <= 10 ? 46 : 32;
-
-    const totalTypingMs = baseDelay * originalText.length + 220;
-
-    const typeInterval = window.setInterval(() => {
-      if (index < originalText.length) {
-        nameEl.textContent += originalText.charAt(index);
-        index++;
-      } else {
-        window.clearInterval(typeInterval);
-
-        window.setTimeout(() => {
-          nameEl.style.borderRight = 'none';
-          nameEl.dataset.typing = 'false';
-        }, 200);
+      if (actorIds.length === 0) {
+        if (!cancelled) setAvatarUrls({});
+        return;
       }
-    }, baseDelay);
 
-    window.setTimeout(() => {
-      window.clearInterval(typeInterval);
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, avatar_url')
+        .in('id', actorIds);
 
-      if (nameEl) {
-        nameEl.textContent = originalText;
-        nameEl.style.borderRight = 'none';
-        nameEl.dataset.typing = 'false';
+      if (error) {
+        console.warn('Impossibile caricare gli avatar della stanza:', error.message);
+        return;
       }
-    }, totalTypingMs);
-  };
 
-  // ============================================================
-  // ANIMAZIONE NUOVO UTENTE
-  // ============================================================
-  const animateNewUser = (userId: string, delay = 0) => {
-    const userEl = userRefs.current.get(userId);
-    if (!userEl) return;
+      const next: Record<string, string> = {};
 
-    const avatar = userEl.querySelector('.wr-avatar') as HTMLElement | null;
-    const nameEl = userEl.querySelector('.wr-user-name') as HTMLElement | null;
-    const originalText = nameEl?.textContent || '';
-
-    userEl.classList.add('wr-user--new');
-
-    userEl.animate(
-      [
-        {
-          opacity: 0,
-          transform: 'translateY(18px) scale(0.96)',
-          filter: 'blur(4px)',
-        },
-        {
-          opacity: 1,
-          transform: 'translateY(0) scale(1)',
-          filter: 'blur(0)',
-        },
-      ],
-      {
-        duration: 560,
-        delay,
-        easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-        fill: 'both',
-      }
-    );
-
-    if (avatar) {
-      avatar.animate(
-        [
-          {
-            transform: 'scale(0.2) rotate(-8deg)',
-            opacity: 0,
-            boxShadow: '0 0 0 rgba(237, 61, 115, 0)',
-          },
-          {
-            transform: 'scale(1.18) rotate(4deg)',
-            opacity: 1,
-            boxShadow: `0 0 24px ${P.pinkGlow}`,
-            offset: 0.6,
-          },
-          {
-            transform: 'scale(1) rotate(0deg)',
-            opacity: 1,
-            boxShadow: '0 0 0 rgba(237, 61, 115, 0)',
-          },
-        ],
-        {
-          duration: 680,
-          delay: delay + 100,
-          easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
-          fill: 'both',
+      for (const profile of data ?? []) {
+        if (
+          typeof profile.id === 'string' &&
+          typeof profile.avatar_url === 'string' &&
+          profile.avatar_url.trim()
+        ) {
+          next[profile.id] = profile.avatar_url.trim();
         }
-      );
-    }
+      }
 
-    if (nameEl && originalText) {
-      window.setTimeout(() => {
-        typeName(nameEl, originalText);
-      }, delay + 260);
-    }
+      // Fallback per il proprio account: se public.users non contiene ancora
+      // avatar_url, proviamo l'avatar del provider (es. Google) dai metadata auth.
+      if (!next[currentUserId]) {
+        const { data: authData } = await supabase.auth.getUser();
+        const authUser = authData.user;
 
-    window.setTimeout(() => {
-      userEl.classList.remove('wr-user--new');
-    }, delay + 1700);
-  };
+        if (authUser?.id === currentUserId) {
+          const metadataAvatar =
+            typeof authUser.user_metadata?.avatar_url === 'string'
+              ? authUser.user_metadata.avatar_url.trim()
+              : '';
 
-  // ============================================================
-  // RILEVAMENTO NUOVI UTENTI
-  // ============================================================
-  useEffect(() => {
-    const currentIds = new Set(roomUsers.map((u) => u.id));
+          if (metadataAvatar) {
+            next[currentUserId] = metadataAvatar;
+          }
+        }
+      }
 
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      prevUserIds.current = currentIds;
-      return;
-    }
+      if (!cancelled) {
+        setAvatarUrls(next);
+      }
+    };
 
-    const prevIds = prevUserIds.current;
-
-    const newIds = roomUsers
-      .map((user) => user.id)
-      .filter((id) => !prevIds.has(id));
-
-    prevUserIds.current = currentIds;
-
-    if (newIds.length === 0) return;
-
-    const timers: number[] = [];
-
-    newIds.forEach((newId, index) => {
-      const delay = index * 180;
-
-      timers.push(
-        window.setTimeout(() => {
-          animateNewUser(newId, delay);
-        }, 50)
-      );
-    });
+    void loadAvatars();
 
     return () => {
-      timers.forEach((timer) => window.clearTimeout(timer));
+      cancelled = true;
     };
-  }, [roomUsers]);
+  }, [supabase, roomUsers, pendingRequests, currentUserId]);
 
-  const cssVars = {
-    '--wr-bg': P.bg,
-    '--wr-bg-soft': P.bgSoft,
-    '--wr-card': P.card,
-    '--wr-card-hover': P.cardHover,
-    '--wr-border': P.border,
-    '--wr-gold': P.gold,
-    '--wr-gold-soft': P.goldSoft,
-    '--wr-gold-glow': P.goldGlow,
-    '--wr-gold-rgb': convertHexToRgb(P.gold),
-    '--wr-pink': P.pink,
-    '--wr-pink-deep': P.pinkDeep,
-    '--wr-pink-glow': P.pinkGlow,
-    '--wr-pink-rgb': convertHexToRgb(P.pink),
-    '--wr-text': P.text,
-    '--wr-muted': P.textMuted,
-    '--wr-faint': P.textFaint,
-    '--wr-code-bg': P.codeBg,
-    '--wr-badge-bg': P.badgeBg,
-    '--wr-badge-border': P.badgeBorder,
-    '--home-font': FONT_SANS,
-    '--home-font-display': FONT_DISPLAY,
-    '--home-font-mono': FONT_MONO,
-  } as CSSProperties;
+  // Avvio automatico con countdown visibile di 5 secondi.
+  // Il timer parte una sola volta quando la stanza diventa completa.
+  useEffect(() => {
+    const shouldShowAutoStart =
+      roomPhase === 'waiting' &&
+      membershipStatus === 'active' &&
+      maxMembers > 0 &&
+      participantCount >= maxMembers &&
+      !isExpired &&
+      !isFinished &&
+      !autoStartRef.current;
 
-  const handleBack = () => router.push('/home');
+    if (!shouldShowAutoStart) return;
+
+    autoStartRef.current = true;
+    setAutoStartCountdown(5);
+
+    const startedAt = Date.now();
+    const durationMs = 5000;
+
+    const updateCountdown = () => {
+      const elapsed = Date.now() - startedAt;
+      const secondsLeft = Math.max(0, Math.ceil((durationMs - elapsed) / 1000));
+
+      setAutoStartCountdown(secondsLeft);
+
+      if (secondsLeft <= 0) {
+        window.clearInterval(interval);
+
+        // Il countdown è visibile a tutti, ma solo l'host effettua
+        // l'azione server che avvia davvero la votazione.
+        if (isHost && !hostActionBusy) {
+          window.setTimeout(() => {
+            onEnterRef.current();
+          }, 320);
+        }
+      }
+    };
+
+    const interval = window.setInterval(updateCountdown, 200);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [
+    isHost,
+    roomPhase,
+    membershipStatus,
+    maxMembers,
+    participantCount,
+    hostActionBusy,
+    isExpired,
+    isFinished,
+  ]);
+
+  useEffect(() => {
+    if (roomPhase !== 'waiting' || participantCount < maxMembers) {
+      autoStartRef.current = false;
+      setAutoStartCountdown(null);
+    }
+  }, [roomPhase, participantCount, maxMembers]);
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(roomId);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
     } catch {
-      // ignore
+      setCopied(false);
     }
-
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
+
+  const handleShare = async () => {
+    const shareText = `Entra nella mia stanza Cinedate con il codice ${roomId}`;
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Cinedate',
+          text: shareText,
+        });
+        setShared(true);
+        window.setTimeout(() => setShared(false), 1800);
+        return;
+      }
+
+      await navigator.clipboard.writeText(shareText);
+      setShared(true);
+      window.setTimeout(() => setShared(false), 1800);
+    } catch {
+      // L'utente può annullare la condivisione nativa.
+    }
+  };
+
+  const vars = {
+    '--cdr-room-bg': P.bg,
+    '--cdr-room-soft': P.bgSoft,
+    '--cdr-room-surface': P.surface,
+    '--cdr-room-surface-hover': P.surfaceHover,
+    '--cdr-room-border': P.border,
+    '--cdr-room-text': P.text,
+    '--cdr-room-muted': P.textMuted,
+    '--cdr-room-faint': P.textFaint,
+    '--cdr-room-pink': P.primary,
+    '--cdr-room-pink-deep': P.primaryDeep,
+    '--cdr-room-pink-glow': P.primaryGlow,
+    '--cdr-room-gold': P.accent,
+    '--cdr-room-gold-soft': P.accentSoft,
+    '--cdr-room-gold-glow': P.accentGlow,
+  } as CSSProperties;
 
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;1,400&display=swap');
-
-        @keyframes wr-fadeInUp {
-          from { opacity: 0; transform: translateY(30px) scale(0.97); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
+        .cdr-room-welcome {
+          position: relative;
+          min-height: 100%;
+          padding: 22px 20px 34px;
+          background: var(--cdr-room-bg);
+          color: var(--cdr-room-text);
+          font-family: ${FONT.sans};
         }
 
-        @keyframes wr-pulse {
-          0% { text-shadow: 0 0 8px var(--wr-pink-glow), 0 0 20px transparent; }
-          50% {
-            text-shadow: 0 0 24px var(--wr-pink-glow), 0 0 60px var(--wr-pink);
-            color: var(--wr-gold-soft);
+        .cdr-room-welcome * {
+          box-sizing: border-box;
+        }
+
+        .cdr-room-welcome button,
+        .cdr-room-welcome input {
+          font-family: ${FONT.sans};
+        }
+
+        .cdr-room-shell {
+          width: min(100%, 1120px);
+          margin: 0 auto;
+        }
+
+        .cdr-room-back {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0;
+          border: 0;
+          background: transparent;
+          color: var(--cdr-room-muted);
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .cdr-room-back:hover {
+          color: var(--cdr-room-text);
+        }
+
+        .cdr-room-hero {
+          display: grid;
+          gap: 16px;
+          margin: 24px 0 26px;
+        }
+
+        .cdr-room-eyebrow {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: var(--cdr-room-gold);
+          font-size: 10px;
+          font-weight: 850;
+          letter-spacing: .14em;
+          text-transform: uppercase;
+        }
+
+        .cdr-room-title {
+          max-width: 780px;
+          margin: 0;
+          color: var(--cdr-room-text);
+          font-family: ${FONT.display};
+          font-size: clamp(34px, 7vw, 62px);
+          line-height: .98;
+          letter-spacing: -.035em;
+        }
+
+        .cdr-room-title em {
+          color: var(--cdr-room-pink);
+          font-style: italic;
+          font-weight: 500;
+        }
+
+        .cdr-room-subtitle {
+          max-width: 620px;
+          margin: 0;
+          color: var(--cdr-room-muted);
+          font-size: 14px;
+          line-height: 1.65;
+        }
+
+        .cdr-room-status {
+          display: inline-flex;
+          width: fit-content;
+          align-items: center;
+          gap: 8px;
+          padding: 7px 10px;
+          border: 1px solid var(--cdr-room-border);
+          border-radius: 6px;
+          background: var(--cdr-room-surface);
+          color: var(--cdr-room-muted);
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .cdr-room-status-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: var(--cdr-room-gold);
+          box-shadow: 0 0 0 4px var(--cdr-room-gold-glow);
+        }
+
+        .cdr-room-status[data-tone="pink"] .cdr-room-status-dot {
+          background: var(--cdr-room-pink);
+          box-shadow: 0 0 0 4px var(--cdr-room-pink-glow);
+        }
+
+        .cdr-room-status[data-tone="muted"] .cdr-room-status-dot {
+          background: var(--cdr-room-faint);
+          box-shadow: none;
+        }
+
+        .cdr-room-grid {
+          display: grid;
+          gap: 18px;
+        }
+
+        .cdr-room-card {
+          border: 1px solid var(--cdr-room-border);
+          border-radius: 0px;
+          background: var(--cdr-room-surface);
+          overflow: hidden;
+        }
+
+        .cdr-room-card-main {
+          padding: 20px;
+        }
+
+        .cdr-room-card-side {
+          padding: 20px;
+        }
+
+        .cdr-room-card-label {
+          color: var(--cdr-room-faint);
+          font-size: 10px;
+          font-weight: 850;
+          letter-spacing: .13em;
+          text-transform: uppercase;
+        }
+
+        .cdr-room-code-wrap {
+          margin-top: 12px;
+          border-top: 1px solid var(--cdr-room-border);
+          border-bottom: 1px solid var(--cdr-room-border);
+          padding: 18px 0;
+        }
+
+        .cdr-room-code {
+          color: var(--cdr-room-text);
+          font-family: ${FONT.mono};
+          font-size: clamp(30px, 8vw, 48px);
+          font-weight: 800;
+          letter-spacing: .1em;
+          line-height: 1;
+          word-break: break-word;
+        }
+
+        .cdr-room-code-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-top: 14px;
+        }
+
+        .cdr-room-mini-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          min-height: 38px;
+          padding: 8px 11px;
+          border: 1px solid var(--cdr-room-border);
+          border-radius: ${R.sm};
+          background: transparent;
+          color: var(--cdr-room-muted);
+          font-size: 11px;
+          font-weight: 800;
+          cursor: pointer;
+          transition: 160ms ease;
+        }
+
+        .cdr-room-mini-btn:hover {
+          border-color: var(--cdr-room-gold);
+          color: var(--cdr-room-text);
+          background: var(--cdr-room-surface-hover);
+        }
+
+        .cdr-room-context {
+          margin-top: 14px;
+          color: var(--cdr-room-muted);
+          font-size: 12px;
+          line-height: 1.55;
+        }
+
+        .cdr-room-primary {
+          width: 100%;
+          min-height: 52px;
+          margin-top: 18px;
+          border: 0;
+          border-radius: 0px;
+          background: var(--cdr-room-pink);
+          color: white;
+          font-size: 14px;
+          font-weight: 850;
+          cursor: pointer;
+          box-shadow: 0 10px 26px var(--cdr-room-pink-glow);
+          transition: 160ms ease;
+        }
+
+        .cdr-room-primary:not(:disabled):hover {
+          transform: translateY(-1px);
+          background: var(--cdr-room-pink-deep);
+        }
+
+        .cdr-room-primary:disabled {
+          cursor: not-allowed;
+          box-shadow: none;
+          opacity: .48;
+        }
+
+        .cdr-room-notice {
+          margin-top: 12px;
+          padding: 12px 13px;
+          border-radius: ${R.sm};
+          border: 1px solid var(--cdr-room-border);
+          background: var(--cdr-room-soft);
+          color: var(--cdr-room-muted);
+          font-size: 12px;
+          line-height: 1.55; 
+          
+        }
+
+        .cdr-room-host-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          margin-top: 10px;
+        }
+
+        .cdr-room-secondary {
+          min-height: 42px;
+          padding: 9px 11px;
+          border: 1px solid var(--cdr-room-border);
+          border-radius: ${R.sm};
+          background: transparent;
+          color: var(--cdr-room-muted);
+          font-size: 11px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .cdr-room-secondary:hover {
+          background: var(--cdr-room-surface-hover);
+          color: var(--cdr-room-text);
+        }
+
+        .cdr-room-secondary.danger:hover {
+          border-color: ${C.error};
+          color: ${C.error};
+        }
+
+        .cdr-room-error {
+          margin-top: 10px;
+          color: ${C.error};
+          font-size: 12px;
+          font-weight: 700;
+        }
+
+        .cdr-room-side-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding-bottom: 14px;
+          border-bottom: 1px solid var(--cdr-room-border);
+        }
+
+        .cdr-room-side-title {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: var(--cdr-room-text);
+          font-size: 13px;
+          font-weight: 850;
+        }
+
+        .cdr-room-count {
+          color: ${isReady ? 'var(--cdr-room-gold)' : 'var(--cdr-room-faint)'};
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .cdr-room-users {
+          display: grid;
+          gap: 4px;
+          margin-top: 10px;
+        }
+
+        .cdr-room-user {
+          display: grid;
+          grid-template-columns: 38px 1fr auto;
+          align-items: center;
+          gap: 10px;
+          padding: 9px 0;
+        }
+
+        .cdr-room-avatar {
+          width: 38px;
+          height: 38px;
+          display: grid;
+          place-items: center;
+          border-radius: 10%; 
+          background: var(--cdr-room-soft);
+          color: var(--cdr-room-text);
+          font-size: 13px;
+          font-weight: 850;
+        }
+
+        .cdr-room-avatar.self {
+          background: var(--cdr-room-pink);
+          color: white;
+        }
+
+        .cdr-room-avatar.has-image {
+          overflow: hidden;
+          background: var(--cdr-room-soft);
+        }
+
+        .cdr-room-avatar-img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .cdr-room-user-name {
+          color: var(--cdr-room-text);
+          font-size: 13px;
+          font-weight: 800;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .cdr-room-user-meta {
+          margin-top: 2px;
+          color: var(--cdr-room-faint);
+          font-size: 10px;
+        }
+
+        .cdr-room-host-badge {
+          display: inline-block;
+          margin-left: 6px;
+          padding: 3px 5px;
+          border-radius: 0px;
+          background: var(--cdr-room-gold);
+          color: var(--cdr-room-bg);
+          font-size: 8px;
+          font-weight: 900;
+          letter-spacing: .05em;
+          vertical-align: 1px;
+        }
+
+        .cdr-room-remove {
+          width: 30px;
+          height: 30px;
+          display: grid;
+          place-items: center;
+          border: 1px solid var(--cdr-room-border);
+          border-radius: 0%;
+          background: transparent;
+          color: var(--cdr-room-faint);
+          cursor: pointer;
+        }
+
+        .cdr-room-remove:hover {
+          color: ${C.error};
+          border-color: ${C.error};
+        }
+
+        .cdr-room-waiting {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-top: 6px;
+          padding: 12px 0 2px;
+          border-top: 1px solid var(--cdr-room-border);
+          color: var(--cdr-room-faint);
+          font-size: 11px;
+        }
+
+        .cdr-room-waiting-ring {
+          width: 28px;
+          height: 28px;
+          border: 1px dashed var(--cdr-room-gold);
+          border-radius: 10%;
+          display: grid;
+          place-items: center;
+        }
+
+        .cdr-room-waiting-ring::after {
+          content: '';
+          width: 6px;
+          height: 6px;
+          border-radius: 10%;
+          background: var(--cdr-room-gold);
+        }
+
+        .cdr-room-pending {
+          margin-top: 18px;
+          padding-top: 16px;
+          border-top: 1px solid var(--cdr-room-border);
+        }
+
+        .cdr-room-pending-title {
+          display: flex;
+          justify-content: space-between;
+          color: var(--cdr-room-text);
+          font-size: 12px;
+          font-weight: 850;
+        }
+
+        .cdr-room-request {
+          display: grid;
+          grid-template-columns: 34px 1fr auto;
+          align-items: center;
+          gap: 9px;
+          padding: 10px 0;
+        }
+
+        .cdr-room-request-actions {
+          display: flex;
+          gap: 5px;
+        }
+
+        .cdr-room-request-btn {
+          min-height: 32px;
+          padding: 6px 8px;
+          border-radius: ${R.sm};
+          border: 1px solid var(--cdr-room-border);
+          background: transparent;
+          color: var(--cdr-room-muted);
+          font-size: 10px;
+          font-weight: 850;
+          cursor: pointer;
+        }
+
+        .cdr-room-request-btn.accept {
+          border-color: var(--cdr-room-gold);
+          background: var(--cdr-room-gold);
+          color: var(--cdr-room-bg);
+        }
+
+        .cdr-room-join {
+          margin-top: 20px;
+          padding-top: 22px;
+          border-top: 1px solid var(--cdr-room-border);
+        }
+
+        .cdr-room-join-title {
+          margin: 0 0 4px;
+          color: var(--cdr-room-text);
+          font-family: ${FONT.display};
+          font-size: 20px;
+        }
+
+        .cdr-room-join-copy {
+          margin: 0 0 14px;
+          color: var(--cdr-room-faint);
+          font-size: 11px;
+        }
+
+        .cdr-room-join-form {
+          display: grid;
+          gap: 8px;
+        }
+
+        .cdr-room-code-input {
+          width: 100%;
+          min-height: 48px;
+          padding: 0 14px;
+          border: 1px solid var(--cdr-room-border);
+          border-radius: 0px;
+          background: var(--cdr-room-surface);
+          color: var(--cdr-room-text);
+          font-family: ${FONT.mono};
+          font-size: 13px;
+          font-weight: 800;
+          letter-spacing: .08em;
+          text-transform: uppercase;
+          outline: 0;
+        }
+
+        .cdr-room-code-input:focus {
+          border-color: var(--cdr-room-pink);
+          box-shadow: 0 0 0 3px var(--cdr-room-pink-glow);
+        }
+
+        .cdr-room-join-btn {
+          width: 100%;
+          height: 48px;
+          min-height: 48px;
+          padding: 0 16px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          border: 1px solid var(--cdr-room-pink);
+          border-radius: 0px;
+          background: transparent;
+          color: var(--cdr-room-pink);
+          font-size: 12px;
+          font-weight: 850;
+          line-height: 1;
+          white-space: nowrap;
+          vertical-align: middle;
+          cursor: pointer;
+        }
+
+        .cdr-room-join-btn svg {
+          display: block;
+          flex: 0 0 auto;
+        }
+
+        .cdr-room-join-btn span {
+          display: block;
+          line-height: 1;
+        }
+
+        .cdr-room-join-btn:disabled {
+          cursor: not-allowed;
+          opacity: .35;
+        }
+
+        .cdr-room-countdown-backdrop {
+          position: absolute;
+          inset: 0;
+          z-index: 50;
+          display: grid;
+          place-items: center;
+          padding: 20px;
+          background: rgba(5, 4, 3, .72);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          animation: cdr-room-countdown-fade .24s ease both;
+        }
+
+        .cdr-room-countdown-modal {
+          position: relative;
+          width: min(100%, 380px);
+          padding: 30px 24px 24px;
+          border: 1px solid var(--cdr-room-border);
+          border-radius: 12px;
+          background: var(--cdr-room-surface);
+          text-align: center;
+          box-shadow: 0 24px 70px rgba(0, 0, 0, .28);
+          overflow: hidden;
+          animation: cdr-room-countdown-pop .48s cubic-bezier(.18,.9,.25,1.08) both;
+        }
+
+        .cdr-room-countdown-modal::before,
+        .cdr-room-countdown-modal::after {
+          content: '';
+          position: absolute;
+          width: 52px;
+          height: 1px;
+          top: 18px;
+          background: linear-gradient(
+            90deg,
+            transparent,
+            var(--cdr-room-gold),
+            transparent
+          );
+          opacity: .65;
+          animation: cdr-room-countdown-line 1.8s ease-in-out infinite alternate;
+        }
+
+        .cdr-room-countdown-modal::before {
+          left: 18px;
+        }
+
+        .cdr-room-countdown-modal::after {
+          right: 18px;
+          animation-delay: .2s;
+        }
+
+        .cdr-room-countdown-kicker {
+          color: var(--cdr-room-gold);
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: .14em;
+          text-transform: uppercase;
+          animation: cdr-room-countdown-rise .45s .08s ease both;
+        }
+
+        .cdr-room-countdown-number-wrap {
+          position: relative;
+          width: 150px;
+          height: 150px;
+          margin: 20px auto 18px;
+          display: grid;
+          place-items: center;
+        }
+
+        .cdr-room-countdown-number-wrap::before {
+          content: '';
+          position: absolute;
+          inset: 15px;
+          border-radius: 50%;
+          background: var(--cdr-room-pink-glow);
+          opacity: .5;
+          animation: cdr-room-countdown-breathe 1s ease-in-out infinite;
+        }
+
+        .cdr-room-countdown-ring {
+          position: absolute;
+          inset: 0;
+          border: 2px solid var(--cdr-room-border);
+          border-radius: 50%;
+          box-shadow:
+            0 0 24px var(--cdr-room-pink-glow),
+            inset 0 0 18px var(--cdr-room-gold-glow);
+        }
+
+        .cdr-room-countdown-ring::before {
+          content: '';
+          position: absolute;
+          inset: -2px;
+          border: 4px solid transparent;
+          border-top-color: var(--cdr-room-pink);
+          border-right-color: var(--cdr-room-pink);
+          border-radius: 50%;
+          filter: drop-shadow(0 0 5px var(--cdr-room-pink-glow));
+          animation: cdr-room-countdown-orbit 1.05s linear infinite;
+        }
+
+        .cdr-room-countdown-ring::after {
+          content: '';
+          position: absolute;
+          inset: 9px;
+          border: 2px solid transparent;
+          border-bottom-color: var(--cdr-room-gold);
+          border-left-color: var(--cdr-room-gold);
+          border-radius: 50%;
+          opacity: .95;
+          filter: drop-shadow(0 0 4px var(--cdr-room-gold-glow));
+          animation: cdr-room-countdown-orbit-reverse 1.65s linear infinite;
+        }
+
+        .cdr-room-countdown-orbit-dot {
+          position: absolute;
+          inset: -7px;
+          border-radius: 50%;
+          animation: cdr-room-countdown-orbit-dot 1.05s linear infinite;
+        }
+
+        .cdr-room-countdown-orbit-dot::before {
+          content: '';
+          position: absolute;
+          top: 1px;
+          left: 50%;
+          width: 10px;
+          height: 10px;
+          transform: translateX(-50%);
+          border-radius: 50%;
+          background: var(--cdr-room-gold);
+          box-shadow:
+            0 0 8px var(--cdr-room-gold),
+            0 0 18px var(--cdr-room-pink);
+        }
+
+        .cdr-room-countdown-number-box {
+          position: relative;
+          z-index: 2;
+          display: grid;
+          justify-items: center;
+          gap: 2px;
+        }
+
+        .cdr-room-countdown-number {
+          color: var(--cdr-room-text);
+          font-family: ${FONT.sans};
+          font-size: 68px;
+          font-weight: 800;
+          letter-spacing: -.055em;
+          line-height: .9;
+          font-variant-numeric: tabular-nums;
+          text-shadow: 0 5px 22px rgba(0, 0, 0, .12);
+          animation: cdr-room-countdown-tick .46s cubic-bezier(.16,.9,.28,1.12) both;
+        }
+
+        .cdr-room-countdown-unit {
+          color: var(--cdr-room-muted);
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: .12em;
+          text-transform: uppercase;
+          animation: cdr-room-countdown-unit .46s ease both;
+        }
+
+        .cdr-room-countdown-title {
+          margin: 0;
+          color: var(--cdr-room-text);
+          font-family: ${FONT.display};
+          font-size: 25px;
+          line-height: 1.1;
+          animation: cdr-room-countdown-rise .45s .14s ease both;
+        }
+
+        .cdr-room-countdown-copy {
+          max-width: 290px;
+          margin: 8px auto 0;
+          color: var(--cdr-room-muted);
+          font-size: 12px;
+          line-height: 1.55;
+          animation: cdr-room-countdown-rise .45s .2s ease both;
+        }
+
+        .cdr-room-countdown-progress {
+          height: 3px;
+          margin-top: 20px;
+          background: var(--cdr-room-border);
+          overflow: hidden;
+        }
+
+        .cdr-room-countdown-progress > span {
+          display: block;
+          width: 100%;
+          height: 100%;
+          transform-origin: left center;
+          background: linear-gradient(
+            90deg,
+            var(--cdr-room-pink),
+            var(--cdr-room-gold)
+          );
+          animation: cdr-room-countdown-progress 5s linear forwards;
+        }
+
+        @keyframes cdr-room-countdown-fade {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        @keyframes cdr-room-countdown-pop {
+          0% {
+            opacity: 0;
+            transform: scale(.9) translateY(14px);
+            filter: blur(8px);
           }
-          100% { text-shadow: 0 0 8px var(--wr-pink-glow), 0 0 20px transparent; }
+          65% {
+            opacity: 1;
+            transform: scale(1.018) translateY(-1px);
+            filter: blur(0);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+            filter: blur(0);
+          }
         }
 
-        @keyframes wr-breathe {
-          0% { transform: scale(1); box-shadow: 0 8px 30px var(--wr-pink-glow); }
-          50% { transform: scale(1.02); box-shadow: 0 12px 40px var(--wr-pink-glow); }
-          100% { transform: scale(1); box-shadow: 0 8px 30px var(--wr-pink-glow); }
+        @keyframes cdr-room-countdown-rise {
+          from {
+            opacity: 0;
+            transform: translateY(8px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
-        @keyframes wr-gradient-shift {
-          0% { background-position: 0% 50%; }
-          50% { background-position: 100% 50%; }
-          100% { background-position: 0% 50%; }
-        }
-
-        @keyframes wr-sparkle {
-          0%, 100% { transform: scale(0.8); opacity: 0.4; }
-          50% { transform: scale(1.2); opacity: 1; }
-        }
-
-        @keyframes wr-spin {
+        @keyframes cdr-room-countdown-orbit {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
 
-        @keyframes wr-check-rotate {
-          0% { transform: scale(0) rotate(-90deg); opacity: 0; }
-          60% { transform: scale(1.3) rotate(10deg); opacity: 1; }
-          100% { transform: scale(1) rotate(0); opacity: 1; }
+        @keyframes cdr-room-countdown-orbit-reverse {
+          from { transform: rotate(360deg); }
+          to { transform: rotate(0deg); }
         }
 
-        @keyframes wr-shake {
-          0%, 100% { transform: translateX(0); }
-          20% { transform: translateX(-10px); }
-          40% { transform: translateX(10px); }
-          60% { transform: translateX(-6px); }
-          80% { transform: translateX(6px); }
+        @keyframes cdr-room-countdown-orbit-dot {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
 
-        @keyframes wr-user-glow {
-          0% { opacity: 0; transform: scale(0.92); }
-          30% { opacity: 1; transform: scale(1); }
-          100% { opacity: 0; transform: scale(1.06); }
-        }
-
-        .wr-root {
-          padding: 24px 20px;
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-          background: var(--wr-bg);
-          max-width: 100%;
-          margin: 0;
-          font-family: var(--home-font);
-          letter-spacing: -0.01em;
-        }
-
-        .wr-root button,
-        .wr-root input {
-          border-radius: 0 !important;
-          font-family: var(--home-font);
-        }
-
-        .wr-root ::selection {
-          background: var(--wr-pink);
-          color: #fff;
-        }
-
-        @media (min-width: 1024px) {
-          .wr-root {
-            padding: 40px 32px;
+        @keyframes cdr-room-countdown-breathe {
+          0%, 100% {
+            transform: scale(.94);
+            opacity: .34;
+          }
+          50% {
+            transform: scale(1.08);
+            opacity: .72;
           }
         }
 
-        .wr-header {
-          animation: wr-fadeInUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+        @keyframes cdr-room-countdown-tick {
+          0% {
+            opacity: 0;
+            transform: translateY(8px) scale(.72);
+          }
+          68% {
+            opacity: 1;
+            transform: translateY(-2px) scale(1.08);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
         }
 
-        .wr-breadcrumb {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          background: none;
-          border: none;
-          padding: 0;
-          color: var(--wr-muted);
-          font-size: 13px;
-          font-weight: 500;
-          margin-bottom: 12px;
-          cursor: pointer;
-          transition: color 0.2s ease;
+        @keyframes cdr-room-countdown-unit {
+          from {
+            opacity: 0;
+            transform: translateY(4px);
+          }
+          to {
+            opacity: .9;
+            transform: translateY(0);
+          }
         }
 
-        .wr-breadcrumb:hover {
-          color: var(--wr-gold);
+        @keyframes cdr-room-countdown-line {
+          from { opacity: .25; transform: scaleX(.7); }
+          to { opacity: .75; transform: scaleX(1); }
         }
 
-        .wr-title-row {
-          display: flex;
-          align-items: center;
-          gap: 14px;
-          flex-wrap: wrap;
+        @keyframes cdr-room-countdown-progress {
+          from { transform: scaleX(1); }
+          to { transform: scaleX(0); }
         }
 
-        .wr-title {
-          font-family: var(--home-font-display);
-          font-size: 32px;
-          font-weight: 800;
-          color: var(--wr-text);
-          letter-spacing: -0.02em;
-          margin: 0;
+        @media (prefers-reduced-motion: reduce) {
+          .cdr-room-countdown-backdrop,
+          .cdr-room-countdown-modal,
+          .cdr-room-countdown-number,
+          .cdr-room-countdown-ring,
+          .cdr-room-countdown-kicker,
+          .cdr-room-countdown-title,
+          .cdr-room-countdown-copy,
+          .cdr-room-countdown-number-wrap::before,
+          .cdr-room-countdown-orbit-dot,
+          .cdr-room-countdown-modal::before,
+          .cdr-room-countdown-modal::after,
+          .cdr-room-countdown-progress > span {
+            animation: none !important;
+          }
         }
 
-        .wr-title span {
-          background: #fff;
-          background-size: 200% 200%;
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          animation: wr-gradient-shift 4s ease-in-out infinite;
+        @media (min-width: 860px) {
+          .cdr-room-welcome {
+            padding: 34px 32px 48px;
+          }
+
+          .cdr-room-grid {
+            grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr);
+            align-items: start;
+          }
+
+          .cdr-room-card-main,
+          .cdr-room-card-side {
+            padding: 26px;
+          }
+
+          .cdr-room-join-form {
+            grid-template-columns: minmax(0, 1fr) 190px;
+          }
         }
 
-        .wr-sub {
-          font-size: 15px;
-          color: var(--wr-muted);
-          margin: 4px 0 0;
-        }
+        @media (max-width: 520px) {
+          .cdr-room-host-actions {
+            grid-template-columns: 1fr;
+          }
 
-        .wr-sub span {
-          color: var(--wr-gold);
-          font-weight: 700;
-        }
+          .cdr-room-request {
+            grid-template-columns: 34px 1fr;
+          }
 
-        .wr-card {
-          background: var(--wr-card);
-          border: 1px solid var(--wr-border);
-          position: relative;
-          overflow: hidden;
-          transition:
-            transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
-            box-shadow 0.3s ease,
-            border-color 0.25s;
-        }
-
-        .wr-card::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          border: 1px solid transparent;
-          transition: border-color 0.3s ease;
-          pointer-events: none;
-        }
-
-        .wr-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 12px 32px var(--wr-gold-glow);
-        }
-
-        .wr-card:hover::after {
-          border-color: rgba(var(--wr-gold-rgb), 0.38);
-        }
-
-        .ticket-tear {
-          position: absolute;
-          left: 50%;
-          bottom: -1px;
-          transform: translateX(-50%);
-          width: 16px;
-          height: 6px;
-          background: var(--wr-bg);
-          border-radius: 50% 50% 0 0;
-          border-left: 1px solid var(--wr-border);
-          border-right: 1px solid var(--wr-border);
-          border-top: 1px solid var(--wr-border);
-          opacity: 0.6;
-          pointer-events: none;
-          z-index: 2;
-        }
-
-        .wr-card--code {
-          padding: 24px;
-          display: flex;
-          flex-direction: column;
-          gap: 18px;
-          animation: wr-fadeInUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
-        }
-
-        .wr-card--users {
-          padding: 20px 24px;
-          animation: wr-fadeInUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both;
-        }
-
-        .wr-card-label {
-          font-size: 12px;
-          font-weight: 700;
-          color: var(--wr-muted);
-          letter-spacing: 1px;
-          text-transform: uppercase;
-        }
-
-        .wr-code-box {
-          display: flex;
-          align-items: center;
-          background: var(--wr-code-bg);
-          border: 1px solid var(--wr-border);
-          padding: 6px;
-          gap: 4px;
-          transition: border-color 0.3s ease;
-        }
-
-        .wr-code-box:hover {
-          border-color: var(--wr-gold);
-        }
-
-        .wr-code {
-          flex: 1;
-          font-size: 30px;
-          font-weight: 700;
-          color: var(--wr-pink);
-          letter-spacing: 8px;
-          text-align: center;
-          font-family: var(--home-font-mono);
-          padding: 16px 0;
-          animation: wr-pulse 3s ease-in-out infinite;
-        }
-
-        .wr-copy-btn {
-          background: var(--wr-bg-soft);
-          border: 1px solid var(--wr-border);
-          padding: 10px 18px;
-          color: var(--wr-muted);
-          font-size: 13px;
-          font-weight: 600;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          cursor: pointer;
-          transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-
-        .wr-copy-btn:hover {
-          color: var(--wr-gold);
-          border-color: var(--wr-gold);
-          transform: scale(1.02);
-        }
-
-        .wr-copy-btn:active {
-          transform: scale(0.96);
-        }
-
-        .wr-hint {
-          font-size: 13px;
-          color: var(--wr-faint);
-          text-align: center;
-          opacity: 0.9;
-          margin: 0;
-        }
-
-        .wr-enter-btn {
-          width: 100%;
-          padding: 16px;
-          background: var(--wr-pink);
-          color: #ffffff;
-          border: none;
-          font-size: 16px;
-          font-weight: 600;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          box-shadow: 0 8px 30px var(--wr-pink-glow);
-          transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-          animation: wr-breathe 2.5s ease-in-out infinite;
-        }
-
-        .wr-enter-btn:not(:disabled):hover {
-          background: var(--wr-pink-deep);
-          transform: translateY(-3px) scale(1.01);
-          box-shadow: 0 14px 40px var(--wr-pink-glow);
-          animation: none;
-        }
-
-        .wr-enter-btn:disabled {
-          background: var(--wr-bg-soft);
-          box-shadow: none;
-          opacity: 0.6;
-          cursor: not-allowed;
-          animation: none;
-        }
-
-        .wr-enter-btn svg {
-          transition: transform 0.3s ease;
-        }
-
-        .wr-enter-btn:not(:disabled):hover svg {
-          transform: rotate(-8deg) scale(1.1);
-        }
-
-        .wr-users-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 16px;
-        }
-
-        .wr-users-label {
-          font-size: 12px;
-          font-weight: 700;
-          color: var(--wr-muted);
-          text-transform: uppercase;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .wr-users-label svg {
-          color: var(--wr-gold);
-        }
-
-        .wr-share-btn {
-          color: var(--wr-muted);
-          font-size: 13px;
-          background: transparent;
-          border: none;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          transition: color 0.2s ease, transform 0.2s ease;
-        }
-
-        .wr-share-btn:hover {
-          color: var(--wr-gold);
-          transform: scale(1.05);
-        }
-
-        .wr-user-list {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-        }
-
-        .wr-empty {
-          font-size: 14px;
-          color: var(--wr-muted);
-        }
-
-        .wr-user {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 4px 0;
-          position: relative;
-          transition: all 0.2s ease;
-        }
-
-        .wr-user--new::before {
-          content: '';
-          position: absolute;
-          inset: -6px -10px;
-          border-radius: 14px;
-          background: radial-gradient(
-            circle at 20% 50%,
-            var(--wr-pink-glow),
-            transparent 70%
-          );
-          opacity: 0;
-          pointer-events: none;
-          z-index: 0;
-          animation: wr-user-glow 1.6s ease-out both;
-        }
-
-        .wr-avatar {
-          width: 38px;
-          height: 38px;
-          border-radius: 50%;
-          background: var(--wr-bg-soft);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 16px;
-          font-weight: 600;
-          color: var(--wr-text);
-          transition: transform 0.2s ease;
-          position: relative;
-          z-index: 1;
-        }
-
-        .wr-avatar--self {
-          background: var(--wr-pink);
-          color: #ffffff;
-        }
-
-        .wr-user-name {
-          font-size: 15px;
-          font-weight: 500;
-          color: var(--wr-text);
-          position: relative;
-          display: inline-block;
-          z-index: 1;
-        }
-
-        .wr-you {
-          font-size: 12px;
-          color: var(--wr-gold);
-          font-weight: 600;
-          margin-top: 2px;
-        }
-
-        .wr-waiting {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding-top: 14px;
-          border-top: 1px solid var(--wr-border);
-        }
-
-        .wr-waiting-avatar {
-          width: 38px;
-          height: 38px;
-          border-radius: 50%;
-          border: 2px dashed var(--wr-gold);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-sizing: border-box;
-          animation: wr-spin 2.5s linear infinite;
-        }
-
-        .wr-waiting-dot {
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: var(--wr-gold-glow);
-          animation: wr-sparkle 1.2s ease-in-out infinite;
-        }
-
-        .wr-waiting-text {
-          font-size: 14px;
-          color: var(--wr-faint);
-          font-style: italic;
-        }
-
-        .wr-divider {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          padding: 4px 0;
-          animation: wr-fadeInUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
-        }
-
-        .wr-divider::before,
-        .wr-divider::after {
-          content: '';
-          flex: 1;
-          border-top: 1px solid var(--wr-border);
-        }
-
-        .wr-divider span {
-          font-size: 13px;
-          color: var(--wr-muted);
-          white-space: nowrap;
-        }
-
-        .wr-form {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-          animation: wr-fadeInUp 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.4s both;
-        }
-
-        .wr-form-row {
-          display: flex;
-          gap: 12px;
-          width: 100%;
-        }
-
-        .wr-code-input {
-          flex: 1;
-          min-width: 0;
-          padding: 16px 20px;
-          border: 1px solid var(--wr-border);
-          font-size: 15px;
-          font-family: var(--home-font-mono);
-          color: var(--wr-text);
-          background: var(--wr-bg-soft);
-          outline: none;
-          text-align: center;
-          letter-spacing: 5px;
-          font-weight: 600;
-          text-transform: uppercase;
-          caret-color: var(--wr-pink);
-          transition: border-color 0.3s ease, box-shadow 0.3s ease;
-        }
-
-        .wr-code-input:focus {
-          border-color: var(--wr-pink);
-          box-shadow: 0 0 0 4px var(--wr-pink-glow);
-        }
-
-        .wr-code-input::placeholder {
-          letter-spacing: 1px;
-          font-weight: 400;
-          color: var(--wr-faint);
-        }
-
-        .wr-code-submit {
-          padding: 0 32px;
-          background: var(--wr-gold);
-          color: #000000;
-          border: none;
-          font-size: 16px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-
-        .wr-code-submit:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
-
-        .wr-code-submit:not(:disabled):hover {
-          background: var(--wr-gold-soft);
-          transform: scale(1.02);
-          box-shadow: 0 4px 16px var(--wr-gold-glow);
-        }
-
-        .wr-code-submit:active {
-          transform: scale(0.96);
-        }
-
-        .wr-error {
-          font-size: 13px;
-          color: var(--wr-pink);
-          text-align: center;
-          margin-top: -8px;
-          font-weight: 500;
-          animation: wr-shake 0.4s ease both;
-        }
-
-        .wr-outline-btn {
-          width: 100%;
-          padding: 15px;
-          background: transparent;
-          color: var(--wr-pink);
-          border: 1.5px solid var(--wr-pink);
-          font-size: 16px;
-          font-weight: 600;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-
-        .wr-outline-btn:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
-        }
-
-        .wr-outline-btn:not(:disabled):hover {
-          background: var(--wr-pink-glow);
-          transform: translateY(-2px) scale(1.01);
-          box-shadow: 0 6px 20px var(--wr-pink-glow);
-        }
-
-        .wr-outline-btn:active {
-          transform: scale(0.97);
-        }
-
-        .wr-check-icon {
-          animation: wr-check-rotate 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-        }
-
-        .wr-breadcrumb:focus-visible,
-        .wr-copy-btn:focus-visible,
-        .wr-enter-btn:focus-visible,
-        .wr-share-btn:focus-visible,
-        .wr-code-input:focus-visible,
-        .wr-code-submit:focus-visible,
-        .wr-outline-btn:focus-visible {
-          outline: 2px solid var(--wr-gold);
-          outline-offset: 2px;
+          .cdr-room-request-actions {
+            grid-column: 1 / -1;
+            padding-left: 43px;
+          }
         }
       `}</style>
 
-      <div className="wr-root" style={{ ...cssVars, opacity: mounted ? 1 : 0, transition: 'opacity 0.4s ease' }}>
-        <header className="wr-header">
+      <main className="cdr-room-welcome" style={vars}>
+        {autoStartCountdown !== null && roomPhase === 'waiting' && (
+          <div
+            className="cdr-room-countdown-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Avvio automatico della votazione"
+          >
+            <div className="cdr-room-countdown-modal">
+              <div className="cdr-room-countdown-kicker">Stanza completa</div>
+
+              <div className="cdr-room-countdown-number-wrap">
+                <div className="cdr-room-countdown-ring" aria-hidden="true" />
+                <div className="cdr-room-countdown-orbit-dot" aria-hidden="true" />
+
+                <div
+                  key={autoStartCountdown}
+                  className="cdr-room-countdown-number-box"
+                  aria-live="polite"
+                >
+                  <div className="cdr-room-countdown-number">
+                    {autoStartCountdown}
+                  </div>
+                  <div className="cdr-room-countdown-unit">
+                    {autoStartCountdown === 1 ? 'secondo' : 'secondi'}
+                  </div>
+                </div>
+              </div>
+
+              <h2 className="cdr-room-countdown-title">Si parte!</h2>
+
+              <p className="cdr-room-countdown-copy">
+                Tutti i posti sono occupati. La votazione inizierà automaticamente.
+              </p>
+
+              <div className="cdr-room-countdown-progress" aria-hidden="true">
+                <span />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="cdr-room-shell">
           <button
             type="button"
-            className="wr-breadcrumb"
+            className="cdr-room-back"
             onClick={() => router.push('/crea-stanza')}
           >
-            <ArrowLeft size={20} style={{ marginRight: '6px' }} />
+            <ArrowLeft size={18} />
             Crea stanza
           </button>
 
-          <div className="wr-title-row">
-            <h1 className="wr-title">
-              Ciao, <span>@{currentUserName}</span>
+          <section className="cdr-room-hero">
+            <div className="cdr-room-eyebrow">
+              <FilmSlate size={16} weight="fill" />
+              Stanza attiva
+            </div>
+
+            <h1 className="cdr-room-title">
+              Ciao @{currentUserName},<br />
+              <em>scegliete insieme.</em>
             </h1>
-          </div>
 
-          <p className="wr-sub">
-            Pronto per il tuo <span>film perfetto</span>?
-          </p>
-        </header>
+            <p className="cdr-room-subtitle">
+              Invita chi vuoi nella stanza, aspetta che il gruppo sia pronto e poi
+              fate swipe sugli stessi film. Il primo match diventa il punto di partenza.
+            </p>
 
-        <section className="wr-card wr-card--code">
-          <div className="wr-card-label">La tua stanza</div>
-
-          <div className="wr-code-box">
-            <div className="wr-code">{roomId}</div>
-
-            <button
-              type="button"
-              className="wr-copy-btn"
-              onClick={handleCopy}
-              aria-label={copied ? 'Codice copiato' : 'Copia codice stanza'}
-            >
-              {copied ? (
-                <Check size={18} weight="bold" className="wr-check-icon" />
-              ) : (
-                <Copy size={18} />
-              )}
-
-              <span>{copied ? 'Copiato!' : 'Copia codice'}</span>
-            </button>
-          </div>
-
-          <p className="wr-hint">
-            {isExpired
-              ? 'Questa stanza è scaduta perché è rimasta vuota troppo a lungo'
-              : sessionStarted
-                ? 'La votazione è iniziata · nuovi ingressi chiusi'
-                : isRoomLocked
-                  ? `Ingressi chiusi · ${participantCount}/${maxMembers} partecipanti`
-                  : isGroup
-                    ? `Condividi il codice con il gruppo · ${participantCount}/${maxMembers} partecipanti`
-                    : 'Condividi questo codice con il tuo partner'}
-          </p>
-
-          <button
-            type="button"
-            className="wr-enter-btn"
-            onClick={onEnter}
-            disabled={
-              isPending ||
-              hostActionBusy ||
-              isFinished ||
-              isExpired ||
-              (roomPhase === 'waiting' && !isHost)
-            }
-          >
-            <FilmSlate size={20} weight="fill" />
-            <span>
-              {isPending
-                ? 'Richiesta inviata'
-                : hostActionBusy
-                  ? 'Operazione in corso...'
-                  : isExpired
-                    ? 'Stanza scaduta'
-                    : isFinished
-                      ? 'Stanza conclusa'
-                      : roomPhase === 'planning'
-                      ? 'Vedi il piano dell’uscita'
-                      : roomPhase === 'matched'
-                        ? 'Vedi il film scelto'
-                        : roomPhase === 'voting'
-                          ? 'Entra nella votazione'
-                          : isHost
-                            ? 'Avvia la votazione'
-                            : 'In attesa che l’host avvii la votazione'}
-            </span>
-          </button>
-
-          {isHost && roomPhase === 'waiting' && !isGroupReady && (
-            <div style={{
-              marginTop: '8px',
-              color: P.textMuted,
-              fontSize: '12px',
-              textAlign: 'center',
-              lineHeight: 1.45,
-            }}>
-              Il server controllerà i partecipanti al momento dell’avvio · {participantCount}/{minMembers} visibili ora
+            <div className="cdr-room-status" data-tone={status.tone}>
+              <span className="cdr-room-status-dot" />
+              {status.label}
             </div>
-          )}
+          </section>
 
-          {isPending && (
-            <div style={{
-              marginTop: '10px',
-              padding: '12px 14px',
-              border: `1px solid ${P.border}`,
-              background: P.bgSoft,
-              color: P.textMuted,
-              fontSize: '13px',
-              lineHeight: 1.55,
-              textAlign: 'center',
-            }}>
-              L’host deve accettare la tua richiesta prima che tu possa partecipare alla stanza.
-            </div>
-          )}
+          <div className="cdr-room-grid">
+            <section className="cdr-room-card cdr-room-card-main">
+              <div className="cdr-room-card-label">Codice stanza</div>
 
-          {isHost && roomPhase !== 'finished' && roomPhase !== 'expired' && (
-            <button
-              type="button"
-              onClick={onFinishRoom}
-              disabled={hostActionBusy}
-              style={{
-                width: '100%',
-                marginTop: '10px',
-                padding: '11px 14px',
-                background: 'transparent',
-                color: P.textMuted,
-                border: `1px solid ${P.border}`,
-                cursor: hostActionBusy ? 'not-allowed' : 'pointer',
-                fontFamily: FONT_SANS,
-                fontWeight: 700,
-              }}
-            >
-              Chiudi stanza
-            </button>
-          )}
+              <div className="cdr-room-code-wrap">
+                <div className="cdr-room-code">{roomId}</div>
 
-          {hostActionError && (
-            <div style={{ color: P.pink, fontSize: '13px', textAlign: 'center' }}>
-              {hostActionError}
-            </div>
-          )}
-
-          {isHost && roomPhase === 'waiting' && (
-            <button
-              type="button"
-              onClick={onToggleLock}
-              disabled={hostActionBusy}
-              style={{
-                width: '100%',
-                marginTop: '10px',
-                padding: '12px 14px',
-                background: 'transparent',
-                color: isRoomLocked ? P.pink : P.textMuted,
-                border: `1px solid ${isRoomLocked ? P.pink : P.border}`,
-                cursor: hostActionBusy ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                fontFamily: FONT_SANS,
-                fontWeight: 700,
-              }}
-            >
-              {isRoomLocked ? <Lock size={17} /> : <LockOpen size={17} />}
-              {isRoomLocked ? 'Riapri ingressi' : 'Chiudi ingressi'}
-            </button>
-          )}
-          <div className="ticket-tear" />
-        </section>
-
-        <section className="wr-card wr-card--users" ref={cardRef}>
-          <div className="wr-users-header">
-            <div className="wr-users-label">
-              <Users size={18} weight="fill" />
-              Partecipanti
-            </div>
-
-            <div style={{ marginLeft: 'auto', marginRight: '10px', fontSize: '12px', fontWeight: 700, color: isGroupReady ? P.gold : P.textMuted }}>
-              {participantCount}/{maxMembers} · {isGroupReady ? 'Gruppo pronto' : `Minimo ${minMembers}`}
-            </div>
-
-            <button
-              type="button"
-              className="wr-share-btn"
-              title="Condividi stanza"
-            >
-              <Share size={16} />
-              Condividi
-            </button>
-          </div>
-
-          <div className="wr-user-list">
-            {roomUsers.length === 0 ? (
-              <div className="wr-empty">
-                Nessuno ancora...
-              </div>
-            ) : (
-              roomUsers.map((u) => (
-                <div
-                  key={u.id}
-                  ref={(el) => {
-                    if (el) {
-                      userRefs.current.set(u.id, el);
-                    } else {
-                      userRefs.current.delete(u.id);
-                    }
-                  }}
-                  className="wr-user"
-                >
-                  <div
-                    className={`wr-avatar${
-                      u.id === currentUserId ? ' wr-avatar--self' : ''
-                    }`}
+                <div className="cdr-room-code-actions">
+                  <button
+                    type="button"
+                    className="cdr-room-mini-btn"
+                    onClick={handleCopy}
                   >
-                    {u.name.charAt(0).toUpperCase()}
-                  </div>
+                    {copied ? <Check size={15} weight="bold" /> : <Copy size={15} />}
+                    {copied ? 'Copiato' : 'Copia codice'}
+                  </button>
 
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                      <div className="wr-user-name">
-                        @{u.name}
-                      </div>
-                      {u.id === hostActorId && (
-                        <span style={{
-                          fontSize: '10px',
-                          fontWeight: 800,
-                          letterSpacing: '0.08em',
-                          color: P.bg,
-                          background: P.gold,
-                          padding: '3px 6px',
-                          borderRadius: '999px',
-                          lineHeight: 1,
-                        }}>
-                          HOST
-                        </span>
-                      )}
-                    </div>
+                  <button
+                    type="button"
+                    className="cdr-room-mini-btn"
+                    onClick={handleShare}
+                  >
+                    {shared ? <Check size={15} weight="bold" /> : <ShareNetwork size={15} />}
+                    {shared ? 'Condiviso' : 'Condividi'}
+                  </button>
 
-                    {u.id === currentUserId && (
-                      <div className="wr-you">
-                        Tu
-                      </div>
-                    )}
-                  </div>
-
-                  {isHost && u.id !== currentUserId && u.id !== hostActorId && roomPhase === 'waiting' && (
+                  {isHost && roomPhase === 'waiting' && (
                     <button
                       type="button"
-                      title={`Rimuovi @${u.name}`}
-                      onClick={() => {
-                        if (window.confirm(`Rimuovere @${u.name} dalla stanza?`)) {
-                          onRemoveParticipant(u.id);
-                        }
-                      }}
+                      className="cdr-room-mini-btn"
+                      onClick={onToggleLock}
                       disabled={hostActionBusy}
-                      style={{
-                        marginLeft: 'auto',
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        border: `1px solid ${P.border}`,
-                        background: 'transparent',
-                        color: P.textMuted,
-                        cursor: hostActionBusy ? 'not-allowed' : 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
                     >
-                      <X size={15} />
+                      {isRoomLocked ? <LockOpen size={15} /> : <Lock size={15} />}
+                      {isRoomLocked ? 'Riapri ingressi' : 'Chiudi ingressi'}
                     </button>
                   )}
                 </div>
-              ))
-            )}
-
-            {availableSpots > 0 && !isExpired && (
-              <div className="wr-waiting">
-                <div className="wr-waiting-avatar">
-                  <div className="wr-waiting-dot" />
-                </div>
-
-                <div className="wr-waiting-text">
-                  {isGroup
-                    ? (isGroupReady
-                        ? `${availableSpots} ${availableSpots === 1 ? 'posto disponibile' : 'posti disponibili'}`
-                        : `In attesa di ${Math.max(0, minMembers - participantCount)} ${Math.max(0, minMembers - participantCount) === 1 ? 'persona' : 'persone'} per essere pronti...`)
-                    : 'In attesa del partner...'}
-                </div>
               </div>
-            )}
-          </div>
-          <div className="ticket-tear" />
-        </section>
 
-        {isHost && pendingRequests.length > 0 && roomPhase === 'waiting' && (
-          <section className="wr-card wr-card--users">
-            <div className="wr-users-header">
-              <div className="wr-users-label">
-                <Users size={18} weight="fill" />
-                Richieste di partecipazione
+              <div className="cdr-room-context">
+                {participantCount >= maxMembers && roomPhase === 'waiting'
+                  ? 'Stanza completa · la votazione partirà automaticamente.'
+                  : status.detail}
               </div>
-              <div style={{ fontSize: '12px', color: P.pink, fontWeight: 800 }}>
-                {pendingRequests.length}
-              </div>
-            </div>
 
-            <div className="wr-user-list">
-              {pendingRequests.map((u) => (
-                <div key={u.id} className="wr-user">
-                  <div className="wr-avatar">
-                    {u.name.charAt(0).toUpperCase()}
+              <button
+                type="button"
+                className="cdr-room-primary"
+                onClick={onEnter}
+                disabled={primaryDisabled}
+              >
+                {primaryLabel}
+              </button>
+
+              {isHost &&
+                roomPhase === 'waiting' &&
+                !isReady &&
+                !isExpired && (
+                  <div className="cdr-room-notice">
+                    Servono almeno {minMembers} partecipanti per iniziare.
+                    Al momento ne vediamo {participantCount}.
                   </div>
+                )}
 
-                  <div style={{ flex: 1 }}>
-                    <div className="wr-user-name">@{u.name}</div>
-                    <div style={{ color: P.textFaint, fontSize: '11px', marginTop: '2px' }}>
-                      Vuole entrare nella stanza
+              {isPending && (
+                <div className="cdr-room-notice">
+                  Puoi restare qui: la stanza si aggiornerà appena l’host approverà
+                  la tua richiesta.
+                </div>
+              )}
+
+              {hostActionError && (
+                <div className="cdr-room-error">{hostActionError}</div>
+              )}
+
+              {isHost && !isFinished && !isExpired && (
+                <div className="cdr-room-host-actions">
+                  <button
+                    type="button"
+                    className="cdr-room-secondary"
+                    onClick={onToggleLock}
+                    disabled={hostActionBusy || roomPhase !== 'waiting'}
+                  >
+                    {isRoomLocked ? 'Riapri ingressi' : 'Chiudi ingressi'}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="cdr-room-secondary danger"
+                    onClick={onFinishRoom}
+                    disabled={hostActionBusy}
+                  >
+                    Chiudi stanza
+                  </button>
+                </div>
+              )}
+            </section>
+
+            <aside className="cdr-room-card cdr-room-card-side">
+              <div className="cdr-room-side-head">
+                <div className="cdr-room-side-title">
+                  <Users size={17} weight="fill" />
+                  Partecipanti
+                </div>
+
+                <div className="cdr-room-count">
+                  {participantCount}/{maxMembers}
+                  {isRoomFull ? ' · completa' : ''}
+                </div>
+              </div>
+
+              <div className="cdr-room-users">
+                {roomUsers.length === 0 ? (
+                  <div className="cdr-room-waiting">
+                    Nessun partecipante visibile.
+                  </div>
+                ) : (
+                  roomUsers.map((user) => {
+                    const isSelf = user.id === currentUserId;
+                    const userIsHost = user.id === hostActorId;
+
+                    return (
+                      <div className="cdr-room-user" key={user.id}>
+                        <div
+                          className={`cdr-room-avatar${isSelf ? ' self' : ''}${
+                            avatarUrls[user.id] ? ' has-image' : ''
+                          }`}
+                        >
+                          {avatarUrls[user.id] ? (
+                            <img
+                              className="cdr-room-avatar-img"
+                              src={avatarUrls[user.id]}
+                              alt={`Foto profilo di ${user.name}`}
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            initials(user.name)
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="cdr-room-user-name">
+                            @{user.name}
+                            {userIsHost && (
+                              <span className="cdr-room-host-badge">HOST</span>
+                            )}
+                          </div>
+
+                          <div className="cdr-room-user-meta">
+                            {isSelf ? 'Tu' : 'Nella stanza'}
+                          </div>
+                        </div>
+
+                        {isHost &&
+                          !isSelf &&
+                          !userIsHost &&
+                          roomPhase === 'waiting' && (
+                            <button
+                              type="button"
+                              className="cdr-room-remove"
+                              title={`Rimuovi @${user.name}`}
+                              disabled={hostActionBusy}
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    `Rimuovere @${user.name} dalla stanza?`
+                                  )
+                                ) {
+                                  onRemoveParticipant(user.id);
+                                }
+                              }}
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                      </div>
+                    );
+                  })
+                )}
+
+                {availableSpots > 0 && !isExpired && (
+                  <div className="cdr-room-waiting">
+                    <span className="cdr-room-waiting-ring" />
+                    <span>
+                      {isReady
+                        ? `${availableSpots} ${
+                            availableSpots === 1
+                              ? 'posto ancora disponibile'
+                              : 'posti ancora disponibili'
+                          }`
+                        : isGroup
+                          ? `In attesa di ${missingForStart} ${
+                              missingForStart === 1 ? 'persona' : 'persone'
+                            }`
+                          : 'In attesa del partner'}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {isHost &&
+                pendingRequests.length > 0 &&
+                roomPhase === 'waiting' && (
+                  <div className="cdr-room-pending">
+                    <div className="cdr-room-pending-title">
+                      <span>Richieste di ingresso</span>
+                      <span>{pendingRequests.length}</span>
                     </div>
+
+                    {pendingRequests.map((user) => (
+                      <div className="cdr-room-request" key={user.id}>
+                        <div
+                          className={`cdr-room-avatar${
+                            avatarUrls[user.id] ? ' has-image' : ''
+                          }`}
+                        >
+                          {avatarUrls[user.id] ? (
+                            <img
+                              className="cdr-room-avatar-img"
+                              src={avatarUrls[user.id]}
+                              alt={`Foto profilo di ${user.name}`}
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            initials(user.name)
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="cdr-room-user-name">@{user.name}</div>
+                          <div className="cdr-room-user-meta">
+                            Vuole entrare nella stanza
+                          </div>
+                        </div>
+
+                        <div className="cdr-room-request-actions">
+                          <button
+                            type="button"
+                            className="cdr-room-request-btn"
+                            onClick={() => onRejectParticipant(user.id)}
+                            disabled={hostActionBusy}
+                          >
+                            Rifiuta
+                          </button>
+
+                          <button
+                            type="button"
+                            className="cdr-room-request-btn accept"
+                            onClick={() => onApproveParticipant(user.id)}
+                            disabled={hostActionBusy}
+                          >
+                            Accetta
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <button
-                      type="button"
-                      onClick={() => onRejectParticipant(u.id)}
-                      disabled={hostActionBusy}
-                      style={{
-                        padding: '7px 10px',
-                        border: `1px solid ${P.border}`,
-                        background: 'transparent',
-                        color: P.textMuted,
-                        cursor: hostActionBusy ? 'not-allowed' : 'pointer',
-                        fontFamily: FONT_SANS,
-                        fontSize: '11px',
-                        fontWeight: 700,
-                      }}
-                    >
-                      Rifiuta
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => onApproveParticipant(u.id)}
-                      disabled={hostActionBusy}
-                      style={{
-                        padding: '7px 10px',
-                        border: `1px solid ${P.gold}`,
-                        background: P.gold,
-                        color: P.bg,
-                        cursor: hostActionBusy ? 'not-allowed' : 'pointer',
-                        fontFamily: FONT_SANS,
-                        fontSize: '11px',
-                        fontWeight: 800,
-                      }}
-                    >
-                      Accetta
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="ticket-tear" />
-          </section>
-        )}
-
-        <div className="wr-divider">
-          <span>oppure entra in un'altra stanza</span>
-        </div>
-
-        <form className="wr-form" onSubmit={onJoinByCode}>
-          <div className="wr-form-row">
-            <input
-              className="wr-code-input"
-              value={codeInput}
-              onChange={(e) => setCodeInput(e.target.value.toUpperCase())}
-              placeholder="INSCRISCI CODICE (ES. MAPLE-73)"
-              maxLength={10}
-              autoCapitalize="characters"
-              autoCorrect="off"
-              autoComplete="off"
-              spellCheck={false}
-            />
+                )}
+            </aside>
           </div>
 
-          {codeError && (
-            <div className="wr-error">
-              ⚠️ {codeError}
-            </div>
-          )}
+          <section className="cdr-room-join">
+            <h2 className="cdr-room-join-title">Hai un altro codice?</h2>
+            <p className="cdr-room-join-copy">
+              Puoi passare direttamente a un’altra stanza senza tornare indietro.
+            </p>
 
-          <button
-            type="submit"
-            className="wr-outline-btn"
-            disabled={!codeValid}
-          >
-            <Door size={20} weight="fill" />
-            <span>Entra con codice</span>
-          </button>
-        </form>
-      </div>
+            <form className="cdr-room-join-form" onSubmit={onJoinByCode}>
+              <input
+                className="cdr-room-code-input"
+                value={codeInput}
+                onChange={(event) =>
+                  setCodeInput(event.target.value.toUpperCase())
+                }
+                placeholder="ES. MAPLE-73"
+                maxLength={10}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
+              />
+
+              <button
+                type="submit"
+                className="cdr-room-join-btn"
+                disabled={codeInput.trim().length < 4}
+              >
+                <Door size={17} weight="fill" />
+                <span>Entra con codice</span>
+              </button>
+            </form>
+
+            {codeError && <div className="cdr-room-error">{codeError}</div>}
+          </section>
+        </div>
+      </main>
     </>
   );
 }

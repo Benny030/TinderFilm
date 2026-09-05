@@ -6,13 +6,11 @@ import {
   useRef,
   useState,
   type ChangeEvent,
+  type CSSProperties,
 } from 'react';
 import { useRouter } from 'next/router';
-import AppShell from '@/components/layout/AppShell';
-import { useAuth } from '@/hooks/useAuth';
-import { createBrowserClient } from '@/utils/supabase/browser';
-import { useTheme } from '@/context/ThemeContext';
 import {
+  ArrowRight,
   Bell,
   BookmarkSimple,
   Camera,
@@ -21,64 +19,25 @@ import {
   Eye,
   FilmSlate,
   Flag,
-  Gavel,
   FloppyDisk,
   GearSix,
+  Gavel,
   Heart,
   LockKey,
   Prohibit,
   ShieldCheck,
-  WarningCircle,
   SignOut,
-  Star,
-  User,
-  Warning,
   Sparkle,
-  ArrowRight,
-  TrendUp,
+  Star,
+  Warning,
+  WarningCircle,
 } from '@phosphor-icons/react';
 
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  cardHover: '#241d19',
-  border: '#2d221c',
-  gold: '#f5b92f',
-  goldSoft: '#ffd875',
-  goldGlow: 'rgba(245,185,47,0.12)',
-  pink: '#ed3d73',
-  pinkDeep: '#8e1740',
-  pinkGlow: 'rgba(237,61,115,0.15)',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-  error: '#ef4444',
-  success: '#22c55e',
-};
-
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  cardHover: '#faf5ef',
-  border: '#d6cbbc',
-  gold: '#b8860b',
-  goldSoft: '#e8c84a',
-  goldGlow: 'rgba(184,134,11,0.10)',
-  pink: '#b83060',
-  pinkDeep: '#8a1d44',
-  pinkGlow: 'rgba(184,48,96,0.10)',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-  error: '#dc2626',
-  success: '#16a34a',
-};
-
-const FONT_SANS = "'Inter','Helvetica Neue',sans-serif";
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
-const FONT_MONO = "'JetBrains Mono','Courier New',monospace";
+import AppShell from '@/components/layout/AppShell';
+import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/context/ThemeContext';
+import { createBrowserClient } from '@/utils/supabase/browser';
+import { FONT, THEME } from '@/styles/token';
 
 type Tab = 'attivita' | 'impostazioni';
 
@@ -111,7 +70,6 @@ type MovieEntryRow = {
   movie_catalog: CatalogMovie | CatalogMovie[] | null;
 };
 
-
 type TasteMeta = {
   personalized: boolean;
   seeds_used: number;
@@ -139,13 +97,24 @@ type TasteRecommendation = {
 };
 
 const GENRES = [
-  'horror',
-  'azione',
-  'comedy',
-  'drama',
-  'thriller',
-  'sci-fi',
-  'romance',
+  'Azione',
+  'Avventura',
+  'Animazione',
+  'Commedia',
+  'Crime',
+  'Documentario',
+  'Dramma',
+  'Famiglia',
+  'Fantasy',
+  'Guerra',
+  'Horror',
+  'Mistero',
+  'Musica',
+  'Romance',
+  'Fantascienza',
+  'Thriller',
+  'Storia',
+  'Western',
 ];
 
 const avatarColors = [
@@ -180,6 +149,48 @@ function getCatalogMovie(row: MovieEntryRow) {
     : row.movie_catalog;
 }
 
+function SafeAvatar({
+  src,
+  initial,
+  color,
+  size,
+}: {
+  src: string | null;
+  initial: string;
+  color: string;
+  size: number;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  return (
+    <div
+      className="cdr-profile-avatar"
+      style={{
+        width: size,
+        height: size,
+        background: src && !failed ? 'var(--cdr-profile-border)' : color,
+      }}
+    >
+      {src && !failed ? (
+        <img
+          src={src}
+          alt="Avatar profilo"
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        initial
+      )}
+    </div>
+  );
+}
+
 export default function ProfiloPage() {
   const router = useRouter();
   const { currentUser, isGuest, isLoading, signOut } = useAuth();
@@ -187,8 +198,7 @@ export default function ProfiloPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
-  const P = isDark ? D : L;
+  const P = theme === 'dark' ? THEME.dark : THEME.light;
 
   const [activeTab, setActiveTab] = useState<Tab>('attivita');
 
@@ -231,9 +241,8 @@ export default function ProfiloPage() {
 
   useEffect(() => {
     if (isLoading) return;
-    if (!currentUser || isGuest) router.replace('/auth');
+    if (!currentUser || isGuest) void router.replace('/auth');
   }, [currentUser, isGuest, isLoading, router]);
-
 
   useEffect(() => {
     if (!currentUser || currentUser.isGuest) {
@@ -313,8 +322,8 @@ export default function ProfiloPage() {
           typeof user?.user_metadata?.avatar_url === 'string'
             ? user.user_metadata.avatar_url
             : typeof user?.user_metadata?.picture === 'string'
-            ? user.user_metadata.picture
-            : null;
+              ? user.user_metadata.picture
+              : null;
 
         setGoogleAvatarUrl(metadataAvatar);
 
@@ -364,17 +373,9 @@ export default function ProfiloPage() {
         return;
       }
 
-      setFavoritesPublic(
-        data?.favorites_visibility === 'public'
-      );
-
-      setWatchlistPublic(
-        data?.watchlist_visibility === 'public'
-      );
-
-      setWatchedPublic(
-        data?.watched_visibility === 'public'
-      );
+      setFavoritesPublic(data?.favorites_visibility === 'public');
+      setWatchlistPublic(data?.watchlist_visibility === 'public');
+      setWatchedPublic(data?.watched_visibility === 'public');
     };
 
     void loadPrivacy();
@@ -401,23 +402,12 @@ export default function ProfiloPage() {
           return;
         }
 
-        setNotifyNewFollower(
-          data?.notify_new_follower ?? true
-        );
-        setNotifyReviewLike(
-          data?.notify_review_like ?? true
-        );
-        setNotifyReviewComment(
-          data?.notify_review_comment ?? true
-        );
-        setNotifyReportUpdates(
-          data?.notify_report_updates ?? true
-        );
+        setNotifyNewFollower(data?.notify_new_follower ?? true);
+        setNotifyReviewLike(data?.notify_review_like ?? true);
+        setNotifyReviewComment(data?.notify_review_comment ?? true);
+        setNotifyReportUpdates(data?.notify_report_updates ?? true);
       } catch (err) {
-        console.error(
-          'Notification settings load failed:',
-          err
-        );
+        console.error('Notification settings load failed:', err);
       }
     };
 
@@ -513,7 +503,6 @@ export default function ProfiloPage() {
         ? current.filter((item) => item !== genre)
         : [...current, genre]
     );
-
     setMessage('');
   };
 
@@ -547,7 +536,6 @@ export default function ProfiloPage() {
           setError('Username già in uso, scegline un altro.');
           return;
         }
-
         throw saveError;
       }
 
@@ -596,9 +584,7 @@ export default function ProfiloPage() {
 
       const { error: saveError } = await supabase
         .from('users')
-        .update({
-          avatar_url: publicUrl,
-        })
+        .update({ avatar_url: publicUrl })
         .eq('id', currentUser.id);
 
       if (saveError) throw saveError;
@@ -609,10 +595,7 @@ export default function ProfiloPage() {
       setError(err.message ?? 'Errore durante upload avatar');
     } finally {
       setUploading(false);
-
-      if (event.target) {
-        event.target.value = '';
-      }
+      if (event.target) event.target.value = '';
     }
   };
 
@@ -648,9 +631,7 @@ export default function ProfiloPage() {
       setConfirmPassword('');
       setMessage('Password aggiornata.');
     } catch (err: any) {
-      setError(
-        err.message ?? 'Errore durante il cambio password'
-      );
+      setError(err.message ?? 'Errore durante il cambio password');
     } finally {
       setChangingPassword(false);
     }
@@ -674,20 +655,14 @@ export default function ProfiloPage() {
             notify_review_comment: notifyReviewComment,
             notify_report_updates: notifyReportUpdates,
           },
-          {
-            onConflict: 'user_id',
-          }
+          { onConflict: 'user_id' }
         );
 
       if (settingsError) throw settingsError;
 
       setMessage('Preferenze notifiche salvate.');
     } catch (err: unknown) {
-      console.error(
-        'Notification settings save failed:',
-        err
-      );
-
+      console.error('Notification settings save failed:', err);
       setError(
         err instanceof Error
           ? err.message
@@ -721,9 +696,7 @@ export default function ProfiloPage() {
               ? 'public'
               : 'private',
           },
-          {
-            onConflict: 'user_id',
-          }
+          { onConflict: 'user_id' }
         );
 
       if (privacyError) throw privacyError;
@@ -731,7 +704,6 @@ export default function ProfiloPage() {
       setMessage('Impostazioni privacy salvate.');
     } catch (err: unknown) {
       console.error('Privacy settings save failed:', err);
-
       setError(
         err instanceof Error
           ? err.message
@@ -750,7 +722,7 @@ export default function ProfiloPage() {
     const movie = getCatalogMovie(entry);
 
     if (movie?.provider === 'tmdb') {
-      router.push(`/film/${movie.provider_movie_id}`);
+      void router.push(`/film/${movie.provider_movie_id}`);
     }
   };
 
@@ -763,30 +735,31 @@ export default function ProfiloPage() {
     return (
       <div
         style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          minHeight: '100dvh',
+          display: 'grid',
+          placeItems: 'center',
           background: P.bg,
         }}
       >
-        <FilmSlate size={42} color={P.pink} weight="duotone" />
+        <FilmSlate size={42} color={P.primary} weight="duotone" />
       </div>
     );
   }
 
-  const inputStyle: React.CSSProperties = {
-    padding: '13px 16px',
-    border: `1px solid ${P.border}`,
-    borderRadius: 0,
-    fontSize: '15px',
-    fontFamily: FONT_SANS,
-    color: P.text,
-    background: P.bgSoft,
-    outline: 'none',
-    width: '100%',
-    boxSizing: 'border-box',
-  };
+  const vars = {
+    '--cdr-profile-bg': P.bg,
+    '--cdr-profile-soft': P.bgSoft,
+    '--cdr-profile-surface': P.surface,
+    '--cdr-profile-hover': P.surfaceHover,
+    '--cdr-profile-border': P.border,
+    '--cdr-profile-text': P.text,
+    '--cdr-profile-muted': P.textMuted,
+    '--cdr-profile-faint': P.textFaint,
+    '--cdr-profile-pink': P.primary,
+    '--cdr-profile-pink-glow': P.primaryGlow,
+    '--cdr-profile-gold': P.accent,
+    '--cdr-profile-gold-glow': P.accentGlow,
+  } as CSSProperties;
 
   const activitySections = [
     {
@@ -795,8 +768,8 @@ export default function ProfiloPage() {
       title: 'Preferiti',
       subtitle: 'I film che ami di più',
       icon: Heart,
-      color: P.pink,
-      background: P.pinkGlow,
+      color: P.primary,
+      background: P.primaryGlow,
       items: favorites,
       empty: 'Non hai ancora film preferiti.',
     },
@@ -806,8 +779,8 @@ export default function ProfiloPage() {
       title: 'Watchlist',
       subtitle: 'I prossimi film da vedere',
       icon: BookmarkSimple,
-      color: P.gold,
-      background: P.goldGlow,
+      color: P.accent,
+      background: P.accentGlow,
       items: watchlist,
       empty: 'La tua watchlist è ancora vuota.',
     },
@@ -817,8 +790,8 @@ export default function ProfiloPage() {
       title: 'Visti',
       subtitle: 'I film che hai già guardato',
       icon: Eye,
-      color: P.success,
-      background: 'rgba(34,197,94,0.10)',
+      color: '#22c55e',
+      background: 'rgba(34,197,94,.10)',
       items: watched,
       empty: 'Non hai ancora segnato film come visti.',
     },
@@ -828,8 +801,8 @@ export default function ProfiloPage() {
       title: 'Voti e recensioni',
       subtitle: 'Le tue opinioni sui film',
       icon: Star,
-      color: P.gold,
-      background: P.goldGlow,
+      color: P.accent,
+      background: P.accentGlow,
       items: reviewed,
       empty: 'Non hai ancora votato o recensito film.',
     },
@@ -837,1517 +810,1287 @@ export default function ProfiloPage() {
 
   return (
     <AppShell activeNav="profilo">
-      <main
-        style={{
-          minHeight: '100vh',
-          background: P.bg,
-          padding: '26px 16px 70px',
-          fontFamily: FONT_SANS,
-        }}
-      >
-        <div
-          style={{
-            width: '100%',
-            maxWidth: 1040,
-            margin: '0 auto',
-          }}
-        >
-          <header
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: 20,
-              alignItems: 'center',
-              marginBottom: 22,
-              flexWrap: 'wrap',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 14,
-              }}
-            >
-              <div
-                style={{
-                  width: 58,
-                  height: 58,
-                  borderRadius: '50%',
-                  overflow: 'hidden',
-                  background: visibleAvatarUrl
-                    ? P.border
-                    : fallbackColor,
-                  display: 'grid',
-                  placeItems: 'center',
-                  color: '#fff',
-                  fontSize: 23,
-                  fontWeight: 900,
-                }}
-              >
-                {visibleAvatarUrl ? (
-                  <img
-                    src={visibleAvatarUrl}
-                    alt="Avatar profilo"
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                    }}
-                  />
-                ) : (
-                  fallbackInitial
-                )}
-              </div>
+      <main className="cdr-profile" style={vars}>
+        <style>{`
+          .cdr-profile {
+            width:100%;
+            min-height:100dvh;
+            overflow-x:hidden;
+            background:var(--cdr-profile-bg);
+            color:var(--cdr-profile-text);
+            font-family:${FONT.sans};
+          }
 
-              <div>
-                <div
-                  style={{
-                    color: P.textFaint,
-                    fontSize: 11,
-                    textTransform: 'uppercase',
-                    letterSpacing: '.09em',
-                  }}
-                >
-                  Il tuo profilo
-                </div>
+          .cdr-profile * { box-sizing:border-box; }
 
-                <h1
-                  style={{
-                    margin: '3px 0 0',
-                    color: P.text,
-                    fontFamily: FONT_DISPLAY,
-                    fontSize: 30,
-                  }}
-                >
-                  @{username || 'utente'}
-                </h1>
-              </div>
+          .cdr-profile-shell {
+            width:min(100%,1040px);
+            margin:0 auto;
+            padding:22px 24px 56px;
+          }
+
+          .cdr-profile-hero {
+            display:grid;
+            grid-template-columns:auto minmax(0,1fr) auto;
+            gap:16px;
+            align-items:center;
+            margin-bottom:18px;
+          }
+
+          .cdr-profile-avatar {
+            overflow:hidden;
+            flex:0 0 auto;
+            border-radius:50%;
+            display:grid;
+            place-items:center;
+            color:#fff;
+            font-weight:900;
+            font-size:22px;
+          }
+
+          .cdr-profile-avatar img {
+            width:100%;
+            height:100%;
+            display:block;
+            object-fit:cover;
+          }
+
+          .cdr-profile-kicker {
+            color:var(--cdr-profile-pink);
+            font-size:12px;
+            font-weight:850;
+            letter-spacing:.1em;
+            text-transform:uppercase;
+          }
+
+          .cdr-profile-name {
+            margin:3px 0 0;
+            font-family:${FONT.display};
+            font-size:38px;
+            line-height:1;
+            letter-spacing:-.025em;
+          }
+
+          .cdr-profile-bio {
+            max-width:620px;
+            margin:7px 0 0;
+            color:var(--cdr-profile-muted);
+            font-size:15px;
+            line-height:1.55;
+          }
+
+          .cdr-profile-perte {
+            min-height:38px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:6px;
+            padding:7px 10px;
+            border:1px solid var(--cdr-profile-gold);
+            background:var(--cdr-profile-gold-glow);
+            color:var(--cdr-profile-gold);
+            font-size:13px;
+            font-weight:850;
+            cursor:pointer;
+          }
+
+          .cdr-profile-overview {
+            display:grid;
+            grid-template-columns:1.25fr repeat(4,minmax(0,.65fr));
+            gap:7px;
+            margin-bottom:16px;
+          }
+
+          .cdr-profile-overview-main,
+          .cdr-profile-stat {
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-surface);
+          }
+
+          .cdr-profile-overview-main {
+            padding:14px;
+          }
+
+          .cdr-profile-overview-main strong {
+            display:block;
+            font-family:${FONT.display};
+            font-size:23px;
+          }
+
+          .cdr-profile-overview-main span {
+            display:block;
+            margin-top:4px;
+            color:var(--cdr-profile-muted);
+            font-size:12px;
+            line-height:1.5;
+          }
+
+          .cdr-profile-stat {
+            min-height:76px;
+            padding:11px;
+            text-align:left;
+            cursor:pointer;
+          }
+
+          .cdr-profile-stat b {
+            display:block;
+            font-size:24px;
+            line-height:1;
+          }
+
+          .cdr-profile-stat span {
+            display:block;
+            margin-top:6px;
+            color:var(--cdr-profile-muted);
+            font-size:12px;
+            font-weight:800;
+          }
+
+          .cdr-profile-tabs {
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:0;
+            margin-bottom:16px;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-soft);
+          }
+
+          .cdr-profile-tabs button {
+            min-height:42px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            gap:6px;
+            border:0;
+            background:transparent;
+            color:var(--cdr-profile-muted);
+            font-size:13px;
+            font-weight:850;
+            cursor:pointer;
+          }
+
+          .cdr-profile-tabs button.active {
+            background:var(--cdr-profile-surface);
+            color:var(--cdr-profile-text);
+          }
+
+          .cdr-profile-stack {
+            display:grid;
+            gap:12px;
+          }
+
+          .cdr-profile-card {
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-surface);
+            padding:16px;
+          }
+
+          .cdr-profile-card.gold {
+            border-top:3px solid var(--cdr-profile-gold);
+          }
+
+          .cdr-profile-card-head {
+            display:flex;
+            align-items:flex-start;
+            justify-content:space-between;
+            gap:12px;
+            margin-bottom:12px;
+          }
+
+          .cdr-profile-card-kicker {
+            display:flex;
+            align-items:center;
+            gap:6px;
+            color:var(--cdr-profile-gold);
+            font-size:11px;
+            font-weight:850;
+            letter-spacing:.08em;
+            text-transform:uppercase;
+          }
+
+          .cdr-profile-card-title {
+            margin:4px 0 0;
+            font-family:${FONT.display};
+            font-size:26px;
+          }
+
+          .cdr-profile-card-copy {
+            margin:5px 0 0;
+            color:var(--cdr-profile-muted);
+            font-size:13px;
+            line-height:1.55;
+          }
+
+          .cdr-profile-summary-grid {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:7px;
+          }
+
+          .cdr-profile-summary {
+            min-height:70px;
+            display:grid;
+            grid-template-columns:34px minmax(0,1fr) auto;
+            align-items:center;
+            gap:8px;
+            padding:9px;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-soft);
+            color:var(--cdr-profile-text);
+            text-align:left;
+            cursor:pointer;
+          }
+
+          .cdr-profile-summary-icon {
+            width:34px;
+            height:34px;
+            display:grid;
+            place-items:center;
+          }
+
+          .cdr-profile-summary strong {
+            display:block;
+            font-size:13px;
+          }
+
+          .cdr-profile-summary span {
+            display:block;
+            margin-top:2px;
+            color:var(--cdr-profile-faint);
+            font-size:11px;
+          }
+
+          .cdr-profile-summary b {
+            font-size:18px;
+          }
+
+          .cdr-profile-taste-stats {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:7px;
+            margin-top:12px;
+          }
+
+          .cdr-profile-taste-stat {
+            padding:10px;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-soft);
+          }
+
+          .cdr-profile-taste-stat b {
+            display:block;
+            font-size:20px;
+          }
+
+          .cdr-profile-taste-stat span {
+            display:block;
+            margin-top:3px;
+            color:var(--cdr-profile-faint);
+            font-size:11px;
+          }
+
+          .cdr-profile-taste-grid {
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:8px;
+            margin-top:10px;
+          }
+
+          .cdr-profile-taste-box {
+            padding:10px;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-soft);
+          }
+
+          .cdr-profile-taste-box strong {
+            display:block;
+            margin-bottom:6px;
+            color:var(--cdr-profile-muted);
+            font-size:10px;
+            text-transform:uppercase;
+            letter-spacing:.07em;
+          }
+
+          .cdr-profile-taste-list {
+            display:flex;
+            flex-wrap:wrap;
+            gap:5px;
+          }
+
+          .cdr-profile-taste-list span {
+            border:1px solid var(--cdr-profile-border);
+            padding:4px 6px;
+            color:var(--cdr-profile-text);
+            font-size:11px;
+          }
+
+          .cdr-profile-rec-preview {
+            display:grid;
+            grid-template-columns:repeat(3,minmax(0,1fr));
+            gap:7px;
+            margin-top:10px;
+          }
+
+          .cdr-profile-rec {
+            padding:9px;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-soft);
+          }
+
+          .cdr-profile-rec strong {
+            display:block;
+            font-size:13px;
+          }
+
+          .cdr-profile-rec span {
+            display:block;
+            margin-top:4px;
+            color:var(--cdr-profile-muted);
+            font-size:11px;
+            line-height:1.45;
+          }
+
+          .cdr-profile-library {
+            display:grid;
+            gap:10px;
+          }
+
+          .cdr-profile-library-head {
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+          }
+
+          .cdr-profile-library-title {
+            display:flex;
+            align-items:center;
+            gap:8px;
+          }
+
+          .cdr-profile-library-title h2 {
+            margin:0;
+            font-family:${FONT.display};
+            font-size:18px;
+          }
+
+          .cdr-profile-library-title span {
+            display:block;
+            margin-top:2px;
+            color:var(--cdr-profile-faint);
+            font-size:8px;
+          }
+
+          .cdr-profile-link {
+            border:0;
+            background:transparent;
+            color:var(--cdr-profile-gold);
+            font-size:12px;
+            font-weight:850;
+            cursor:pointer;
+          }
+
+          .cdr-profile-movies {
+            display:flex;
+            gap:10px;
+            overflow-x:auto;
+            padding-bottom:4px;
+          }
+
+          .cdr-profile-movie {
+            width:112px;
+            min-width:112px;
+            padding:0;
+            border:0;
+            background:transparent;
+            color:var(--cdr-profile-text);
+            text-align:left;
+            cursor:pointer;
+          }
+
+          .cdr-profile-movie-poster {
+            width:112px;
+            aspect-ratio:2/3;
+            overflow:hidden;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-soft);
+            position:relative;
+          }
+
+          .cdr-profile-movie-poster img {
+            width:100%;
+            height:100%;
+            object-fit:cover;
+          }
+
+          .cdr-profile-rating {
+            position:absolute;
+            left:5px;
+            bottom:5px;
+            padding:3px 5px;
+            background:rgba(0,0,0,.78);
+            color:var(--cdr-profile-gold);
+            font-size:11px;
+            font-weight:850;
+          }
+
+          .cdr-profile-movie strong {
+            display:block;
+            margin-top:5px;
+            overflow:hidden;
+            font-size:9px;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+          }
+
+          .cdr-profile-movie span {
+            display:block;
+            margin-top:2px;
+            overflow:hidden;
+            color:var(--cdr-profile-faint);
+            font-size:7.5px;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+          }
+
+          .cdr-profile-empty {
+            min-height:84px;
+            display:grid;
+            place-items:center;
+            padding:12px;
+            border:1px dashed var(--cdr-profile-border);
+            background:var(--cdr-profile-soft);
+            color:var(--cdr-profile-faint);
+            text-align:center;
+            font-size:12px;
+          }
+
+          .cdr-profile-settings-grid {
+            display:grid;
+            grid-template-columns:190px minmax(0,1fr);
+            gap:18px;
+          }
+
+          .cdr-profile-avatar-pane {
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            gap:10px;
+          }
+
+          .cdr-profile-field {
+            display:grid;
+            gap:5px;
+          }
+
+          .cdr-profile-field label,
+          .cdr-profile-label {
+            color:var(--cdr-profile-muted);
+            font-size:11px;
+            font-weight:850;
+            text-transform:uppercase;
+            letter-spacing:.06em;
+          }
+
+          .cdr-profile-input,
+          .cdr-profile-textarea {
+            width:100%;
+            padding:10px 11px;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-soft);
+            color:var(--cdr-profile-text);
+            outline:0;
+            font:inherit;
+            font-size:14px;
+          }
+
+          .cdr-profile-textarea {
+            min-height:95px;
+            resize:vertical;
+            line-height:1.5;
+          }
+
+          .cdr-profile-fields {
+            display:grid;
+            gap:10px;
+          }
+
+          .cdr-profile-genres {
+            display:grid;
+            grid-template-columns:repeat(4,minmax(0,1fr));
+            gap:8px;
+          }
+
+          .cdr-profile-genre {
+            min-height:48px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:10px;
+            padding:10px 12px;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-surface);
+            color:var(--cdr-profile-muted);
+            font-size:13px;
+            font-weight:800;
+            text-transform:capitalize;
+            cursor:pointer;
+            transition:border-color .16s ease, background .16s ease, color .16s ease;
+          }
+
+          .cdr-profile-genre:hover {
+            border-color:var(--cdr-profile-pink);
+            color:var(--cdr-profile-text);
+          }
+
+          .cdr-profile-genre.selected {
+            border-color:var(--cdr-profile-pink);
+            background:var(--cdr-profile-pink-glow);
+            color:var(--cdr-profile-pink);
+          }
+
+          .cdr-profile-genre-check {
+            width:20px;
+            height:20px;
+            flex:0 0 auto;
+            display:grid;
+            place-items:center;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-soft);
+          }
+
+          .cdr-profile-genre.selected .cdr-profile-genre-check {
+            border-color:var(--cdr-profile-pink);
+            background:var(--cdr-profile-pink);
+            color:#fff;
+          }
+
+          .cdr-profile-action {
+            min-height:36px;
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            gap:6px;
+            padding:6px 10px;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-surface);
+            color:var(--cdr-profile-text);
+            font-size:12px;
+            font-weight:850;
+            cursor:pointer;
+          }
+
+          .cdr-profile-action.primary {
+            border-color:var(--cdr-profile-pink);
+            background:var(--cdr-profile-pink);
+            color:#fff;
+          }
+
+          .cdr-profile-action.gold {
+            border-color:var(--cdr-profile-gold);
+            background:var(--cdr-profile-gold-glow);
+            color:var(--cdr-profile-gold);
+          }
+
+          .cdr-profile-action.danger {
+            border-color:rgba(239,68,68,.4);
+            background:rgba(239,68,68,.08);
+            color:#ef4444;
+          }
+
+          .cdr-profile-password-grid {
+            display:grid;
+            grid-template-columns:1fr 1fr auto;
+            gap:7px;
+          }
+
+          .cdr-profile-toggle-list {
+            display:grid;
+            gap:6px;
+          }
+
+          .cdr-profile-toggle {
+            display:grid;
+            grid-template-columns:minmax(0,1fr) auto;
+            gap:12px;
+            align-items:center;
+            padding:9px 10px;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-soft);
+          }
+
+          .cdr-profile-toggle strong {
+            display:block;
+            font-size:13px;
+          }
+
+          .cdr-profile-toggle span {
+            display:block;
+            margin-top:2px;
+            color:var(--cdr-profile-faint);
+            font-size:11px;
+            line-height:1.45;
+          }
+
+          .cdr-profile-toggle input {
+            width:17px;
+            height:17px;
+            accent-color:var(--cdr-profile-pink);
+          }
+
+          .cdr-profile-setting-links {
+            display:grid;
+            gap:6px;
+            margin-top:8px;
+          }
+
+          .cdr-profile-setting-link {
+            width:100%;
+            display:grid;
+            grid-template-columns:32px minmax(0,1fr) auto;
+            gap:9px;
+            align-items:center;
+            padding:9px;
+            border:1px solid var(--cdr-profile-border);
+            background:var(--cdr-profile-soft);
+            color:var(--cdr-profile-text);
+            text-align:left;
+            cursor:pointer;
+          }
+
+          .cdr-profile-setting-link-icon {
+            width:32px;
+            height:32px;
+            display:grid;
+            place-items:center;
+            background:var(--cdr-profile-pink-glow);
+            color:var(--cdr-profile-pink);
+          }
+
+          .cdr-profile-setting-link strong {
+            display:block;
+            font-size:13px;
+          }
+
+          .cdr-profile-setting-link span {
+            display:block;
+            margin-top:2px;
+            color:var(--cdr-profile-faint);
+            font-size:11px;
+          }
+
+          .cdr-profile-status {
+            padding:9px 10px;
+            border:1px solid;
+            font-size:12px;
+            font-weight:750;
+          }
+
+          .cdr-profile-status.error {
+            border-color:rgba(239,68,68,.32);
+            background:rgba(239,68,68,.07);
+            color:#ef4444;
+          }
+
+          .cdr-profile-status.success {
+            border-color:rgba(34,197,94,.32);
+            background:rgba(34,197,94,.07);
+            color:#22c55e;
+          }
+
+          @media (max-width:900px) {
+            .cdr-profile-genres {
+              grid-template-columns:repeat(3,minmax(0,1fr));
+            }
+
+            .cdr-profile-overview {
+              grid-template-columns:repeat(4,minmax(0,1fr));
+            }
+            .cdr-profile-overview-main {
+              grid-column:1 / -1;
+            }
+            .cdr-profile-summary-grid {
+              grid-template-columns:repeat(2,minmax(0,1fr));
+            }
+          }
+
+          @media (max-width:720px) {
+            .cdr-profile-shell {
+              padding:12px 10px 78px;
+            }
+
+            .cdr-profile-hero {
+              grid-template-columns:auto minmax(0,1fr);
+            }
+
+            .cdr-profile-perte {
+              grid-column:1 / -1;
+              width:100%;
+            }
+
+            .cdr-profile-overview {
+              grid-template-columns:repeat(2,minmax(0,1fr));
+            }
+
+            .cdr-profile-settings-grid,
+            .cdr-profile-password-grid,
+            .cdr-profile-taste-grid,
+            .cdr-profile-rec-preview {
+              grid-template-columns:1fr;
+            }
+
+            .cdr-profile-genres {
+              grid-template-columns:repeat(2,minmax(0,1fr));
+            }
+
+            .cdr-profile-summary-grid,
+            .cdr-profile-taste-stats {
+              grid-template-columns:repeat(2,minmax(0,1fr));
+            }
+          }
+
+          @media (max-width:460px) {
+            .cdr-profile-shell {
+              padding-inline:8px;
+            }
+
+            .cdr-profile-name {
+              font-size:29px;
+            }
+
+            .cdr-profile-bio {
+              font-size:10px;
+            }
+
+            .cdr-profile-overview-main {
+              padding:11px;
+            }
+
+            .cdr-profile-stat {
+              min-height:66px;
+              padding:9px;
+            }
+
+            .cdr-profile-stat b {
+              font-size:21px;
+            }
+
+            .cdr-profile-card {
+              padding:11px;
+            }
+
+            .cdr-profile-summary {
+              grid-template-columns:30px minmax(0,1fr) auto;
+              min-height:62px;
+              padding:8px;
+            }
+
+            .cdr-profile-movie,
+            .cdr-profile-movie-poster {
+              width:100px;
+              min-width:100px;
+            }
+          }
+        `}</style>
+
+        <div className="cdr-profile-shell">
+          <header className="cdr-profile-hero">
+            <SafeAvatar
+              src={visibleAvatarUrl}
+              initial={fallbackInitial}
+              color={fallbackColor}
+              size={62}
+            />
+
+            <div>
+              <div className="cdr-profile-kicker">Il tuo profilo</div>
+              <h1 className="cdr-profile-name">
+                @{username || 'utente'}
+              </h1>
+              <p className="cdr-profile-bio">
+                {bio.trim() ||
+                  'Costruisci il tuo profilo cinematografico attraverso preferiti, voti, match e recensioni.'}
+              </p>
             </div>
-          </header>
-          <section
-            style={{
-              border: `1px solid ${P.border}`,
-              background: P.bgSoft,
-              padding: 16,
-              marginBottom: 18,
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-end',
-                gap: 12,
-                flexWrap: 'wrap',
-                marginBottom: 12,
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    color: P.pink,
-                    fontSize: 9,
-                    fontWeight: 900,
-                    textTransform: 'uppercase',
-                    letterSpacing: '.12em',
-                  }}
-                >
-                  La tua attività
-                </div>
-                <div
-                  style={{
-                    color: P.text,
-                    fontFamily: FONT_DISPLAY,
-                    fontSize: 21,
-                    fontWeight: 800,
-                    marginTop: 3,
-                  }}
-                >
-                  La tua CineDate in breve
-                </div>
-              </div>
 
+            <button
+              type="button"
+              className="cdr-profile-perte"
+              onClick={() => router.push('/per-te')}
+            >
+              <Sparkle size={13} weight="fill" />
+              I tuoi consigli
+            </button>
+          </header>
+
+          <section className="cdr-profile-overview">
+            <div className="cdr-profile-overview-main">
+              <strong>La tua CineDate in breve</strong>
+              <span>
+                Tutto quello che hai salvato, visto e raccontato finora.
+              </span>
+            </div>
+
+            {[
+              ['Preferiti', favorites.length, P.primary, 'preferiti'],
+              ['Watchlist', watchlist.length, P.accent, 'watchlist'],
+              ['Visti', watched.length, '#22c55e', 'visti'],
+              ['Recensioni', reviewed.length, P.accent, 'recensioni'],
+            ].map(([label, value, color, tab]) => (
               <button
                 type="button"
-                onClick={() => router.push('/per-te')}
-                style={{
-                  border: `1px solid ${P.gold}`,
-                  background: P.goldGlow,
-                  color: P.gold,
-                  padding: '8px 11px',
-                  fontFamily: FONT_SANS,
-                  fontSize: 10,
-                  fontWeight: 850,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5,
-                }}
+                key={String(label)}
+                className="cdr-profile-stat"
+                onClick={() =>
+                  router.push(`/libreria?tab=${String(tab)}`)
+                }
               >
-                <Sparkle size={13} weight="fill" />
-                I tuoi consigli
+                <b style={{ color: String(color) }}>{String(value)}</b>
+                <span>{String(label)}</span>
               </button>
-            </div>
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))',
-                gap: 8,
-              }}
-            >
-              {[
-                { label: 'Preferiti', value: favorites.length, color: P.pink, tab: 'preferiti' },
-                { label: 'Watchlist', value: watchlist.length, color: P.gold, tab: 'watchlist' },
-                { label: 'Visti', value: watched.length, color: P.success, tab: 'visti' },
-                { label: 'Recensioni', value: reviewed.length, color: P.gold, tab: 'recensioni' },
-              ].map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  onClick={() => router.push(`/libreria?tab=${item.tab}`)}
-                  style={{
-                    border: `1px solid ${P.border}`,
-                    background: P.card,
-                    color: P.text,
-                    padding: 12,
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    fontFamily: FONT_SANS,
-                  }}
-                >
-                  <div
-                    style={{
-                      color: item.color,
-                      fontSize: 21,
-                      fontWeight: 900,
-                    }}
-                  >
-                    {item.value}
-                  </div>
-                  <div
-                    style={{
-                      color: P.textMuted,
-                      fontSize: 9.5,
-                      fontWeight: 800,
-                      marginTop: 3,
-                    }}
-                  >
-                    {item.label}
-                  </div>
-                </button>
-              ))}
-            </div>
+            ))}
           </section>
 
-
-          <div
-            style={{
-              display: 'flex',
-              gap: 4,
-              padding: 4,
-              background: P.bgSoft,
-              border: `1px solid ${P.border}`,
-              marginBottom: 22,
-            }}
-          >
+          <nav className="cdr-profile-tabs">
             <button
+              type="button"
+              className={activeTab === 'attivita' ? 'active' : ''}
               onClick={() => setActiveTab('attivita')}
-              style={{
-                flex: 1,
-                border: 0,
-                background:
-                  activeTab === 'attivita'
-                    ? P.card
-                    : 'transparent',
-                color:
-                  activeTab === 'attivita'
-                    ? P.text
-                    : P.textMuted,
-                padding: '12px 14px',
-                cursor: 'pointer',
-                fontWeight: 800,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 7,
-                boxShadow:
-                  activeTab === 'attivita'
-                    ? '0 2px 10px rgba(0,0,0,.14)'
-                    : 'none',
-              }}
             >
               <FilmSlate
-                size={17}
-                color={
-                  activeTab === 'attivita'
-                    ? P.gold
-                    : P.textMuted
-                }
+                size={15}
                 weight="fill"
+                color={
+                  activeTab === 'attivita' ? P.accent : P.textMuted
+                }
               />
               Attività
             </button>
 
             <button
+              type="button"
+              className={activeTab === 'impostazioni' ? 'active' : ''}
               onClick={() => setActiveTab('impostazioni')}
-              style={{
-                flex: 1,
-                border: 0,
-                background:
-                  activeTab === 'impostazioni'
-                    ? P.card
-                    : 'transparent',
-                color:
-                  activeTab === 'impostazioni'
-                    ? P.text
-                    : P.textMuted,
-                padding: '12px 14px',
-                cursor: 'pointer',
-                fontWeight: 800,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 7,
-                boxShadow:
-                  activeTab === 'impostazioni'
-                    ? '0 2px 10px rgba(0,0,0,.14)'
-                    : 'none',
-              }}
             >
               <GearSix
-                size={17}
+                size={15}
+                weight="fill"
                 color={
                   activeTab === 'impostazioni'
-                    ? P.pink
+                    ? P.primary
                     : P.textMuted
                 }
-                weight="fill"
               />
               Impostazioni
             </button>
-          </div>
+          </nav>
 
           {activeTab === 'attivita' && (
-            <div style={{ display: 'grid', gap: 16 }}>
-              <section
-                style={{
-                  background: P.card,
-                  border: `1px solid ${P.border}`,
-                  padding: 20,
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: 3,
-                    background: P.gold,
-                  }}
-                />
+            <div className="cdr-profile-stack">
 
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                    gap: 16,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div
-                      style={{
-                        color: P.gold,
-                        fontSize: 10,
-                        fontWeight: 900,
-                        textTransform: 'uppercase',
-                        letterSpacing: '.11em',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 6,
-                      }}
+              <section className="cdr-profile-card">
+                <div className="cdr-profile-card-head">
+                  <div>
+                    <div className="cdr-profile-card-kicker">
+                      Profilo pubblico
+                    </div>
+                    <h2 className="cdr-profile-card-title">
+                      Identità su Cinedate
+                    </h2>
+                    <p className="cdr-profile-card-copy">
+                      Avatar, username, bio e generi preferiti che gli altri utenti vedono.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="cdr-profile-settings-grid">
+                  <aside className="cdr-profile-avatar-pane">
+                    <SafeAvatar
+                      src={visibleAvatarUrl}
+                      initial={fallbackInitial}
+                      color={fallbackColor}
+                      size={122}
+                    />
+
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={uploadAvatar}
+                      style={{ display: 'none' }}
+                    />
+
+                    <button
+                      type="button"
+                      className="cdr-profile-action"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
                     >
-                      <Sparkle size={14} weight="fill" />
+                      <Camera size={14} weight="bold" />
+                      {uploading ? 'Upload...' : 'Cambia avatar'}
+                    </button>
+                  </aside>
+
+                  <div className="cdr-profile-fields">
+                    <div className="cdr-profile-field">
+                      <label>Username</label>
+                      <input
+                        className="cdr-profile-input"
+                        value={username}
+                        onChange={(event) => {
+                          setUsername(
+                            normalizeUsername(event.target.value)
+                          );
+                          setMessage('');
+                          setError('');
+                        }}
+                      />
+                    </div>
+
+                    <div className="cdr-profile-field">
+                      <label>Email</label>
+                      <input
+                        className="cdr-profile-input"
+                        value={email}
+                        disabled
+                      />
+                    </div>
+
+                    <div className="cdr-profile-field">
+                      <label>Bio</label>
+                      <textarea
+                        className="cdr-profile-textarea"
+                        value={bio}
+                        maxLength={220}
+                        onChange={(event) =>
+                          setBio(event.target.value.slice(0, 220))
+                        }
+                      />
+                    </div>
+
+                    <div className="cdr-profile-field">
+                      <div className="cdr-profile-label">
+                        Generi preferiti
+                      </div>
+                      <div className="cdr-profile-genres">
+                        {GENRES.map((genre) => {
+                          const selected =
+                            favoriteGenres.includes(genre);
+
+                          return (
+                            <button
+                              type="button"
+                              key={genre}
+                              className={`cdr-profile-genre ${
+                                selected ? 'selected' : ''
+                              }`}
+                              onClick={() => toggleGenre(genre)}
+                            >
+                              <span>{genre}</span>
+                              <span className="cdr-profile-genre-check">
+                                {selected && (
+                                  <Check size={11} weight="bold" />
+                                )}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="cdr-profile-action primary"
+                      onClick={saveProfile}
+                      disabled={saving || uploading}
+                    >
+                      <FloppyDisk size={14} weight="bold" />
+                      {saving ? 'Salvataggio...' : 'Salva modifiche'}
+                    </button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="cdr-profile-card gold">
+                <div className="cdr-profile-card-head">
+                  <div>
+                    <div className="cdr-profile-card-kicker">
+                      <Sparkle size={13} weight="fill" />
                       I tuoi gusti
                     </div>
-
-                    <div
-                      style={{
-                        color: P.text,
-                        fontFamily: FONT_DISPLAY,
-                        fontSize: 24,
-                        fontWeight: 800,
-                        marginTop: 6,
-                      }}
-                    >
+                    <h2 className="cdr-profile-card-title">
                       Il tuo profilo cinematografico
-                    </div>
-
-                    <div
-                      style={{
-                        color: P.textMuted,
-                        fontSize: 12,
-                        lineHeight: 1.5,
-                        marginTop: 6,
-                        maxWidth: 620,
-                      }}
-                    >
-                      TinderFilm usa preferiti, voti, match, swipe e film scelti nelle stanze per capire cosa proporti.
-                    </div>
+                    </h2>
+                    <p className="cdr-profile-card-copy">
+                      Cinedate usa preferiti, voti, match, swipe e film
+                      scelti nelle stanze per capire cosa proporti.
+                    </p>
                   </div>
 
                   <button
                     type="button"
+                    className="cdr-profile-action gold"
                     onClick={() => router.push('/per-te')}
-                    style={{
-                      border: `1px solid ${P.gold}`,
-                      background: P.goldGlow,
-                      color: P.gold,
-                      padding: '9px 11px',
-                      cursor: 'pointer',
-                      fontFamily: FONT_SANS,
-                      fontSize: 11,
-                      fontWeight: 850,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                    }}
                   >
-                    Vedi il tuo Per te
-                    <ArrowRight size={13} weight="bold" />
+                    Vedi Per te
+                    <ArrowRight size={11} />
                   </button>
                 </div>
 
                 {tasteLoading ? (
-                  <div
-                    style={{
-                      marginTop: 16,
-                      color: P.textFaint,
-                      fontSize: 12,
-                    }}
-                  >
+                  <div className="cdr-profile-empty">
                     Sto leggendo i tuoi gusti...
                   </div>
                 ) : tasteMeta ? (
                   <>
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns:
-                          'repeat(auto-fit,minmax(130px,1fr))',
-                        gap: 8,
-                        marginTop: 16,
-                      }}
-                    >
+                    <div className="cdr-profile-taste-stats">
                       {[
-                        {
-                          label: 'Segnali forti',
-                          value: tasteMeta.seeds_used,
-                          color: P.pink,
-                        },
-                        {
-                          label: 'Generi capiti',
-                          value: tasteMeta.taste_genres ?? 0,
-                          color: P.gold,
-                        },
-                        {
-                          label: 'Attori ricorrenti',
-                          value: tasteMeta.taste_actors ?? 0,
-                          color: P.success,
-                        },
-                        {
-                          label: 'Film già considerati',
-                          value: tasteMeta.excluded_movies,
-                          color: P.textMuted,
-                        },
-                      ].map((item) => (
+                        [
+                          'Segnali forti',
+                          tasteMeta.seeds_used,
+                          P.primary,
+                        ],
+                        [
+                          'Generi capiti',
+                          tasteMeta.taste_genres ?? 0,
+                          P.accent,
+                        ],
+                        [
+                          'Attori ricorrenti',
+                          tasteMeta.taste_actors ?? 0,
+                          '#22c55e',
+                        ],
+                        [
+                          'Film considerati',
+                          tasteMeta.excluded_movies,
+                          P.textMuted,
+                        ],
+                      ].map(([label, value, color]) => (
                         <div
-                          key={item.label}
-                          style={{
-                            border: `1px solid ${P.border}`,
-                            background: P.bgSoft,
-                            padding: 12,
-                          }}
+                          key={String(label)}
+                          className="cdr-profile-taste-stat"
                         >
-                          <div
-                            style={{
-                              color: item.color,
-                              fontFamily: FONT_MONO,
-                              fontSize: 20,
-                              fontWeight: 900,
-                            }}
-                          >
-                            {item.value}
-                          </div>
-                          <div
-                            style={{
-                              color: P.textFaint,
-                              fontSize: 10,
-                              marginTop: 4,
-                            }}
-                          >
-                            {item.label}
-                          </div>
+                          <b style={{ color: String(color) }}>
+                            {String(value)}
+                          </b>
+                          <span>{String(label)}</span>
                         </div>
                       ))}
                     </div>
 
-                    {((tasteMeta.top_genres?.length ?? 0) > 0 ||
-                      (tasteMeta.top_actors?.length ?? 0) > 0) && (
-                      <div
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns:
-                            'repeat(auto-fit,minmax(220px,1fr))',
-                          gap: 10,
-                          marginTop: 14,
-                        }}
-                      >
-                        {(tasteMeta.top_genres?.length ?? 0) > 0 && (
-                          <div
-                            style={{
-                              border: `1px solid ${P.border}`,
-                              background: P.bgSoft,
-                              padding: 12,
-                            }}
-                          >
-                            <div
-                              style={{
-                                color: P.textFaint,
-                                fontSize: 10,
-                                textTransform: 'uppercase',
-                                letterSpacing: '.08em',
-                                fontWeight: 850,
-                              }}
-                            >
-                              Generi che tornano di più
-                            </div>
-
-                            <div
-                              style={{
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: 6,
-                                marginTop: 9,
-                              }}
-                            >
-                              {tasteMeta.top_genres?.map((genre, index) => (
-                                <span
-                                  key={genre.id}
-                                  style={{
-                                    border: `1px solid ${
-                                      index === 0 ? P.gold : P.border
-                                    }`,
-                                    background:
-                                      index === 0 ? P.goldGlow : P.card,
-                                    color:
-                                      index === 0 ? P.gold : P.textMuted,
-                                    padding: '6px 8px',
-                                    fontSize: 10,
-                                    fontWeight: 800,
-                                  }}
-                                >
-                                  {genre.name}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {(tasteMeta.top_actors?.length ?? 0) > 0 && (
-                          <div
-                            style={{
-                              border: `1px solid ${P.border}`,
-                              background: P.bgSoft,
-                              padding: 12,
-                            }}
-                          >
-                            <div
-                              style={{
-                                color: P.textFaint,
-                                fontSize: 10,
-                                textTransform: 'uppercase',
-                                letterSpacing: '.08em',
-                                fontWeight: 850,
-                              }}
-                            >
-                              Attori ricorrenti
-                            </div>
-
-                            <div
-                              style={{
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: 6,
-                                marginTop: 9,
-                              }}
-                            >
-                              {tasteMeta.top_actors?.map((actor, index) => (
-                                <span
-                                  key={actor.id}
-                                  style={{
-                                    border: `1px solid ${
-                                      index === 0 ? P.pink : P.border
-                                    }`,
-                                    background:
-                                      index === 0 ? P.pinkGlow : P.card,
-                                    color:
-                                      index === 0 ? P.pink : P.textMuted,
-                                    padding: '6px 8px',
-                                    fontSize: 10,
-                                    fontWeight: 800,
-                                  }}
-                                >
-                                  {actor.name}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                    <div className="cdr-profile-taste-grid">
+                      <div className="cdr-profile-taste-box">
+                        <strong>Generi che tornano di più</strong>
+                        <div className="cdr-profile-taste-list">
+                          {(tasteMeta.top_genres ?? [])
+                            .slice(0, 5)
+                            .map((genre) => (
+                              <span key={genre.id}>{genre.name}</span>
+                            ))}
+                          {(tasteMeta.top_genres?.length ?? 0) === 0 && (
+                            <span>Ancora pochi segnali</span>
+                          )}
+                        </div>
                       </div>
-                    )}
+
+                      <div className="cdr-profile-taste-box">
+                        <strong>Attori ricorrenti</strong>
+                        <div className="cdr-profile-taste-list">
+                          {(tasteMeta.top_actors ?? [])
+                            .slice(0, 5)
+                            .map((actor) => (
+                              <span key={actor.id}>{actor.name}</span>
+                            ))}
+                          {(tasteMeta.top_actors?.length ?? 0) === 0 && (
+                            <span>Ancora pochi segnali</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
                     {tastePreview.length > 0 && (
-                      <div
-                        style={{
-                          marginTop: 14,
-                          borderTop: `1px solid ${P.border}`,
-                          paddingTop: 12,
-                        }}
-                      >
-                        <div
-                          style={{
-                            color: P.textFaint,
-                            fontSize: 10,
-                            fontWeight: 800,
-                            textTransform: 'uppercase',
-                            letterSpacing: '.08em',
-                            marginBottom: 8,
-                          }}
-                        >
-                          Alcuni consigli per te
-                        </div>
-
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: 8,
-                            flexWrap: 'wrap',
-                          }}
-                        >
-                          {tastePreview.map((movie) => (
-                            <button
-                              key={movie.tmdb_id}
-                              type="button"
-                              onClick={() =>
-                                router.push(`/film/${movie.tmdb_id}`)
-                              }
-                              style={{
-                                border: `1px solid ${P.border}`,
-                                background: P.bgSoft,
-                                color: P.text,
-                                padding: '8px 10px',
-                                cursor: 'pointer',
-                                fontFamily: FONT_SANS,
-                                fontSize: 11,
-                                fontWeight: 750,
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: 6,
-                              }}
-                              title={movie.reason}
-                            >
-                              <TrendUp
-                                size={13}
-                                color={P.gold}
-                                weight="duotone"
-                              />
-                              {movie.title}
-                            </button>
-                          ))}
-                        </div>
+                      <div className="cdr-profile-rec-preview">
+                        {tastePreview.map((item) => (
+                          <button
+                            type="button"
+                            key={item.tmdb_id}
+                            className="cdr-profile-rec"
+                            onClick={() =>
+                              router.push(`/film/${item.tmdb_id}`)
+                            }
+                            style={{
+                              color: P.text,
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <strong>{item.title}</strong>
+                            <span>{item.reason}</span>
+                          </button>
+                        ))}
                       </div>
                     )}
                   </>
                 ) : (
-                  <div
-                    style={{
-                      marginTop: 16,
-                      border: `1px dashed ${P.border}`,
-                      background: P.bgSoft,
-                      padding: 14,
-                      color: P.textMuted,
-                      fontSize: 12,
-                    }}
-                  >
-                    Usa preferiti, voti e stanze per costruire il tuo profilo gusti.
+                  <div className="cdr-profile-empty">
+                    Aggiungi preferiti, voti e film visti per costruire
+                    il tuo profilo cinematografico.
                   </div>
                 )}
               </section>
 
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns:
-                    'repeat(auto-fit,minmax(190px,1fr))',
-                  gap: 12,
-                }}
-              >
-                {activitySections.map((section) => {
-                  const Icon = section.icon;
+              <section className="cdr-profile-card">
+                <div className="cdr-profile-summary-grid">
+                  {activitySections.map((section) => {
+                    const Icon = section.icon;
 
-                  return (
-                    <button
-                      type="button"
-                      key={`summary-${section.key}`}
-                      onClick={() =>
-                        router.push(`/libreria?tab=${section.libraryTab}`)
-                      }
-                      style={{
-                        width: '100%',
-                        background: P.card,
-                        border: `1px solid ${P.border}`,
-                        padding: 16,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        fontFamily: FONT_SANS,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 42,
-                          height: 42,
-                          display: 'grid',
-                          placeItems: 'center',
-                          background: section.background,
-                          color: section.color,
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Icon
-                          size={20}
-                          weight="fill"
-                        />
-                      </div>
-
-                      <div>
-                        <div
-                          style={{
-                            color: P.text,
-                            fontWeight: 800,
-                            fontSize: 13,
-                          }}
-                        >
-                          {section.title}
-                        </div>
-
-                        <div
-                          style={{
-                            color: P.textFaint,
-                            fontSize: 10,
-                            marginTop: 2,
-                          }}
-                        >
-                          {section.subtitle}
-                        </div>
-                      </div>
-
-                      <div
-                        style={{
-                          marginLeft: 'auto',
-                          color: section.color,
-                          fontFamily: FONT_MONO,
-                          fontWeight: 900,
-                          fontSize: 20,
-                        }}
-                      >
-                        {section.items.length}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {movieEntriesLoading ? (
-                <div
-                  style={{
-                    padding: 30,
-                    color: P.textFaint,
-                    textAlign: 'center',
-                  }}
-                >
-                  Caricamento attività...
-                </div>
-              ) : (
-                activitySections.map((section) => {
-                  const Icon = section.icon;
-
-                  return (
-                    <section
-                      key={section.key}
-                      style={{
-                        background: P.card,
-                        border: `1px solid ${P.border}`,
-                        padding: 20,
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          marginBottom: 14,
-                        }}
+                    return (
+                      <button
+                        type="button"
+                        key={`summary-${section.key}`}
+                        className="cdr-profile-summary"
+                        onClick={() =>
+                          router.push(
+                            `/libreria?tab=${section.libraryTab}`
+                          )
+                        }
                       >
                         <div
+                          className="cdr-profile-summary-icon"
                           style={{
-                            width: 36,
-                            height: 36,
-                            display: 'grid',
-                            placeItems: 'center',
-                            background: section.background,
                             color: section.color,
+                            background: section.background,
                           }}
                         >
-                          <Icon size={18} weight="fill" />
+                          <Icon size={16} weight="fill" />
                         </div>
 
                         <div>
-                          <h2
-                            style={{
-                              margin: 0,
-                              color: P.text,
-                              fontFamily: FONT_DISPLAY,
-                              fontSize: 19,
-                            }}
-                          >
-                            {section.title}
-                          </h2>
-
-                          <div
-                            style={{
-                              color: P.textFaint,
-                              fontSize: 10,
-                              marginTop: 2,
-                            }}
-                          >
-                            {section.subtitle}
-                          </div>
+                          <strong>{section.title}</strong>
+                          <span>{section.subtitle}</span>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            router.push(`/libreria?tab=${section.libraryTab}`)
-                          }
-                          style={{
-                            marginLeft: 'auto',
-                            border: 0,
-                            background: 'transparent',
-                            color: section.color,
-                            fontSize: 10,
-                            fontWeight: 800,
-                            cursor: 'pointer',
-                            fontFamily: FONT_SANS,
-                          }}
-                        >
-                          Vedi tutti
-                        </button>
-                      </div>
+                        <b style={{ color: section.color }}>
+                          {section.items.length}
+                        </b>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
 
-                      {section.items.length === 0 ? (
-                        <div
-                          style={{
-                            border: `1px dashed ${P.border}`,
-                            background: P.bgSoft,
-                            color: P.textFaint,
-                            padding: 22,
-                            textAlign: 'center',
-                            fontSize: 12,
-                          }}
-                        >
-                          {section.empty}
-                        </div>
-                      ) : (
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: 14,
-                            overflowX: 'auto',
-                            paddingBottom: 6,
-                          }}
-                        >
-                          {section.items
-                            .slice(0, 14)
-                            .map((entry) => {
-                              const movie =
-                                getCatalogMovie(entry);
-
-                              if (!movie) return null;
-
-                              return (
-                                <button
-                                  key={`${section.key}-${entry.id}`}
-                                  onClick={() =>
-                                    openMovie(entry)
-                                  }
-                                  style={{
-                                    width: 126,
-                                    minWidth: 126,
-                                    padding: 0,
-                                    border: 0,
-                                    background:
-                                      'transparent',
-                                    textAlign: 'left',
-                                    cursor: 'pointer',
-                                    color: P.text,
-                                  }}
-                                >
-                                  <div
-                                    style={{
-                                      width: 126,
-                                      aspectRatio: '2/3',
-                                      border: `1px solid ${P.border}`,
-                                      background: P.bgSoft,
-                                      overflow: 'hidden',
-                                      position: 'relative',
-                                    }}
-                                  >
-                                    {movie.cover ? (
-                                      <img
-                                        src={movie.cover}
-                                        alt={movie.title}
-                                        style={{
-                                          width: '100%',
-                                          height: '100%',
-                                          objectFit:
-                                            'cover',
-                                        }}
-                                      />
-                                    ) : (
-                                      <div
-                                        style={{
-                                          width: '100%',
-                                          height: '100%',
-                                          display: 'grid',
-                                          placeItems:
-                                            'center',
-                                        }}
-                                      >
-                                        🎬
-                                      </div>
-                                    )}
-
-                                    {section.key ===
-                                      'reviews' &&
-                                      entry.rating !==
-                                        null && (
-                                        <div
-                                          style={{
-                                            position:
-                                              'absolute',
-                                            bottom: 6,
-                                            left: 6,
-                                            background:
-                                              'rgba(0,0,0,.78)',
-                                            color: P.gold,
-                                            padding:
-                                              '4px 6px',
-                                            fontSize: 10,
-                                            fontWeight: 800,
-                                            display: 'flex',
-                                            alignItems:
-                                              'center',
-                                            gap: 3,
-                                          }}
-                                        >
-                                          <Star
-                                            size={10}
-                                            weight="fill"
-                                          />
-                                          {Number(
-                                            entry.rating
-                                          ).toFixed(1)}
-                                        </div>
-                                      )}
-                                  </div>
-
-                                  <strong
-                                    style={{
-                                      display: 'block',
-                                      marginTop: 7,
-                                      color: P.text,
-                                      fontSize: 11,
-                                      whiteSpace: 'nowrap',
-                                      overflow: 'hidden',
-                                      textOverflow:
-                                        'ellipsis',
-                                    }}
-                                  >
-                                    {movie.title}
-                                  </strong>
-
-                                  <span
-                                    style={{
-                                      display: 'block',
-                                      marginTop: 3,
-                                      color: P.textFaint,
-                                      fontSize: 9,
-                                      whiteSpace: 'nowrap',
-                                      overflow: 'hidden',
-                                      textOverflow:
-                                        'ellipsis',
-                                    }}
-                                  >
-                                    {[
-                                      movie.year,
-                                      movie.genre,
-                                    ]
-                                      .filter(Boolean)
-                                      .join(' · ')}
-                                  </span>
-                                </button>
-                              );
-                            })}
-                        </div>
-                      )}
-                    </section>
-                  );
-                })
+              {movieEntriesLoading && (
+                <div className="cdr-profile-empty">
+                  Caricamento attività...
+                </div>
               )}
             </div>
           )}
 
           {activeTab === 'impostazioni' && (
-            <div style={{ display: 'grid', gap: 16 }}>
-              <section
-                style={{
-                  background: P.card,
-                  border: `1px solid ${P.border}`,
-                  padding: 22,
-                  display: 'grid',
-                  gridTemplateColumns:
-                    '220px minmax(0,1fr)',
-                  gap: 24,
-                }}
-                className="profile-settings-grid"
-              >
-                <aside
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 14,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 130,
-                      height: 130,
-                      borderRadius: '50%',
-                      background: visibleAvatarUrl
-                        ? P.border
-                        : fallbackColor,
-                      overflow: 'hidden',
-                      display: 'grid',
-                      placeItems: 'center',
-                      color: '#fff',
-                      fontSize: 46,
-                      fontWeight: 900,
-                    }}
-                  >
-                    {visibleAvatarUrl ? (
-                      <img
-                        src={visibleAvatarUrl}
-                        alt="Avatar profilo"
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover',
-                        }}
-                      />
-                    ) : (
-                      fallbackInitial
-                    )}
-                  </div>
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={uploadAvatar}
-                    style={{ display: 'none' }}
-                  />
-
-                  <button
-                    onClick={() =>
-                      fileInputRef.current?.click()
-                    }
-                    disabled={uploading}
-                    style={{
-                      background: P.pinkGlow,
-                      color: P.pink,
-                      border: `1px solid ${P.pink}35`,
-                      padding: '9px 13px',
-                      cursor: 'pointer',
-                      fontWeight: 800,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 7,
-                    }}
-                  >
-                    <Camera size={16} weight="bold" />
-                    {uploading
-                      ? 'Upload...'
-                      : 'Cambia avatar'}
-                  </button>
-                </aside>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 15,
-                  }}
-                >
-                  <label
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: P.textMuted,
-                        fontSize: 10,
-                        textTransform: 'uppercase',
-                        fontWeight: 800,
-                      }}
-                    >
-                      Username
-                    </span>
-                    <input
-                      value={username}
-                      onChange={(event) => {
-                        setUsername(
-                          normalizeUsername(
-                            event.target.value
-                          )
-                        );
-                        setMessage('');
-                        setError('');
-                      }}
-                      style={inputStyle}
-                    />
-                  </label>
-
-                  <label
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: P.textMuted,
-                        fontSize: 10,
-                        textTransform: 'uppercase',
-                        fontWeight: 800,
-                      }}
-                    >
-                      Email
-                    </span>
-                    <input
-                      value={email}
-                      disabled
-                      style={{
-                        ...inputStyle,
-                        color: P.textFaint,
-                        cursor: 'not-allowed',
-                      }}
-                    />
-                  </label>
-
-                  <label
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: P.textMuted,
-                        fontSize: 10,
-                        textTransform: 'uppercase',
-                        fontWeight: 800,
-                      }}
-                    >
-                      Bio
-                    </span>
-                    <textarea
-                      value={bio}
-                      onChange={(event) =>
-                        setBio(
-                          event.target.value.slice(
-                            0,
-                            220
-                          )
-                        )
-                      }
-                      rows={4}
-                      style={{
-                        ...inputStyle,
-                        resize: 'vertical',
-                        lineHeight: 1.5,
-                      }}
-                    />
-                  </label>
-
+            <div className="cdr-profile-stack">
+              <section className="cdr-profile-card">
+                <div className="cdr-profile-card-head">
                   <div>
-                    <div
-                      style={{
-                        color: P.textMuted,
-                        fontSize: 10,
-                        textTransform: 'uppercase',
-                        fontWeight: 800,
-                        marginBottom: 7,
-                      }}
-                    >
-                      Generi preferiti
+                    <div className="cdr-profile-card-kicker">
+                      <LockKey size={12} weight="fill" />
+                      Sicurezza
                     </div>
-
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: 7,
-                      }}
-                    >
-                      {GENRES.map((genre) => {
-                        const selected =
-                          favoriteGenres.includes(genre);
-
-                        return (
-                          <button
-                            key={genre}
-                            type="button"
-                            onClick={() =>
-                              toggleGenre(genre)
-                            }
-                            style={{
-                              border: `1px solid ${
-                                selected
-                                  ? P.pink
-                                  : P.border
-                              }`,
-                              background: selected
-                                ? P.pinkGlow
-                                : 'transparent',
-                              color: selected
-                                ? P.pink
-                                : P.textMuted,
-                              padding: '8px 11px',
-                              fontSize: 11,
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                            }}
-                          >
-                            {selected && (
-                              <Check
-                                size={11}
-                                weight="bold"
-                                style={{
-                                  marginRight: 4,
-                                }}
-                              />
-                            )}
-                            {genre}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={saveProfile}
-                    disabled={saving || uploading}
-                    style={{
-                      background: P.pink,
-                      color: '#fff',
-                      border: 0,
-                      padding: '12px 16px',
-                      cursor: 'pointer',
-                      fontWeight: 800,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 7,
-                    }}
-                  >
-                    <FloppyDisk
-                      size={17}
-                      weight="bold"
-                    />
-                    {saving
-                      ? 'Salvataggio...'
-                      : 'Salva modifiche'}
-                  </button>
-                </div>
-              </section>
-
-              <section
-                style={{
-                  background: P.card,
-                  border: `1px solid ${P.border}`,
-                  padding: 22,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 9,
-                    marginBottom: 16,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 34,
-                      height: 34,
-                      display: 'grid',
-                      placeItems: 'center',
-                      background: P.goldGlow,
-                      color: P.gold,
-                    }}
-                  >
-                    <LockKey size={17} weight="fill" />
-                  </div>
-                  <div>
-                    <h2
-                      style={{
-                        margin: 0,
-                        color: P.text,
-                        fontFamily: FONT_DISPLAY,
-                        fontSize: 18,
-                      }}
-                    >
-                      Password
-                    </h2>
-                    <div
-                      style={{
-                        color: P.textFaint,
-                        fontSize: 10,
-                        marginTop: 2,
-                      }}
-                    >
+                    <h2 className="cdr-profile-card-title">Password</h2>
+                    <p className="cdr-profile-card-copy">
                       Modifica la password del tuo account.
-                    </div>
+                    </p>
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns:
-                      'repeat(2,minmax(0,1fr))',
-                    gap: 10,
-                  }}
-                  className="password-grid"
-                >
+                <div className="cdr-profile-password-grid">
                   <input
+                    className="cdr-profile-input"
                     type="password"
                     value={newPassword}
+                    placeholder="Nuova password"
                     onChange={(event) =>
                       setNewPassword(event.target.value)
                     }
-                    placeholder="Nuova password"
-                    style={inputStyle}
                   />
                   <input
+                    className="cdr-profile-input"
                     type="password"
                     value={confirmPassword}
-                    onChange={(event) =>
-                      setConfirmPassword(
-                        event.target.value
-                      )
-                    }
                     placeholder="Conferma password"
-                    style={inputStyle}
+                    onChange={(event) =>
+                      setConfirmPassword(event.target.value)
+                    }
                   />
+                  <button
+                    type="button"
+                    className="cdr-profile-action gold"
+                    onClick={updatePassword}
+                    disabled={changingPassword}
+                  >
+                    {changingPassword ? '...' : 'Aggiorna'}
+                  </button>
                 </div>
-
-                <button
-                  onClick={updatePassword}
-                  disabled={changingPassword}
-                  style={{
-                    marginTop: 10,
-                    border: `1px solid ${P.gold}`,
-                    background: P.goldGlow,
-                    color: P.gold,
-                    padding: '10px 13px',
-                    fontWeight: 800,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {changingPassword
-                    ? 'Aggiornamento...'
-                    : 'Aggiorna password'}
-                </button>
               </section>
 
-              <section
-                style={{
-                  background: P.card,
-                  border: `1px solid ${P.border}`,
-                  padding: 22,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 9,
-                    marginBottom: 16,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 34,
-                      height: 34,
-                      display: 'grid',
-                      placeItems: 'center',
-                      background: P.goldGlow,
-                      color: P.gold,
-                    }}
-                  >
-                    <Bell size={17} weight="fill" />
-                  </div>
-
+              <section className="cdr-profile-card">
+                <div className="cdr-profile-card-head">
                   <div>
-                    <h2
-                      style={{
-                        margin: 0,
-                        color: P.text,
-                        fontFamily: FONT_DISPLAY,
-                        fontSize: 18,
-                      }}
-                    >
+                    <div className="cdr-profile-card-kicker">
+                      <Bell size={12} weight="fill" />
                       Notifiche
-                    </h2>
-
-                    <div
-                      style={{
-                        color: P.textFaint,
-                        fontSize: 10,
-                        marginTop: 2,
-                      }}
-                    >
-                      Scegli quali aggiornamenti vuoi ricevere.
                     </div>
+                    <h2 className="cdr-profile-card-title">
+                      Cosa vuoi ricevere
+                    </h2>
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    display: 'grid',
-                    gap: 8,
-                  }}
-                >
+                <div className="cdr-profile-toggle-list">
                   {[
-                    {
-                      key: 'followers',
-                      title: 'Nuovi follower',
-                      subtitle:
-                        'Ricevi una notifica quando qualcuno inizia a seguirti.',
-                      checked: notifyNewFollower,
-                      onChange: setNotifyNewFollower,
-                    },
-                    {
-                      key: 'likes',
-                      title: 'Like alle recensioni',
-                      subtitle:
-                        'Ricevi una notifica quando qualcuno mette like a una tua recensione.',
-                      checked: notifyReviewLike,
-                      onChange: setNotifyReviewLike,
-                    },
-                    {
-                      key: 'comments',
-                      title: 'Commenti alle recensioni',
-                      subtitle:
-                        'Ricevi una notifica quando qualcuno commenta una tua recensione.',
-                      checked: notifyReviewComment,
-                      onChange: setNotifyReviewComment,
-                    },
-                    {
-                      key: 'reports',
-                      title: 'Aggiornamenti segnalazioni',
-                      subtitle:
-                        'Ricevi una notifica quando una tua segnalazione viene risolta o archiviata.',
-                      checked: notifyReportUpdates,
-                      onChange: setNotifyReportUpdates,
-                    },
-                  ].map((item) => (
+                    [
+                      'Nuovi follower',
+                      'Quando qualcuno inizia a seguirti.',
+                      notifyNewFollower,
+                      setNotifyNewFollower,
+                    ],
+                    [
+                      'Like alle recensioni',
+                      'Quando qualcuno mette like a una tua recensione.',
+                      notifyReviewLike,
+                      setNotifyReviewLike,
+                    ],
+                    [
+                      'Commenti alle recensioni',
+                      'Quando qualcuno commenta una tua recensione.',
+                      notifyReviewComment,
+                      setNotifyReviewComment,
+                    ],
+                    [
+                      'Aggiornamenti segnalazioni',
+                      'Quando cambia lo stato di una segnalazione.',
+                      notifyReportUpdates,
+                      setNotifyReportUpdates,
+                    ],
+                  ].map(([title, subtitle, checked, setter]) => (
                     <label
-                      key={item.key}
-                      style={{
-                        border: `1px solid ${P.border}`,
-                        background: P.bgSoft,
-                        padding: '12px 13px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 14,
-                        cursor: 'pointer',
-                      }}
+                      key={String(title)}
+                      className="cdr-profile-toggle"
                     >
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            color: P.text,
-                            fontSize: 12,
-                            fontWeight: 800,
-                          }}
-                        >
-                          {item.title}
-                        </div>
-
-                        <div
-                          style={{
-                            color: P.textFaint,
-                            fontSize: 9,
-                            lineHeight: 1.5,
-                            marginTop: 3,
-                          }}
-                        >
-                          {item.subtitle}
-                        </div>
+                      <div>
+                        <strong>{String(title)}</strong>
+                        <span>{String(subtitle)}</span>
                       </div>
-
                       <input
                         type="checkbox"
-                        checked={item.checked}
+                        checked={Boolean(checked)}
                         onChange={(event) =>
-                          item.onChange(event.target.checked)
+                          (
+                            setter as React.Dispatch<
+                              React.SetStateAction<boolean>
+                            >
+                          )(event.target.checked)
                         }
-                        style={{
-                          width: 17,
-                          height: 17,
-                          accentColor: P.gold,
-                          flexShrink: 0,
-                          cursor: 'pointer',
-                        }}
                       />
                     </label>
                   ))}
@@ -2355,25 +2098,10 @@ export default function ProfiloPage() {
 
                 <button
                   type="button"
-                  onClick={() =>
-                    void saveNotificationSettings()
-                  }
+                  className="cdr-profile-action gold"
+                  style={{ width: '100%', marginTop: 8 }}
+                  onClick={() => void saveNotificationSettings()}
                   disabled={savingNotifications}
-                  style={{
-                    width: '100%',
-                    border: `1px solid ${P.gold}`,
-                    background: P.goldGlow,
-                    color: P.gold,
-                    padding: '10px 13px',
-                    marginTop: 12,
-                    cursor: savingNotifications
-                      ? 'wait'
-                      : 'pointer',
-                    opacity: savingNotifications ? 0.55 : 1,
-                    fontFamily: FONT_SANS,
-                    fontWeight: 800,
-                    fontSize: 11,
-                  }}
                 >
                   {savingNotifications
                     ? 'Salvataggio...'
@@ -2381,140 +2109,58 @@ export default function ProfiloPage() {
                 </button>
               </section>
 
-              <section
-                style={{
-                  background: P.card,
-                  border: `1px solid ${P.border}`,
-                  padding: 22,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 9,
-                    marginBottom: 16,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 34,
-                      height: 34,
-                      display: 'grid',
-                      placeItems: 'center',
-                      background: P.pinkGlow,
-                      color: P.pink,
-                    }}
-                  >
-                    <Prohibit size={17} weight="fill" />
-                  </div>
-
+              <section className="cdr-profile-card">
+                <div className="cdr-profile-card-head">
                   <div>
-                    <h2
-                      style={{
-                        margin: 0,
-                        color: P.text,
-                        fontFamily: FONT_DISPLAY,
-                        fontSize: 18,
-                      }}
-                    >
+                    <div className="cdr-profile-card-kicker">
+                      <Prohibit size={12} weight="fill" />
                       Privacy e sicurezza
-                    </h2>
-
-                    <div
-                      style={{
-                        color: P.textFaint,
-                        fontSize: 10,
-                        marginTop: 2,
-                      }}
-                    >
-                      Gestisci blocchi e interazioni con altri utenti.
                     </div>
+                    <h2 className="cdr-profile-card-title">
+                      Visibilità e blocchi
+                    </h2>
                   </div>
                 </div>
 
-                <div
-                  style={{
-                    display: 'grid',
-                    gap: 8,
-                    marginBottom: 12,
-                  }}
-                >
+                <div className="cdr-profile-toggle-list">
                   {[
-                    {
-                      key: 'favorites',
-                      title: 'Preferiti pubblici',
-                      subtitle:
-                        'Permetti agli altri utenti di vedere i film che hai aggiunto ai Preferiti.',
-                      checked: favoritesPublic,
-                      onChange: setFavoritesPublic,
-                    },
-                    {
-                      key: 'watchlist',
-                      title: 'Watchlist pubblica',
-                      subtitle:
-                        'Permetti agli altri utenti di vedere i film che vuoi guardare.',
-                      checked: watchlistPublic,
-                      onChange: setWatchlistPublic,
-                    },
-                    {
-                      key: 'watched',
-                      title: 'Film visti pubblici',
-                      subtitle:
-                        'Permetti agli altri utenti di vedere quali film hai segnato come visti.',
-                      checked: watchedPublic,
-                      onChange: setWatchedPublic,
-                    },
-                  ].map((item) => (
+                    [
+                      'Preferiti pubblici',
+                      'Permetti agli altri utenti di vedere i film che hai aggiunto ai Preferiti.',
+                      favoritesPublic,
+                      setFavoritesPublic,
+                    ],
+                    [
+                      'Watchlist pubblica',
+                      'Permetti agli altri utenti di vedere i film che vuoi guardare.',
+                      watchlistPublic,
+                      setWatchlistPublic,
+                    ],
+                    [
+                      'Film visti pubblici',
+                      'Permetti agli altri utenti di vedere quali film hai segnato come visti.',
+                      watchedPublic,
+                      setWatchedPublic,
+                    ],
+                  ].map(([title, subtitle, checked, setter]) => (
                     <label
-                      key={item.key}
-                      style={{
-                        border: `1px solid ${P.border}`,
-                        background: P.bgSoft,
-                        padding: '12px 13px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 14,
-                        cursor: 'pointer',
-                      }}
+                      key={String(title)}
+                      className="cdr-profile-toggle"
                     >
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            color: P.text,
-                            fontSize: 12,
-                            fontWeight: 800,
-                          }}
-                        >
-                          {item.title}
-                        </div>
-
-                        <div
-                          style={{
-                            color: P.textFaint,
-                            fontSize: 9,
-                            lineHeight: 1.5,
-                            marginTop: 3,
-                          }}
-                        >
-                          {item.subtitle}
-                        </div>
+                      <div>
+                        <strong>{String(title)}</strong>
+                        <span>{String(subtitle)}</span>
                       </div>
-
                       <input
                         type="checkbox"
-                        checked={item.checked}
+                        checked={Boolean(checked)}
                         onChange={(event) =>
-                          item.onChange(event.target.checked)
+                          (
+                            setter as React.Dispatch<
+                              React.SetStateAction<boolean>
+                            >
+                          )(event.target.checked)
                         }
-                        style={{
-                          width: 17,
-                          height: 17,
-                          accentColor: P.pink,
-                          flexShrink: 0,
-                          cursor: 'pointer',
-                        }}
                       />
                     </label>
                   ))}
@@ -2522,529 +2168,142 @@ export default function ProfiloPage() {
 
                 <button
                   type="button"
+                  className="cdr-profile-action"
+                  style={{ width: '100%', marginTop: 8 }}
                   onClick={() => void savePrivacy()}
                   disabled={savingPrivacy}
-                  style={{
-                    width: '100%',
-                    border: `1px solid ${P.pink}`,
-                    background: P.pinkGlow,
-                    color: P.pink,
-                    padding: '10px 13px',
-                    marginBottom: 12,
-                    cursor: savingPrivacy ? 'wait' : 'pointer',
-                    opacity: savingPrivacy ? 0.55 : 1,
-                    fontFamily: FONT_SANS,
-                    fontWeight: 800,
-                    fontSize: 11,
-                  }}
                 >
-                  {savingPrivacy
-                    ? 'Salvataggio...'
-                    : 'Salva privacy'}
+                  {savingPrivacy ? 'Salvataggio...' : 'Salva privacy'}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    router.push('/impostazioni/utenti-bloccati')
-                  }
-                  style={{
-                    width: '100%',
-                    border: `1px solid ${P.border}`,
-                    background: P.bgSoft,
-                    color: P.text,
-                    padding: '14px 16px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    fontFamily: FONT_SANS,
-                    textAlign: 'left',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 11,
-                      minWidth: 0,
-                    }}
+                <div className="cdr-profile-setting-links">
+                  <button
+                    type="button"
+                    className="cdr-profile-setting-link"
+                    onClick={() =>
+                      router.push('/impostazioni/utenti-bloccati')
+                    }
                   >
                     <div
+                      className="cdr-profile-setting-link-icon"
                       style={{
-                        width: 34,
-                        height: 34,
-                        display: 'grid',
-                        placeItems: 'center',
                         background: 'rgba(239,68,68,.08)',
-                        color: P.error,
-                        flexShrink: 0,
+                        color: '#ef4444',
                       }}
                     >
-                      <Prohibit size={16} weight="bold" />
+                      <Prohibit size={14} />
                     </div>
-
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 800,
-                          marginBottom: 3,
-                          color: P.text,
-                        }}
-                      >
-                        Utenti bloccati
-                      </div>
-
-                      <div
-                        style={{
-                          color: P.textMuted,
-                          fontSize: 10,
-                          lineHeight: 1.5,
-                        }}
-                      >
-                        Visualizza e gestisci gli account che hai bloccato.
-                      </div>
+                    <div>
+                      <strong>Utenti bloccati</strong>
+                      <span>
+                        Visualizza e gestisci gli account che hai
+                        bloccato.
+                      </span>
                     </div>
-                  </div>
+                    <ArrowRight size={12} />
+                  </button>
 
-                  <span
-                    style={{
-                      color: P.textFaint,
-                      fontSize: 20,
-                      lineHeight: 1,
-                      flexShrink: 0,
-                    }}
+                  <button
+                    type="button"
+                    className="cdr-profile-setting-link"
+                    onClick={() =>
+                      router.push('/impostazioni/segnalazioni')
+                    }
                   >
-                    ›
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    router.push('/impostazioni/segnalazioni')
-                  }
-                  style={{
-                    width: '100%',
-                    border: `1px solid ${P.border}`,
-                    background: P.bgSoft,
-                    color: P.text,
-                    padding: '14px 16px',
-                    marginTop: 8,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                    fontFamily: FONT_SANS,
-                    textAlign: 'left',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 11,
-                      minWidth: 0,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 34,
-                        height: 34,
-                        display: 'grid',
-                        placeItems: 'center',
-                        background: P.pinkGlow,
-                        color: P.pink,
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Flag size={16} weight="fill" />
+                    <div className="cdr-profile-setting-link-icon">
+                      <Flag size={14} weight="fill" />
                     </div>
-
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 800,
-                          marginBottom: 3,
-                          color: P.text,
-                        }}
-                      >
-                        Le mie segnalazioni
-                      </div>
-
-                      <div
-                        style={{
-                          color: P.textMuted,
-                          fontSize: 10,
-                          lineHeight: 1.5,
-                        }}
-                      >
+                    <div>
+                      <strong>Le mie segnalazioni</strong>
+                      <span>
                         Controlla lo stato delle segnalazioni inviate.
-                      </div>
+                      </span>
                     </div>
-                  </div>
-
-                  <span
-                    style={{
-                      color: P.textFaint,
-                      fontSize: 20,
-                      lineHeight: 1,
-                      flexShrink: 0,
-                    }}
-                  >
-                    ›
-                  </span>
-                </button>
+                    <ArrowRight size={12} />
+                  </button>
+                </div>
               </section>
 
               {isAdmin && (
-                <section
-                  style={{
-                    background: P.card,
-                    border: `1px solid ${P.gold}35`,
-                    padding: 22,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 9,
-                      marginBottom: 16,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 34,
-                        height: 34,
-                        display: 'grid',
-                        placeItems: 'center',
-                        background: P.goldGlow,
-                        color: P.gold,
-                      }}
-                    >
-                      <ShieldCheck size={17} weight="fill" />
-                    </div>
-
+                <section className="cdr-profile-card gold">
+                  <div className="cdr-profile-card-head">
                     <div>
-                      <h2
-                        style={{
-                          margin: 0,
-                          color: P.text,
-                          fontFamily: FONT_DISPLAY,
-                          fontSize: 18,
-                        }}
-                      >
+                      <div className="cdr-profile-card-kicker">
+                        <ShieldCheck size={12} weight="fill" />
                         Moderazione
-                      </h2>
-
-                      <div
-                        style={{
-                          color: P.textFaint,
-                          fontSize: 10,
-                          marginTop: 2,
-                        }}
-                      >
-                        Strumenti riservati agli amministratori.
                       </div>
+                      <h2 className="cdr-profile-card-title">
+                        Strumenti amministratore
+                      </h2>
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push('/admin/segnalazioni')
-                    }
-                    style={{
-                      width: '100%',
-                      border: `1px solid ${P.border}`,
-                      background: P.bgSoft,
-                      color: P.text,
-                      padding: '14px 16px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      fontFamily: FONT_SANS,
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 11,
-                        minWidth: 0,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 34,
-                          height: 34,
-                          display: 'grid',
-                          placeItems: 'center',
-                          background: P.goldGlow,
-                          color: P.gold,
-                          flexShrink: 0,
-                        }}
-                      >
-                        <ShieldCheck size={16} weight="fill" />
-                      </div>
+                  <div className="cdr-profile-setting-links">
+                    {[
+                      [
+                        'Gestisci segnalazioni',
+                        'Apri il pannello di moderazione della community.',
+                        '/admin/segnalazioni',
+                        ShieldCheck,
+                      ],
+                      [
+                        'Gestisci ricorsi',
+                        'Valuta i ricorsi contro le sospensioni.',
+                        '/admin/ricorsi',
+                        Gavel,
+                      ],
+                      [
+                        'Gestisci sospensioni',
+                        'Visualizza le sospensioni attive e lo storico.',
+                        '/admin/sospensioni',
+                        WarningCircle,
+                      ],
+                    ].map(([title, subtitle, path, Icon]) => {
+                      const IconComponent = Icon as typeof ShieldCheck;
 
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 800,
-                            marginBottom: 3,
-                            color: P.text,
-                          }}
+                      return (
+                        <button
+                          type="button"
+                          key={String(title)}
+                          className="cdr-profile-setting-link"
+                          onClick={() => router.push(String(path))}
                         >
-                          Gestisci segnalazioni
-                        </div>
-
-                        <div
-                          style={{
-                            color: P.textMuted,
-                            fontSize: 10,
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          Apri il pannello di moderazione della community.
-                        </div>
-                      </div>
-                    </div>
-
-                    <span
-                      style={{
-                        color: P.textFaint,
-                        fontSize: 20,
-                        lineHeight: 1,
-                        flexShrink: 0,
-                      }}
-                    >
-                      ›
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push('/admin/ricorsi')
-                    }
-                    style={{
-                      width: '100%',
-                      border: `1px solid ${P.border}`,
-                      background: P.bgSoft,
-                      color: P.text,
-                      padding: '14px 16px',
-                      marginTop: 8,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      fontFamily: FONT_SANS,
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 11,
-                        minWidth: 0,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 34,
-                          height: 34,
-                          display: 'grid',
-                          placeItems: 'center',
-                          background: P.goldGlow,
-                          color: P.gold,
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Gavel size={16} weight="fill" />
-                      </div>
-
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 800,
-                            marginBottom: 3,
-                            color: P.text,
-                          }}
-                        >
-                          Gestisci ricorsi
-                        </div>
-
-                        <div
-                          style={{
-                            color: P.textMuted,
-                            fontSize: 10,
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          Valuta i ricorsi contro le sospensioni.
-                        </div>
-                      </div>
-                    </div>
-
-                    <span
-                      style={{
-                        color: P.textFaint,
-                        fontSize: 20,
-                        lineHeight: 1,
-                        flexShrink: 0,
-                      }}
-                    >
-                      ›
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push('/admin/sospensioni')
-                    }
-                    style={{
-                      width: '100%',
-                      border: `1px solid ${P.border}`,
-                      background: P.bgSoft,
-                      color: P.text,
-                      padding: '14px 16px',
-                      marginTop: 8,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      fontFamily: FONT_SANS,
-                      textAlign: 'left',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 11,
-                        minWidth: 0,
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 34,
-                          height: 34,
-                          display: 'grid',
-                          placeItems: 'center',
-                          background: 'rgba(239,68,68,.08)',
-                          color: P.error,
-                          flexShrink: 0,
-                        }}
-                      >
-                        <WarningCircle size={16} weight="fill" />
-                      </div>
-
-                      <div style={{ minWidth: 0 }}>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 800,
-                            marginBottom: 3,
-                            color: P.text,
-                          }}
-                        >
-                          Gestisci sospensioni
-                        </div>
-
-                        <div
-                          style={{
-                            color: P.textMuted,
-                            fontSize: 10,
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          Visualizza le sospensioni attive e lo storico.
-                        </div>
-                      </div>
-                    </div>
-
-                    <span
-                      style={{
-                        color: P.textFaint,
-                        fontSize: 20,
-                        lineHeight: 1,
-                        flexShrink: 0,
-                      }}
-                    >
-                      ›
-                    </span>
-                  </button>
+                          <div
+                            className="cdr-profile-setting-link-icon"
+                            style={{
+                              background: P.accentGlow,
+                              color: P.accent,
+                            }}
+                          >
+                            <IconComponent size={14} weight="fill" />
+                          </div>
+                          <div>
+                            <strong>{String(title)}</strong>
+                            <span>{String(subtitle)}</span>
+                          </div>
+                          <ArrowRight size={12} />
+                        </button>
+                      );
+                    })}
+                  </div>
                 </section>
               )}
 
-              <section
-                style={{
-                  background: P.card,
-                  border: `1px solid ${P.error}35`,
-                  padding: 22,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 16,
-                    flexWrap: 'wrap',
-                  }}
-                >
+              <section className="cdr-profile-card">
+                <div className="cdr-profile-card-head">
                   <div>
-                    <h2
-                      style={{
-                        margin: 0,
-                        color: P.text,
-                        fontSize: 15,
-                      }}
-                    >
-                      Sessione
-                    </h2>
-                    <p
-                      style={{
-                        color: P.textFaint,
-                        fontSize: 11,
-                        margin: '4px 0 0',
-                      }}
-                    >
-                      Disconnettiti da CineDate su questo dispositivo.
+                    <h2 className="cdr-profile-card-title">Sessione</h2>
+                    <p className="cdr-profile-card-copy">
+                      Disconnettiti da Cinedate su questo dispositivo.
                     </p>
                   </div>
 
                   <button
+                    type="button"
+                    className="cdr-profile-action danger"
                     onClick={handleLogout}
-                    style={{
-                      background:
-                        'rgba(239,68,68,.08)',
-                      color: P.error,
-                      border: `1px solid ${P.error}45`,
-                      padding: '10px 14px',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 7,
-                    }}
                   >
-                    <SignOut size={17} weight="bold" />
+                    <SignOut size={13} weight="bold" />
                     Logout
                   </button>
                 </div>
@@ -3052,48 +2311,21 @@ export default function ProfiloPage() {
 
               {(error || message) && (
                 <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '12px 14px',
-                    color: error ? P.error : P.success,
-                    background: error
-                      ? 'rgba(239,68,68,.08)'
-                      : 'rgba(34,197,94,.08)',
-                    border: `1px solid ${
-                      error ? P.error : P.success
-                    }35`,
-                    fontSize: 12,
-                    fontWeight: 700,
-                  }}
+                  className={`cdr-profile-status ${
+                    error ? 'error' : 'success'
+                  }`}
                 >
                   {error ? (
-                    <Warning size={17} weight="fill" />
+                    <Warning size={13} weight="fill" />
                   ) : (
-                    <CheckCircle
-                      size={17}
-                      weight="fill"
-                    />
-                  )}
+                    <CheckCircle size={13} weight="fill" />
+                  )}{' '}
                   {error || message}
                 </div>
               )}
             </div>
           )}
         </div>
-
-        <style jsx global>{`
-          @media (max-width: 720px) {
-            .profile-settings-grid {
-              grid-template-columns: 1fr !important;
-            }
-
-            .password-grid {
-              grid-template-columns: 1fr !important;
-            }
-          }
-        `}</style>
       </main>
     </AppShell>
   );

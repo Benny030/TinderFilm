@@ -1,0 +1,151 @@
+a home con registrazione e funzionalita ospiete, dopo la registrazione sblocco funzionalita come record di match, possibilita di aggiungere film personalizzati,.
+aggiungere funzione di commenti nei film, per vedere delle recensioni di altri utenti, possibilita di scrittura solo con account, altrimenti acceso come ospite posso solo visualizzare le varie recensioni.
+con un account posso avere nome personalizzato nel campo delle recensione, sistema di rank delle recensioni.
+aggiornare il database con tabella film personalizzati, tabella recensioni, tabella utenti iscritti.
+correggere la stanza temp, correggere la visualizzazione per coop, magari con pallino verde rosso arancione in base, allo stato del compagno di stanza.
+correggere animazione per smartphone, 
+implementare funzione che ricerca il film e da come outlut il servizio di streaming che lo offre.
+
+
+
+
+-------------------------
+Problema: Movie è definito localmente in matchesScreen.tsx, finalmatchescreen.tsx e non importa da @/types. trama_c e trama_l sono opzionali (?) ma causano errori TypeScript.
+
+Aggiornare types/index.ts: rendere trama_c e trama_l string | null (senza ?) okok
+Rimuovere il tipo Movie locale da matchesScreen.tsx e finalmatchescreen.tsx e importare da @/types okok
+Aggiungere a types/index.ts i tipi mancanti: AuthUser, GuestUser, Review, Match
+Creare in Supabase le tabelle mancanti:
+
+users (id, email, username, created_at)
+reviews (id, movie_id, user_id, text, rating, likes_count, created_at)
+review_likes (id, review_id, user_id)
+matches (id, user_id, movie_id, room_id, created_at) con vincolo unique su (user_id, movie_id)
+
+
+Aggiungere PATCH all'API pages/api/movies/[id].ts (attualmente ha solo DELETE)
+----------------------------
+TASK 2 — Autenticazione Supabase
+Stato attuale: nessuna auth, solo nome libero in localStorage.
+
+Creare pages/auth.tsx con:
+
+Form login/registrazione (email + password via Supabase Auth)
+Bottone "Continua come ospite" (salta auth, rimane nel flusso attuale)
+
+
+Creare hooks/useAuth.ts che espone: user, isGuest, signIn, signUp, signOut
+Dopo registrazione, mostrare form per scegliere username e salvarlo in tabella users
+Aggiornare useRoom.ts: se utente loggato, usare user.id e user.username invece di UUID generato + nome libero
+-----------------------------
+
+TASK 3 — Welcome screen con auth
+Stato attuale: welcomeScreen.tsx ha solo form nome + bottone entra.
+
+Aggiungere sopra il form attuale:
+
+Bottone "Login / Registrati" → naviga a pages/auth.tsx
+Bottone "Continua come ospite" → comportamento attuale
+
+
+Se utente già loggato: saltare il form nome e mostrare direttamente "Bentornato, [username]"
+Mostrare badge visivo "ospite" o "utente registrato" nell'header
+------------------------------
+
+
+TASK 4 — Gestione accessi guest vs utente
+Stato attuale: nessun blocco, tutti possono fare tutto.
+
+Definire cosa può fare un ospite:
+
+✅ Swipe
+✅ Stanza coop
+❌ Scrittura recensioni
+❌ Like recensioni
+❌ Salvataggio match permanente
+❌ Aggiunta film (attualmente protetto da AdminGate, va mantenuto)
+
+
+Quando ospite prova un'azione bloccata: mostrare popup "Registrati per usare questa funzione" con bottone → /auth
+Creare componente GuestBlocker riutilizzabile per wrappare queste azioni
+------------------------------
+
+
+TASK 5 — Sistema match
+Stato attuale: matchesScreen.tsx mostra solo i match in-session (persi al refresh). finalmatchescreen.tsx mostra il match finale ma non lo salva.
+
+Quando scatta un match (in handleSwipe su index.tsx): chiamare API POST /api/matches per salvare su Supabase (solo se utente loggato)
+Creare pages/api/matches/index.ts (GET lista match utente, POST salva match)
+Aggiornare matchesScreen.tsx:
+
+Importare Movie da @/types
+Per utenti loggati: caricare match salvati da DB oltre a quelli in-session
+Mostrare data del match
+
+------------------------------
+
+
+
+TASK 6 — Sistema recensioni
+Stato attuale: non esiste.
+
+Creare components/screens/reviewsScreen.tsx con:
+
+Lista recensioni del film (username, testo, rating 1-5, numero like)
+Ordinamento: per data / per like
+Form scrittura recensione (solo utenti loggati, altrimenti GuestBlocker)
+
+
+Creare API:
+
+GET /api/reviews?movieId=...
+POST /api/reviews
+POST /api/reviews/[id]/like
+
+
+Aggiungere bottone recensioni nel retro della card (attualmente mostra solo trama_c)
+
+---------------------------------
+
+TASK 7 — Stato partner in stanza
+Stato attuale: nessun indicatore visivo online/offline del partner.
+
+Aggiungere al canale Supabase Realtime gli eventi presence (heartbeat ogni 30s)
+Aggiungere in welcomeScreen.tsx e swipeScreen.tsx un badge per ogni utente:
+
+🟢 verde = online (heartbeat < 30s fa)
+🟠 arancione = idle (30-60s)
+🔴 rosso = offline (> 60s o disconnesso)
+
+
+Gestire cleanup quando utente lascia la pagina (beforeunload)
+
+---------------------------------
+
+TASK 8 — API movies: aggiungere PATCH
+Stato attuale: pages/api/movies/[id].ts ha solo DELETE, ma handleEditMovie in index.tsx chiama PATCH.
+
+Aggiungere case PATCH in pages/api/movies/[id].ts
+Aggiungere validazione campi
+Testare che modifica da addFilmScreen.tsx funzioni end-to-end
+----------------------------------
+
+
+
+TASK 9 — Ricerca film e streaming
+Stato attuale: nessuna ricerca, film solo da DB.
+
+Scegliere API esterna (TMDB è gratuita con chiave)
+Creare pages/api/search.ts che proxia le chiamate a TMDB (per non esporre la chiave)
+Aggiungere barra di ricerca in addFilmScreen.tsx come alternativa al form manuale
+Per ogni film: mostrare dove è disponibile in streaming (TMDB ha endpoint /watch/providers)
+-----------------------------------
+
+
+TASK 10 — Pulizia tipi e componenti
+Stato attuale: Movie ridefinito in più file, styles: any ovunque, SetStateAction importato ma non usato in finalmatchescreen.tsx.
+
+Rimuovere import SetStateAction inutilizzato da finalmatchescreen.tsx
+Rimuovere tutte le definizioni locali di Movie e usare solo @/types
+Tipizzare styles con un tipo preciso invece di any
+Unificare Props per page in @/types o tenerla locale (decidere una convenzione)

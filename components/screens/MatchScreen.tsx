@@ -1,50 +1,27 @@
-import { useState, useEffect, type CSSProperties } from 'react';
-import { useTheme } from '@/context/ThemeContext';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { useRouter } from 'next/router';
 import {
-  FilmSlate, Heart, ArrowRight, Trophy,
-  Play, TelevisionSimple, ArrowClockwise, Star, Ticket, MapPin,
+  ArrowClockwise,
+  ArrowRight,
+  Article,
+  FilmSlate,
+  Heart,
+  MapPin,
+  Play,
+  Star,
+  TelevisionSimple,
+  Ticket,
+  Trophy,
 } from '@phosphor-icons/react';
-import type { ExtendedMovie, StreamingSource, MatchEntry } from '@/types/stanza';
+
 import CinemaInSala from '@/components/cinema/CinemaInSala';
-
-// ─── Palette dark "cinema elegante" ──────────────────────────────────────
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  cardHover: '#241d19',
-  border: '#2d221c',
-  gold: '#f5b92f',
-  goldSoft: '#ffd875',
-  goldGlow: 'rgba(245,185,47,0.12)',
-  pink: '#ed3d73',
-  pinkDeep: '#8e1740',
-  pinkGlow: 'rgba(237,61,115,0.15)',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-};
-
-// ─── Palette light "cinema elegante" ──────────────────────────────────────
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  cardHover: '#faf5ef',
-  border: '#d6cbbc',
-  gold: '#b8860b',
-  goldSoft: '#e8c84a',
-  goldGlow: 'rgba(184,134,11,0.10)',
-  pink: '#b83060',
-  pinkDeep: '#8a1d44',
-  pinkGlow: 'rgba(184,48,96,0.10)',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-};
-
-const FONT_SANS = "'Inter','Helvetica Neue',sans-serif";
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
+import { useTheme } from '@/context/ThemeContext';
+import { FONT, R, THEME } from '@/styles/token';
+import type {
+  ExtendedMovie,
+  MatchEntry,
+  StreamingSource,
+} from '@/types/stanza';
 
 type Props = {
   match: ExtendedMovie;
@@ -60,147 +37,66 @@ type Props = {
 
 function PlatformRow({ s }: { s: StreamingSource }) {
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
-  const P = isDark ? D : L;
+  const P = theme === 'dark' ? THEME.dark : THEME.light;
+
+  const typeLabel =
+    s.type === 'sub'
+      ? "Incluso nell'abbonamento"
+      : s.type === 'free'
+        ? 'Gratuito'
+        : s.type === 'rent'
+          ? `Noleggio${s.price ? ` · €${s.price.toFixed(2)}` : ''}`
+          : `Acquisto${s.price ? ` · €${s.price.toFixed(2)}` : ''}`;
 
   return (
-    <div
+    <button
+      type="button"
+      className="cdr-match-platform"
       onClick={() => s.url && window.open(s.url, '_blank')}
-      style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '12px 14px', background: P.bg,
-        border: `1px solid ${P.border}`,
-        cursor: s.url ? 'pointer' : 'default',
-        transition: 'border-color .15s, box-shadow .15s',
-        borderRadius: 0,
-      }}
-      onMouseEnter={(e) => {
-        if (s.url) {
-          e.currentTarget.style.borderColor = s.color ?? P.pink;
-          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = P.border;
-        e.currentTarget.style.boxShadow = 'none';
-      }}
+      disabled={!s.url}
+      style={
+        {
+          '--cdr-platform-accent': s.color ?? P.primary,
+        } as CSSProperties
+      }
     >
-      <style>{`
-        .match-screen-root {
-          width: 100%;
-          min-height: 100%;
-        }
-
-        .match-screen-scroll {
-          width: 100%;
-          max-width: 980px;
-          margin: 0 auto;
-        }
-
-        .match-movie-card {
-          display: grid !important;
-          grid-template-columns: 96px minmax(0,1fr);
-          gap: 18px !important;
-        }
-
-        .match-movie-poster {
-          width: 96px !important;
-          height: 144px !important;
-        }
-
-        .match-actions {
-          width: 100%;
-        }
-
-        @media (min-width: 1024px) {
-          .match-screen-scroll {
-            max-width: 1080px;
-            padding: 24px 28px 28px !important;
-          }
-
-          .match-movie-card {
-            grid-template-columns: 128px minmax(0,1fr);
-            padding: 20px !important;
-          }
-
-          .match-movie-poster {
-            width: 128px !important;
-            height: 192px !important;
-          }
-
-          .match-actions {
-            max-width: 1080px;
-            margin: 0 auto;
-            padding: 16px 28px 22px !important;
-          }
-        }
-
-        @media (max-width: 640px) {
-          .match-screen-scroll {
-            padding: 12px !important;
-          }
-
-          .match-movie-card {
-            grid-template-columns: 74px minmax(0,1fr);
-            gap: 12px !important;
-            padding: 12px !important;
-          }
-
-          .match-movie-poster {
-            width: 74px !important;
-            height: 111px !important;
-          }
-
-          .match-ticket-wrap {
-            border-radius: 14px !important;
-          }
-
-          .match-ticket-head {
-            padding: 12px !important;
-          }
-
-          .match-actions {
-            padding: 12px !important;
-          }
-        }
-      `}</style>
-      <div className="match-screen-root" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{
-          width: '44px', height: '30px', borderRadius: 0,
-          background: s.color ?? '#f0f0f0',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          overflow: 'hidden', flexShrink: 0,
-        }}>
+      <div className="cdr-match-platform-left">
+        <div
+          className="cdr-match-platform-logo"
+          style={{ background: s.color ?? P.bgSoft }}
+        >
           {s.logoUrl ? (
             <img
               src={s.logoUrl}
               alt={s.name}
-              style={{ width: '36px', height: '24px', objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = 'none';
-                (e.currentTarget.parentElement as HTMLElement).innerHTML = `<span style="font-size:16px">${s.logo}</span>`;
+              onError={(event) => {
+                event.currentTarget.style.display = 'none';
               }}
             />
           ) : (
-            <span style={{ fontSize: '16px' }}>{s.logo}</span>
+            <span>{s.name.slice(0, 3).toUpperCase()}</span>
           )}
         </div>
-        <div>
-          <div style={{ fontSize: '13px', fontWeight: '600', color: P.text }}>{s.name}</div>
-          <div style={{ fontSize: '11px', fontWeight: '500', color: s.type === 'sub' || s.type === 'free' ? '#22c55e' : P.gold }}>
-            {s.type === 'sub'  && "Incluso nell'abbonamento"}
-            {s.type === 'free' && 'Gratuito'}
-            {s.type === 'rent' && `Noleggio${s.price ? ` · €${s.price.toFixed(2)}` : ''}`}
-            {s.type === 'buy'  && `Acquisto${s.price ? ` · €${s.price.toFixed(2)}` : ''}`}
-          </div>
+
+        <div className="cdr-match-platform-copy">
+          <strong>{s.name}</strong>
+          <span
+            data-kind={
+              s.type === 'sub' || s.type === 'free' ? 'included' : 'paid'
+            }
+          >
+            {typeLabel}
+          </span>
         </div>
       </div>
+
       {s.url && (
-        <div style={{ fontSize: '11px', fontWeight: '700', color: s.color ?? P.pink, display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-          Guarda <ArrowRight size={12} color={s.color ?? P.pink} weight="bold" />
-        </div>
+        <span className="cdr-match-platform-go">
+          Guarda
+          <ArrowRight size={13} weight="bold" />
+        </span>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -216,322 +112,1382 @@ export default function MatchScreen({
   selectingWinner = false,
 }: Props) {
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
-  const P = isDark ? D : L;
+  const P = theme === 'dark' ? THEME.dark : THEME.light;
+  const router = useRouter();
 
   const [sources, setSources] = useState<StreamingSource[]>([]);
   const [loadingSources, setLoadingSources] = useState(false);
 
   useEffect(() => {
     const tmdbId = match.tmdb_id;
-    if (!tmdbId) { setSources([]); setLoadingSources(false); return; }
+
+    if (!tmdbId) {
+      setSources([]);
+      setLoadingSources(false);
+      return;
+    }
 
     setLoadingSources(true);
+
     fetch(`/api/watchmode/${tmdbId}`)
-      .then((r) => r.json())
-      .then((d) => setSources(d.sources ?? []))
+      .then((response) => response.json())
+      .then((data) => setSources(data.sources ?? []))
       .catch(() => setSources([]))
       .finally(() => setLoadingSources(false));
-  }, [match.id]);
+  }, [match.id, match.tmdb_id]);
 
-  const subSources  = sources.filter((s) => s.type === 'sub' || s.type === 'free');
-  const rentSources = sources.filter((s) => s.type === 'rent' || s.type === 'buy');
+  const subSources = sources.filter(
+    (source) => source.type === 'sub' || source.type === 'free'
+  );
+  const rentSources = sources.filter(
+    (source) => source.type === 'rent' || source.type === 'buy'
+  );
+
+  const isSelected = selectedMovieId === String(match.id);
+  const canSelectWinner = isHost && !selectedMovieId && !!onSelectWinner;
+  const detailMovieId = match.tmdb_id ? String(match.tmdb_id) : String(match.id);
+
+  const vars = {
+    '--cdr-match-bg': P.bg,
+    '--cdr-match-soft': P.bgSoft,
+    '--cdr-match-surface': P.surface,
+    '--cdr-match-surface-hover': P.surfaceHover,
+    '--cdr-match-border': P.border,
+    '--cdr-match-text': P.text,
+    '--cdr-match-muted': P.textMuted,
+    '--cdr-match-faint': P.textFaint,
+    '--cdr-match-pink': P.primary,
+    '--cdr-match-pink-deep': P.primaryDeep,
+    '--cdr-match-pink-glow': P.primaryGlow,
+    '--cdr-match-gold': P.accent,
+    '--cdr-match-gold-soft': P.accentSoft,
+    '--cdr-match-gold-glow': P.accentGlow,
+  } as CSSProperties;
 
   return (
-    <div style={{ minHeight: '100%', display: 'flex', flexDirection: 'column', background: P.bg, fontFamily: FONT_SANS, position: 'relative' }}>
-      {/* Header */}
-      <div style={{
-        background: `linear-gradient(135deg, ${P.pink} 0%, ${P.pinkDeep} 100%)`,
-        padding: '24px 16px', textAlign: 'center', color: '#fff',
-        position: 'relative',
-      }}>
-        <div style={{ fontSize: '36px', marginBottom: '4px' }}>🎉</div>
-        <div style={{ fontSize: '24px', fontWeight: '800', marginBottom: '4px', fontFamily: FONT_DISPLAY }}>È un match!</div>
-        <div style={{ fontSize: '13px', opacity: 0.85 }}>
-          Vi piace entrambi <strong>{match.title}</strong>
-        </div>
-        {allMatches.length > 1 && (
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            background: 'rgba(255,255,255,0.2)', borderRadius: 0,
-            padding: '5px 14px', marginTop: '8px', fontSize: '11px', fontWeight: '600',
-          }}>
-            <Trophy size={14} color="#fff" weight="fill" />
-            {allMatches.length} match totali
+    <main className="cdr-match" style={vars}>
+      <style>{`
+        .cdr-match {
+          width: 100%;
+          min-height: 100%;
+          min-height: 100dvh;
+          overflow-x: hidden;
+          background: var(--cdr-match-bg);
+          color: var(--cdr-match-text);
+          font-family: ${FONT.sans};
+        }
+
+        .cdr-match * {
+          box-sizing: border-box;
+        }
+
+        .cdr-match button {
+          font-family: ${FONT.sans};
+        }
+
+        .cdr-match-hero {
+          position: relative;
+          overflow: hidden;
+          min-height: clamp(180px, 24vw, 240px);
+          display: grid;
+          place-items: center;
+          padding: clamp(30px, 5vw, 46px) 20px clamp(28px, 4vw, 38px);
+          text-align: center;
+          color: #fff;
+          background:
+            radial-gradient(circle at 50% 0%, rgba(255,255,255,.2), transparent 34%),
+            linear-gradient(135deg, var(--cdr-match-pink), var(--cdr-match-pink-deep));
+        }
+
+        .cdr-match-hero::before,
+        .cdr-match-hero::after {
+          content: '';
+          position: absolute;
+          border: 1px solid rgba(255,255,255,.18);
+          transform: rotate(45deg);
+        }
+
+        .cdr-match-hero::before {
+          width: 180px;
+          height: 180px;
+          top: -110px;
+          left: -80px;
+        }
+
+        .cdr-match-hero::after {
+          width: 220px;
+          height: 220px;
+          right: -130px;
+          bottom: -140px;
+        }
+
+        .cdr-match-hero-inner {
+          position: relative;
+          z-index: 1;
+          width: min(100%, 620px);
+          animation: cdr-match-hero-in .58s cubic-bezier(.2,.82,.2,1) both;
+        }
+
+        .cdr-match-heart {
+          width: 58px;
+          height: 58px;
+          margin: 0 auto 14px;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(255,255,255,.3);
+          background: rgba(255,255,255,.12);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          animation: cdr-match-heart-pop .72s .08s cubic-bezier(.2,1.3,.2,1) both;
+        }
+
+        .cdr-match-eyebrow {
+          margin-bottom: 7px;
+          font-size: 10px;
+          font-weight: 850;
+          letter-spacing: .14em;
+          text-transform: uppercase;
+          opacity: .78;
+        }
+
+        .cdr-match-title {
+          margin: 0;
+          font-family: ${FONT.display};
+          font-size: clamp(34px, 6vw, 52px);
+          line-height: .98;
+          letter-spacing: -.035em;
+        }
+
+        .cdr-match-subtitle {
+          margin: 11px auto 0;
+          max-width: 520px;
+          color: rgba(255,255,255,.82);
+          font-size: 13px;
+          line-height: 1.55;
+        }
+
+        .cdr-match-total {
+          margin-top: 16px;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 7px 10px;
+          border: 1px solid rgba(255,255,255,.28);
+          background: rgba(255,255,255,.1);
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: .02em;
+        }
+
+        .cdr-match-content {
+          width: min(100%, 1120px);
+          margin: 0 auto;
+          padding: clamp(18px, 3vw, 28px) clamp(14px, 3vw, 28px) 136px;
+        }
+
+        .cdr-match-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 1.08fr) minmax(300px, .92fr);
+          gap: clamp(14px, 2.2vw, 24px);
+          align-items: start;
+        }
+
+        .cdr-match-stack {
+          display: grid;
+          gap: 18px;
+        }
+
+        .cdr-match-panel {
+          border: 1px solid var(--cdr-match-border);
+          background: var(--cdr-match-surface);
+          box-shadow: 0 10px 30px rgba(31,26,22,.05);
+        }
+
+        .cdr-match-film {
+          display: grid;
+          grid-template-columns: clamp(104px, 12vw, 132px) minmax(0,1fr);
+          gap: clamp(14px, 2vw, 20px);
+          padding: clamp(14px, 2vw, 18px);
+        }
+
+        .cdr-match-poster {
+          width: 100%;
+          aspect-ratio: 2 / 3;
+          display: block;
+          object-fit: cover;
+          min-width: 0;
+          border: 1px solid var(--cdr-match-border);
+          background: var(--cdr-match-soft);
+        }
+
+        .cdr-match-film-copy {
+          min-width: 0;
+          align-self: center;
+        }
+
+        .cdr-match-film-label {
+          margin-bottom: 7px;
+          color: var(--cdr-match-pink);
+          font-size: 10px;
+          font-weight: 850;
+          letter-spacing: .1em;
+          text-transform: uppercase;
+        }
+
+        .cdr-match-film-title {
+          margin: 0;
+          font-family: ${FONT.display};
+          font-size: clamp(25px, 3.5vw, 36px);
+          line-height: 1.02;
+          letter-spacing: -.025em;
+        }
+
+        .cdr-match-meta {
+          margin-top: 8px;
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 6px;
+          color: var(--cdr-match-muted);
+          font-size: 11px;
+        }
+
+        .cdr-match-rating {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          color: var(--cdr-match-gold);
+          font-weight: 850;
+        }
+
+        .cdr-match-plot {
+          margin: 13px 0 0;
+          color: var(--cdr-match-muted);
+          font-size: 12px;
+          line-height: 1.68;
+          display: -webkit-box;
+          -webkit-box-orient: vertical;
+          -webkit-line-clamp: 4;
+          overflow: hidden;
+        }
+
+        .cdr-match-film-actions {
+          margin-top: 14px;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          width: 100%;
+        }
+
+        .cdr-match-trailer,
+        .cdr-match-detail {
+          min-height: 38px;
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 8px 11px;
+          border: 1px solid var(--cdr-match-pink);
+          border-radius: 0;
+          background: transparent;
+          color: var(--cdr-match-pink);
+          font-size: 11px;
+          font-weight: 850;
+          cursor: pointer;
+          transition: 160ms ease;
+        }
+
+        .cdr-match-trailer:hover {
+          background: var(--cdr-match-pink-glow);
+          transform: translateY(-1px);
+        }
+
+        .cdr-match-detail {
+          align-items: center;
+          gap: 7px;
+          padding: 8px 11px;
+          border: 1px solid var(--cdr-match-border);
+          border-radius: 0;
+          background: transparent;
+          color: var(--cdr-match-text);
+          font-size: 11px;
+          font-weight: 850;
+          cursor: pointer;
+          transition: 160ms ease;
+        }
+
+        .cdr-match-detail:hover {
+          background: var(--cdr-match-surface-hover);
+          border-color: var(--cdr-match-text);
+          transform: translateY(-1px);
+        }
+
+        .cdr-match-section-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 14px 16px;
+          border-bottom: 1px solid var(--cdr-match-border);
+          background: var(--cdr-match-soft);
+        }
+
+        .cdr-match-section-title {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .cdr-match-section-icon {
+          width: 34px;
+          height: 34px;
+          display: grid;
+          place-items: center;
+          border: 1px solid currentColor;
+          flex: 0 0 auto;
+        }
+
+        .cdr-match-section-icon.gold {
+          color: var(--cdr-match-gold);
+          background: var(--cdr-match-gold-glow);
+        }
+
+        .cdr-match-section-icon.pink {
+          color: var(--cdr-match-pink);
+          background: var(--cdr-match-pink-glow);
+        }
+
+        .cdr-match-section-copy strong {
+          display: block;
+          font-size: 13px;
+          line-height: 1.2;
+        }
+
+        .cdr-match-section-copy span {
+          display: block;
+          margin-top: 3px;
+          color: var(--cdr-match-muted);
+          font-size: 10px;
+          line-height: 1.35;
+        }
+
+        .cdr-match-section-body {
+          padding: 14px;
+        }
+
+        .cdr-match-streaming {
+          display: grid;
+          gap: 8px;
+        }
+
+        .cdr-match-group-label {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          margin-bottom: 7px;
+          color: var(--cdr-match-muted);
+          font-size: 9px;
+          font-weight: 850;
+          letter-spacing: .1em;
+          text-transform: uppercase;
+        }
+
+        .cdr-match-group-label::before {
+          content: '';
+          width: 6px;
+          height: 6px;
+          background: currentColor;
+        }
+
+        .cdr-match-group-label.included {
+          color: #22c55e;
+        }
+
+        .cdr-match-group-label.paid {
+          color: var(--cdr-match-gold);
+        }
+
+        .cdr-match-platform {
+          width: 100%;
+          min-height: 58px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 10px 12px;
+          border: 1px solid var(--cdr-match-border);
+          border-radius: 0;
+          background: var(--cdr-match-bg);
+          color: var(--cdr-match-text);
+          text-align: left;
+          cursor: pointer;
+          transition: 160ms ease;
+        }
+
+        .cdr-match-platform:disabled {
+          cursor: default;
+        }
+
+        .cdr-match-platform:not(:disabled):hover {
+          border-color: var(--cdr-platform-accent);
+          background: var(--cdr-match-surface-hover);
+          transform: translateY(-1px);
+        }
+
+        .cdr-match-platform-left {
+          min-width: 0;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .cdr-match-platform-logo {
+          width: 48px;
+          height: 34px;
+          display: grid;
+          place-items: center;
+          overflow: hidden;
+          flex: 0 0 auto;
+          border: 1px solid var(--cdr-match-border);
+          background: #fff !important;
+          padding: 5px;
+        }
+
+        .cdr-match-platform-logo img {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          filter: none;
+        }
+
+        .cdr-match-platform-logo span {
+          display: grid;
+          place-items: center;
+          width: 100%;
+          height: 100%;
+          color: #17130f;
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: -.02em;
+        }
+
+        .cdr-match-platform-copy {
+          min-width: 0;
+        }
+
+        .cdr-match-platform-copy strong {
+          display: block;
+          font-size: 12px;
+        }
+
+        .cdr-match-platform-copy span {
+          display: block;
+          margin-top: 2px;
+          color: var(--cdr-match-muted);
+          font-size: 10px;
+        }
+
+        .cdr-match-platform-copy span[data-kind="included"] {
+          color: #22c55e;
+        }
+
+        .cdr-match-platform-copy span[data-kind="paid"] {
+          color: var(--cdr-match-gold);
+        }
+
+        .cdr-match-platform-go {
+          flex: 0 0 auto;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          color: var(--cdr-platform-accent);
+          font-size: 10px;
+          font-weight: 850;
+        }
+
+        .cdr-match-empty {
+          min-height: 116px;
+          display: grid;
+          place-items: center;
+          padding: 18px;
+          border: 1px dashed var(--cdr-match-border);
+          color: var(--cdr-match-muted);
+          text-align: center;
+          font-size: 11px;
+          line-height: 1.5;
+        }
+
+        .cdr-match-empty svg {
+          margin-bottom: 7px;
+          color: var(--cdr-match-faint);
+        }
+
+        .cdr-match-skeleton {
+          height: 58px;
+          border: 1px solid var(--cdr-match-border);
+          background:
+            linear-gradient(
+              90deg,
+              var(--cdr-match-soft) 25%,
+              var(--cdr-match-surface-hover) 50%,
+              var(--cdr-match-soft) 75%
+            );
+          background-size: 400px 100%;
+          animation: cdr-match-shimmer 1.3s ease infinite;
+        }
+
+        .cdr-match-divider {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: var(--cdr-match-faint);
+          font-size: 9px;
+          margin: 4px 0;
+        }
+
+        .cdr-match-divider::before,
+        .cdr-match-divider::after {
+          content: '';
+          flex: 1;
+          border-top: 1px solid var(--cdr-match-border);
+        }
+
+        .cdr-match-actions {
+          position: sticky;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          width: 100%;
+          z-index: 20;
+          border-top: 1px solid var(--cdr-match-border);
+          background: color-mix(in srgb, var(--cdr-match-bg) 92%, transparent);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+        }
+
+        .cdr-match-actions-inner {
+          width: min(100%, 1120px);
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+          gap: 9px;
+          padding: 12px clamp(14px, 3vw, 28px) max(14px, env(safe-area-inset-bottom));
+        }
+
+        .cdr-match-selected {
+          grid-column: 1 / -1;
+          min-height: 44px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 9px 12px;
+          border: 1px solid var(--cdr-match-gold);
+          background: var(--cdr-match-gold-glow);
+          color: var(--cdr-match-gold);
+          font-size: 11px;
+          font-weight: 850;
+        }
+
+        .cdr-match-primary,
+        .cdr-match-secondary,
+        .cdr-match-winner {
+          min-height: 50px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 10px 14px;
+          border-radius: 0;
+          font-size: 12px;
+          font-weight: 850;
+          cursor: pointer;
+          transition: 160ms ease;
+        }
+
+        .cdr-match-primary {
+          border: 1px solid var(--cdr-match-pink);
+          background: var(--cdr-match-pink);
+          color: #fff;
+          box-shadow: 0 8px 20px var(--cdr-match-pink-glow);
+        }
+
+        .cdr-match-primary:hover {
+          background: var(--cdr-match-pink-deep);
+          transform: translateY(-1px);
+        }
+
+        .cdr-match-secondary {
+          border: 1px solid var(--cdr-match-border);
+          background: transparent;
+          color: var(--cdr-match-muted);
+        }
+
+        .cdr-match-secondary:hover {
+          background: var(--cdr-match-surface-hover);
+          color: var(--cdr-match-text);
+        }
+
+        .cdr-match-winner {
+          grid-column: 1 / -1;
+          border: 1px solid var(--cdr-match-gold);
+          background: var(--cdr-match-gold);
+          color: var(--cdr-match-bg);
+        }
+
+        .cdr-match-winner:disabled {
+          cursor: wait;
+          opacity: .68;
+        }
+
+        .cdr-match-note {
+          padding-top: 2px;
+          color: var(--cdr-match-faint);
+          font-size: 9px;
+          text-align: center;
+          grid-column: 1 / -1;
+        }
+
+        @keyframes cdr-match-hero-in {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes cdr-match-heart-pop {
+          0% {
+            opacity: 0;
+            transform: scale(.6) rotate(-8deg);
+          }
+          72% {
+            opacity: 1;
+            transform: scale(1.08) rotate(2deg);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) rotate(0);
+          }
+        }
+
+        @keyframes cdr-match-shimmer {
+          from {
+            background-position: -400px 0;
+          }
+          to {
+            background-position: 400px 0;
+          }
+        }
+
+        @media (max-width: 960px) {
+          .cdr-match-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .cdr-match-stack {
+            gap: 14px;
+          }
+
+          .cdr-match-content {
+            width: min(100%, 760px);
+          }
+        }
+
+        @media (max-width: 780px) {
+          .cdr-match-hero {
+            min-height: 190px;
+            padding-inline: 16px;
+          }
+
+          .cdr-match-heart {
+            width: 52px;
+            height: 52px;
+            margin-bottom: 11px;
+          }
+
+          .cdr-match-subtitle {
+            max-width: 460px;
+            font-size: 12px;
+          }
+
+          .cdr-match-content {
+            padding: 16px 14px 128px;
+          }
+
+          .cdr-match-film {
+            grid-template-columns: 94px minmax(0,1fr);
+            gap: 14px;
+            padding: 14px;
+          }
+
+          .cdr-match-film-title {
+            font-size: clamp(22px, 6vw, 28px);
+          }
+
+          .cdr-match-plot {
+            -webkit-line-clamp: 3;
+          }
+
+          .cdr-match-section-head {
+            padding: 12px 13px;
+          }
+
+          .cdr-match-section-body {
+            padding: 12px;
+          }
+
+          .cdr-match-actions-inner {
+            padding: 10px 14px max(12px, env(safe-area-inset-bottom));
+          }
+        }
+
+        @media (max-width: 560px) {
+          .cdr-match-hero {
+            min-height: 152px;
+            padding: 20px 12px 18px;
+          }
+
+          .cdr-match-heart {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 8px;
+          }
+
+          .cdr-match-heart svg {
+            width: 21px;
+            height: 21px;
+          }
+
+          .cdr-match-eyebrow {
+            margin-bottom: 4px;
+            font-size: 8px;
+          }
+
+          .cdr-match-title {
+            font-size: 31px;
+          }
+
+          .cdr-match-subtitle {
+            margin-top: 6px;
+            max-width: 330px;
+            font-size: 10px;
+            line-height: 1.4;
+          }
+
+          .cdr-match-total {
+            margin-top: 9px;
+            padding: 5px 8px;
+            font-size: 9px;
+          }
+
+          .cdr-match-content {
+            width: 100%;
+            padding: 8px 8px 116px;
+          }
+
+          .cdr-match-grid,
+          .cdr-match-stack {
+            gap: 8px;
+          }
+
+          .cdr-match-panel {
+            box-shadow: none;
+          }
+
+          .cdr-match-film {
+            grid-template-columns: 86px minmax(0,1fr);
+            gap: 10px;
+            padding: 10px;
+          }
+
+          .cdr-match-film-label {
+            margin-bottom: 4px;
+            font-size: 8px;
+            letter-spacing: .08em;
+          }
+
+          .cdr-match-film-title {
+            font-size: 20px;
+            line-height: 1.02;
+          }
+
+          .cdr-match-meta {
+            margin-top: 5px;
+            gap: 3px;
+            font-size: 9px;
+            line-height: 1.35;
+          }
+
+          .cdr-match-plot {
+            display: none;
+          }
+
+          .cdr-match-film-actions {
+            display: grid;
+            grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+            gap: 5px;
+            margin-top: 9px;
+          }
+
+          .cdr-match-trailer,
+          .cdr-match-detail {
+            width: 100%;
+            min-width: 0;
+            min-height: 34px;
+            justify-content: center;
+            padding: 6px 6px;
+            font-size: 9px;
+            white-space: nowrap;
+          }
+
+          .cdr-match-section-head {
+            align-items: center;
+            padding: 10px;
+          }
+
+          .cdr-match-section-title {
+            gap: 8px;
+          }
+
+          .cdr-match-section-icon {
+            width: 30px;
+            height: 30px;
+          }
+
+          .cdr-match-section-copy strong {
+            font-size: 12px;
+          }
+
+          .cdr-match-section-copy span {
+            max-width: 220px;
+            margin-top: 2px;
+            font-size: 9px;
+          }
+
+          .cdr-match-section-body {
+            padding: 9px;
+          }
+
+          .cdr-match-platform {
+            min-height: 52px;
+            gap: 8px;
+            padding: 7px 8px;
+          }
+
+          .cdr-match-platform-left {
+            gap: 8px;
+          }
+
+          .cdr-match-platform-logo {
+            width: 42px;
+            height: 30px;
+            padding: 4px;
+          }
+
+          .cdr-match-platform-copy strong {
+            font-size: 11px;
+          }
+
+          .cdr-match-platform-copy span {
+            font-size: 9px;
+          }
+
+          .cdr-match-platform-go {
+            display: none;
+          }
+
+          .cdr-match-empty {
+            min-height: 88px;
+            padding: 12px;
+          }
+
+          .cdr-match-actions-inner {
+            grid-template-columns: minmax(0,1.25fr) minmax(0,.75fr);
+            gap: 6px;
+            padding: 7px 8px max(8px, env(safe-area-inset-bottom));
+          }
+
+          .cdr-match-winner,
+          .cdr-match-selected,
+          .cdr-match-note {
+            grid-column: 1 / -1;
+          }
+
+          .cdr-match-primary,
+          .cdr-match-secondary,
+          .cdr-match-winner {
+            min-height: 42px;
+            padding: 7px 8px;
+            font-size: 10px;
+          }
+
+          .cdr-match-selected {
+            min-height: 38px;
+            padding: 7px 8px;
+            font-size: 10px;
+          }
+
+          .cdr-match-note {
+            font-size: 8px;
+          }
+        }
+
+        @media (min-width: 381px) and (max-width: 460px) {
+          .cdr-match {
+            min-height: 100dvh;
+          }
+
+          .cdr-match-hero {
+            min-height: 138px;
+            padding: 16px 12px 14px;
+          }
+
+          .cdr-match-heart {
+            width: 36px;
+            height: 36px;
+            margin-bottom: 6px;
+          }
+
+          .cdr-match-heart svg {
+            width: 19px;
+            height: 19px;
+          }
+
+          .cdr-match-eyebrow {
+            margin-bottom: 3px;
+            font-size: 7px;
+            letter-spacing: .12em;
+          }
+
+          .cdr-match-title {
+            font-size: 29px;
+            line-height: 1;
+          }
+
+          .cdr-match-subtitle {
+            margin-top: 5px;
+            max-width: 350px;
+            font-size: 9px;
+            line-height: 1.35;
+          }
+
+          .cdr-match-total {
+            margin-top: 7px;
+            padding: 4px 7px;
+            font-size: 8px;
+          }
+
+          .cdr-match-content {
+            width: 100%;
+            padding: 6px 8px 104px;
+          }
+
+          .cdr-match-grid,
+          .cdr-match-stack {
+            gap: 7px;
+          }
+
+          .cdr-match-film {
+            grid-template-columns: 82px minmax(0, 1fr);
+            gap: 9px;
+            padding: 9px;
+          }
+
+          .cdr-match-film-title {
+            font-size: 19px;
+            line-height: 1.02;
+          }
+
+          .cdr-match-meta {
+            font-size: 9px;
+            gap: 3px;
+          }
+
+          .cdr-match-film-actions {
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            margin-top: 8px;
+          }
+
+          .cdr-match-trailer,
+          .cdr-match-detail {
+            min-height: 32px;
+            padding: 5px 5px;
+            font-size: 8.5px;
+          }
+
+          .cdr-match-section-head {
+            padding: 8px 9px;
+          }
+
+          .cdr-match-section-icon {
+            width: 28px;
+            height: 28px;
+          }
+
+          .cdr-match-section-copy strong {
+            font-size: 11px;
+          }
+
+          .cdr-match-section-copy span {
+            max-width: 250px;
+            font-size: 8.5px;
+          }
+
+          .cdr-match-section-body {
+            padding: 8px;
+          }
+
+          .cdr-match-platform {
+            min-height: 48px;
+            padding: 6px 7px;
+          }
+
+          .cdr-match-platform-logo {
+            width: 40px;
+            height: 28px;
+          }
+
+          .cdr-match-platform-copy strong {
+            font-size: 10px;
+          }
+
+          .cdr-match-platform-copy span {
+            font-size: 8.5px;
+          }
+
+          .cdr-match-actions {
+            position: sticky;
+            bottom: 0;
+          }
+
+          .cdr-match-actions-inner {
+            grid-template-columns: minmax(0, 1.28fr) minmax(0, .72fr);
+            gap: 5px;
+            padding: 6px 8px max(7px, env(safe-area-inset-bottom));
+          }
+
+          .cdr-match-primary,
+          .cdr-match-secondary,
+          .cdr-match-winner {
+            min-height: 40px;
+            padding: 6px 7px;
+            font-size: 9px;
+          }
+
+          .cdr-match-selected {
+            min-height: 34px;
+            font-size: 9px;
+          }
+
+          .cdr-match-note {
+            display: none;
+          }
+        }
+
+        @media (max-width: 380px) {
+          .cdr-match-hero {
+            min-height: 144px;
+            padding-inline: 10px;
+          }
+
+          .cdr-match-title {
+            font-size: 29px;
+          }
+
+          .cdr-match-subtitle {
+            max-width: 300px;
+          }
+
+          .cdr-match-content {
+            padding-inline: 6px;
+          }
+
+          .cdr-match-film {
+            grid-template-columns: 78px minmax(0,1fr);
+            gap: 8px;
+            padding: 8px;
+          }
+
+          .cdr-match-film-title {
+            font-size: 18px;
+          }
+
+          .cdr-match-film-actions {
+            grid-template-columns: 1fr;
+          }
+
+          .cdr-match-trailer,
+          .cdr-match-detail {
+            min-height: 32px;
+          }
+
+          .cdr-match-section-copy span {
+            max-width: 180px;
+          }
+
+          .cdr-match-actions-inner {
+            grid-template-columns: minmax(0,1.15fr) minmax(0,.85fr);
+            padding-inline: 6px;
+          }
+
+          .cdr-match-primary,
+          .cdr-match-secondary {
+            font-size: 9px;
+          }
+        }
+
+        @media (min-width: 400px) and (max-width: 460px) and (min-height: 850px) {
+          .cdr-match-content {
+            padding-top: 8px;
+          }
+
+          .cdr-match-film {
+            grid-template-columns: 88px minmax(0, 1fr);
+          }
+
+          .cdr-match-film-title {
+            font-size: 20px;
+          }
+
+          .cdr-match-section-body {
+            padding: 9px;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .cdr-match-hero-inner,
+          .cdr-match-heart,
+          .cdr-match-skeleton {
+            animation: none !important;
+          }
+        }
+      `}</style>
+
+      <section className="cdr-match-hero">
+        <div className="cdr-match-hero-inner">
+          <div className="cdr-match-heart">
+            <Heart size={28} weight="fill" />
           </div>
-        )}
-      </div>
 
-      <div className="match-screen-scroll" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
-        {/* Film card */}
-        <div className="match-movie-card" style={{
-          display: 'flex', gap: '16px', background: P.card,
-          borderRadius: 0, padding: '16px', marginBottom: '16px',
-          border: `1px solid ${P.border}`,
-        }}>
-          <img
-            src={match.cover?.startsWith('http') ? match.cover : ''}
-            alt={match.title}
-            className="match-movie-poster"
-            style={{ width: '80px', height: '120px', objectFit: 'cover', borderRadius: 0, flexShrink: 0 }}
-          />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '17px', fontWeight: '800', color: P.text, marginBottom: '4px' }}>{match.title}</div>
-            <div style={{ fontSize: '11px', color: P.textMuted, marginBottom: '6px' }}>
-              {match.year} · {match.genre}{match.runtime && ` · ${match.runtime}`}
-            </div>
-            {(match.rating ?? 0) > 0 && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '8px' }}>
-                <Star size={12} color={P.gold} weight="fill" />
-                <span style={{ fontSize: '11px', fontWeight: '700', color: P.gold }}>
-                  {(match.rating as number).toFixed(1)}
-                </span>
-              </div>
-            )}
-            {match.trama_c && (
-              <div style={{
-                fontSize: '11px', color: P.textMuted, lineHeight: 1.6,
-                overflow: 'hidden', display: '-webkit-box',
-                WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' as any,
-              }}>
-                {match.trama_c}
-              </div>
-            )}
-            {match.trailer && (
-              <button
-                onClick={() => window.open(match.trailer!, '_blank')}
-                style={{
-                  marginTop: '8px', display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  background: P.pinkGlow, color: P.pink, border: `1px solid ${P.pink}`,
-                  borderRadius: 0, padding: '7px 14px',
-                  fontSize: '11px', fontWeight: '600', cursor: 'pointer', fontFamily: FONT_SANS,
-                }}
-              >
-                <Play size={14} weight="fill" /> Trailer
-              </button>
-            )}
-          </div>
-        </div>
+          <div className="cdr-match-eyebrow">Cinedate Match</div>
 
-        {/* ── Biglietti cinema ── */}
-        <section
-          className="match-ticket-wrap"
-          style={{
-            marginBottom: '18px',
-            border: `1px solid ${P.border}`,
-            background: P.card,
-            borderRadius: 16,
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            className="match-ticket-head"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              padding: '14px 15px 12px',
-              borderBottom: `1px solid ${P.border}`,
-              background: P.bgSoft,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 12,
-                  display: 'grid',
-                  placeItems: 'center',
-                  background: P.goldGlow,
-                  border: `1px solid ${P.gold}`,
-                  flexShrink: 0,
-                }}
-              >
-                <Ticket size={18} color={P.gold} weight="duotone" />
-              </div>
+          <h1 className="cdr-match-title">È un match.</h1>
 
-              <div>
-                <div
-                  style={{
-                    fontSize: '14px',
-                    fontWeight: 850,
-                    color: P.text,
-                    lineHeight: 1.2,
-                  }}
-                >
-                  Biglietti al cinema
-                </div>
-                <div
-                  style={{
-                    marginTop: 3,
-                    fontSize: '11px',
-                    color: P.textMuted,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                  }}
-                >
-                  <MapPin size={12} color={P.gold} />
-                  Proiezioni disponibili vicino a te
-                </div>
-              </div>
-            </div>
+          <p className="cdr-match-subtitle">
+            Avete scelto entrambi <strong>{match.title}</strong>.
+            Adesso resta solo da decidere come guardarlo.
+          </p>
 
-            <div
-              style={{
-                padding: '5px 8px',
-                borderRadius: 999,
-                background: P.goldGlow,
-                color: P.gold,
-                fontSize: '10px',
-                fontWeight: 800,
-                border: `1px solid ${P.gold}`,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              In sala
-            </div>
-          </div>
-
-          <div style={{ padding: '12px' }}>
-            <CinemaInSala filmTitle={match.title} tmdbTitle={match.title} />
-          </div>
-        </section>
-
-        {/* Dove guardarlo */}
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{ fontSize: '15px', fontWeight: '700', color: P.text, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <TelevisionSimple size={18} color={P.pink} weight="fill" />
-            Dove guardarlo
-          </div>
-
-          {loadingSources ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {[1, 2, 3].map((i) => (
-                <div key={i} style={{ height: '60px', borderRadius: 0, background: `linear-gradient(90deg, ${P.bgSoft} 25%, ${P.cardHover} 50%, ${P.bgSoft} 75%)`, backgroundSize: '400px 100%', animation: 'shimmer 1.4s ease infinite' }} />
-              ))}
-            </div>
-          ) : sources.length === 0 ? (
-            <div style={{ padding: '16px', background: P.card, borderRadius: 0, textAlign: 'center', fontSize: '13px', color: P.textMuted, border: `1px dashed ${P.border}` }}>
-              <TelevisionSimple size={28} color={P.textFaint} weight="duotone" style={{ marginBottom: '8px' }} />
-              <div>Nessuna disponibilità streaming trovata</div>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {subSources.length > 0 && (
-                <div>
-                  <div style={{ fontSize: '11px', fontWeight: '700', color: '#22c55e', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }} />
-                    Incluso nel tuo abbonamento
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {subSources.map((s) => <PlatformRow key={s.name} s={s} />)}
-                  </div>
-                </div>
-              )}
-              {subSources.length > 0 && rentSources.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0' }}>
-                  <div style={{ flex: 1, borderTop: `1px solid ${P.border}` }} />
-                  <span style={{ fontSize: '11px', color: P.textFaint }}>oppure</span>
-                  <div style={{ flex: 1, borderTop: `1px solid ${P.border}` }} />
-                </div>
-              )}
-              {rentSources.length > 0 && (
-                <div>
-                  <div style={{ fontSize: '11px', fontWeight: '700', color: P.gold, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: P.gold }} />
-                    Noleggio o acquisto
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {rentSources.map((s) => <PlatformRow key={s.name} s={s} />)}
-                  </div>
-                </div>
-              )}
+          {allMatches.length > 1 && (
+            <div className="cdr-match-total">
+              <Trophy size={14} weight="fill" />
+              {allMatches.length} match totali
             </div>
           )}
         </div>
+      </section>
 
+      <div className="cdr-match-content">
+        <div className="cdr-match-grid">
+          <div className="cdr-match-stack">
+            <section className="cdr-match-panel cdr-match-film">
+              <img
+                className="cdr-match-poster"
+                src={match.cover?.startsWith('http') ? match.cover : ''}
+                alt={match.title}
+              />
 
+              <div className="cdr-match-film-copy">
+                <div className="cdr-match-film-label">La vostra scelta</div>
+
+                <h2 className="cdr-match-film-title">{match.title}</h2>
+
+                <div className="cdr-match-meta">
+                  {match.year && <span>{match.year}</span>}
+                  {match.genre && <span>· {match.genre}</span>}
+                  {match.runtime && <span>· {match.runtime}</span>}
+
+                  {(match.rating ?? 0) > 0 && (
+                    <span className="cdr-match-rating">
+                      <Star size={12} weight="fill" />
+                      {(match.rating as number).toFixed(1)}
+                    </span>
+                  )}
+                </div>
+
+                {match.trama_c && (
+                  <p className="cdr-match-plot">{match.trama_c}</p>
+                )}
+
+                <div className="cdr-match-film-actions">
+                  {match.trailer && (
+                    <button
+                      type="button"
+                      className="cdr-match-trailer"
+                      onClick={() => window.open(match.trailer!, '_blank')}
+                    >
+                      <Play size={14} weight="fill" />
+                      Guarda il trailer
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="cdr-match-detail"
+                    onClick={() => router.push(`/film/${encodeURIComponent(detailMovieId)}`)}
+                  >
+                    <Article size={14} weight="bold" />
+                    Scheda film
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className="cdr-match-panel">
+              <div className="cdr-match-section-head">
+                <div className="cdr-match-section-title">
+                  <div className="cdr-match-section-icon gold">
+                    <Ticket size={17} weight="duotone" />
+                  </div>
+
+                  <div className="cdr-match-section-copy">
+                    <strong>Al cinema</strong>
+                    <span>Cinema vicini e programmazione dei prossimi 7 giorni</span>
+                  </div>
+                </div>
+
+                <MapPin size={16} color={P.accent} />
+              </div>
+
+              <div className="cdr-match-section-body">
+                <CinemaInSala
+                  filmTitle={match.title}
+                  tmdbTitle={match.title}
+                />
+              </div>
+            </section>
+          </div>
+
+          <div className="cdr-match-stack">
+            <section className="cdr-match-panel">
+              <div className="cdr-match-section-head">
+                <div className="cdr-match-section-title">
+                  <div className="cdr-match-section-icon pink">
+                    <TelevisionSimple size={17} weight="fill" />
+                  </div>
+
+                  <div className="cdr-match-section-copy">
+                    <strong>Dove guardarlo</strong>
+                    <span>Streaming, noleggio e acquisto</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="cdr-match-section-body">
+                {loadingSources ? (
+                  <div className="cdr-match-streaming">
+                    {[1, 2, 3].map((item) => (
+                      <div key={item} className="cdr-match-skeleton" />
+                    ))}
+                  </div>
+                ) : sources.length === 0 ? (
+                  <div className="cdr-match-empty">
+                    <div>
+                      <TelevisionSimple size={27} weight="duotone" />
+                      <div>Nessuna disponibilità streaming trovata</div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="cdr-match-streaming">
+                    {subSources.length > 0 && (
+                      <div>
+                        <div className="cdr-match-group-label included">
+                          Incluso o gratuito
+                        </div>
+
+                        <div className="cdr-match-streaming">
+                          {subSources.map((source) => (
+                            <PlatformRow key={source.name} s={source} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {subSources.length > 0 && rentSources.length > 0 && (
+                      <div className="cdr-match-divider">oppure</div>
+                    )}
+
+                    {rentSources.length > 0 && (
+                      <div>
+                        <div className="cdr-match-group-label paid">
+                          Noleggio o acquisto
+                        </div>
+
+                        <div className="cdr-match-streaming">
+                          {rentSources.map((source) => (
+                            <PlatformRow key={source.name} s={source} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
       </div>
 
-      {/* Azioni bottom */}
-      <div className="match-actions" style={{ padding: '16px', borderTop: `1px solid ${P.border}`, display: 'flex', flexDirection: 'column', gap: '8px', background: P.bg }}>
-        {selectedMovieId === String(match.id) && (
-          <div style={{
-            padding: '13px',
-            background: P.goldGlow,
-            border: `1px solid ${P.gold}`,
-            color: P.gold,
-            fontSize: '13px',
-            fontWeight: 800,
-            textAlign: 'center',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-          }}>
-            <Trophy size={18} weight="fill" />
-            <span>Film scelto dal gruppo</span>
-          </div>
-        )}
+      <div className="cdr-match-actions">
+        <div className="cdr-match-actions-inner">
+          {isSelected && (
+            <div className="cdr-match-selected">
+              <Trophy size={17} weight="fill" />
+              Film scelto dal gruppo
+            </div>
+          )}
 
-        {isHost && !selectedMovieId && onSelectWinner && (
+          {canSelectWinner && (
+            <button
+              type="button"
+              className="cdr-match-winner"
+              onClick={() => onSelectWinner?.(String(match.id))}
+              disabled={selectingWinner}
+            >
+              <Trophy size={17} weight="fill" />
+              {selectingWinner ? 'Salvataggio...' : 'Conferma questo film'}
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={() => onSelectWinner(String(match.id))}
-            disabled={selectingWinner}
-            style={{
-              width: '100%',
-              minHeight: '48px',
-              padding: '15px',
-              background: P.gold,
-              color: P.bg,
-              border: 'none',
-              borderRadius: 0,
-              fontSize: '15px',
-              fontWeight: '800',
-              cursor: selectingWinner ? 'wait' : 'pointer',
-              fontFamily: FONT_SANS,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              opacity: selectingWinner ? 0.7 : 1,
-            }}
+            className="cdr-match-primary"
+            onClick={onContinue}
           >
-            <Trophy size={18} weight="fill" />
-            <span>{selectingWinner ? 'Salvataggio...' : 'Conferma questo film'}</span>
+            <FilmSlate size={17} weight="fill" />
+            Continua a swipare
           </button>
-        )}
 
-        <button
-          onClick={onContinue}
-          style={{
-            width: '100%', padding: '15px', background: P.pink, color: '#fff',
-            border: 'none', borderRadius: 0, fontSize: '15px', fontWeight: '700',
-            cursor: 'pointer', fontFamily: FONT_SANS,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-            boxShadow: `0 4px 16px ${P.pinkGlow}`,
-          }}
-        >
-          <FilmSlate size={18} color="#fff" weight="fill" />
-          Continua a swipare
-        </button>
-        <button
-          onClick={onReset}
-          style={{
-            width: '100%', padding: '13px', background: 'transparent', color: P.textMuted,
-            border: `1.5px solid ${P.border}`, borderRadius: 0,
-            fontSize: '15px', fontWeight: '500', cursor: 'pointer', fontFamily: FONT_SANS,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-          }}
-        >
-          <ArrowClockwise size={16} color={P.textMuted} />
-          Ricomincia da capo
-        </button>
+          <button
+            type="button"
+            className="cdr-match-secondary"
+            onClick={onReset}
+          >
+            <ArrowClockwise size={16} />
+            Ricomincia
+          </button>
+
+          {!isLoggedIn && (
+            <div className="cdr-match-note">
+              Puoi continuare come ospite nella stanza corrente.
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </main>
   );
 }
