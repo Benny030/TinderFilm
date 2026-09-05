@@ -409,6 +409,11 @@ export default function SwipeCard({
         }
 
         .cdr-swipe-deck-card img {
+          pointer-events: none;
+          -webkit-touch-callout: none;
+          -webkit-user-drag: none;
+          -webkit-user-select: none;
+          user-select: none;
           width: 100%;
           height: 100%;
           display: block;
@@ -426,6 +431,9 @@ export default function SwipeCard({
         }
 
         .cdr-swipe-active {
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
+          user-select: none;
           position: absolute;
           inset: 0;
           z-index: 10;
@@ -455,6 +463,11 @@ export default function SwipeCard({
         }
 
         .cdr-swipe-poster {
+          pointer-events: none;
+          -webkit-touch-callout: none;
+          -webkit-user-drag: none;
+          -webkit-user-select: none;
+          user-select: none;
           width: 100%;
           height: 100%;
           display: block;
@@ -617,6 +630,10 @@ export default function SwipeCard({
         }
 
         .cdr-swipe-details-poster {
+          -webkit-touch-callout: none;
+          -webkit-user-drag: none;
+          -webkit-user-select: none;
+          user-select: none;
           width: 76px;
           aspect-ratio: 2 / 3;
           object-fit: cover;
@@ -1145,6 +1162,7 @@ export default function SwipeCard({
                   }
                   alt=""
                   draggable={false}
+                  onContextMenu={(event) => event.preventDefault()}
                 />
                 <div className="cdr-swipe-deck-shade" />
               </div>
@@ -1166,6 +1184,10 @@ export default function SwipeCard({
               transition: isFlipped ? 'none' : cardTransition,
               filter: swipeShadow,
             }}
+            onContextMenu={(event) => {
+              // Evita il menu nativo mobile/desktop (salva immagine, nuova scheda, copia...).
+              event.preventDefault();
+            }}
             onMouseDown={(event) => {
               if (isFlipped || isTrailerOpen || isTrailerClosing) return;
               event.preventDefault();
@@ -1174,6 +1196,11 @@ export default function SwipeCard({
             }}
             onTouchStart={(event) => {
               if (isFlipped || isTrailerOpen || isTrailerClosing) return;
+
+              // Su Safari/Chrome mobile impedisce che il long press venga
+              // intercettato dall'immagine prima del timer del trailer.
+              event.preventDefault();
+
               startTrailerHold();
               handleStart(event.touches[0].clientX);
             }}
@@ -1202,6 +1229,7 @@ export default function SwipeCard({
                   }
                   alt={movie.title}
                   draggable={false}
+                  onContextMenu={(event) => event.preventDefault()}
                 />
 
                 <div className="cdr-swipe-front-gradient" />
@@ -1324,6 +1352,8 @@ export default function SwipeCard({
                           : fallbackPoster
                       }
                       alt=""
+                      draggable={false}
+                      onContextMenu={(event) => event.preventDefault()}
                     />
 
                     <div>

@@ -141,6 +141,10 @@ export default function AppShell({
   const { isDark, P } = useShellTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // La stanza attiva è un'esperienza immersiva: niente footer.
+  // Le altre pagine dell'area Stanze (creazione, elenco, ecc.) lo mantengono.
+  const hideFooter = router.pathname === '/stanza';
+
   return (
     <>
       <style suppressHydrationWarning>{`
@@ -343,7 +347,7 @@ export default function AppShell({
             </div>
 
             {children}
-            <AppFooter />
+            {!hideFooter && <AppFooter />}
 
             {!hideNav && (
               <div className="app-bottom-nav">
