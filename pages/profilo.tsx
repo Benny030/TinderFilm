@@ -27,6 +27,7 @@ import {
   Prohibit,
   ShieldCheck,
   SignOut,
+  Trash,
   Sparkle,
   Star,
   Warning,
@@ -38,8 +39,46 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTheme } from '@/context/ThemeContext';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import { FONT, THEME } from '@/styles/token';
+import {
+  moderateText,
+  moderationMessage,
+} from '@/utils/contentModeration';
 
 type Tab = 'attivita' | 'impostazioni';
+
+function getPasswordChecks(password: string) {
+  return [
+    {
+      label: '8+ caratteri',
+      ok: password.length >= 8,
+    },
+    {
+      label: 'Maiuscola',
+      ok: /[A-Z]/.test(password),
+    },
+    {
+      label: 'Minuscola',
+      ok: /[a-z]/.test(password),
+    },
+    {
+      label: 'Numero',
+      ok: /[0-9]/.test(password),
+    },
+    {
+      label: 'Simbolo',
+      ok: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>/?]/.test(
+        password
+      ),
+    },
+  ];
+}
+
+function isPasswordValid(password: string) {
+  return getPasswordChecks(password).every(
+    (check) => check.ok
+  );
+}
+
 
 type ProfileRow = {
   username: string | null;
@@ -216,8 +255,24 @@ export default function ProfiloPage() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [googleAvatarUrl, setGoogleAvatarUrl] = useState<string | null>(null);
 
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [authProvider, setAuthProvider] = useState<string>('email');
+
+  const [newEmail, setNewEmail] = useState('');
+  const [confirmEmail, setConfirmEmail] = useState('');
+  const [emailPassword, setEmailPassword] = useState('');
+  const [changingEmail, setChangingEmail] = useState(false);
+
+  const [deleteConfirmation, setDeleteConfirmation] =
+    useState('');
+  const [deletePassword, setDeletePassword] =
+    useState('');
+  const [deleteAccountOpen, setDeleteAccountOpen] =
+    useState(false);
+  const [deletingAccount, setDeletingAccount] =
+    useState(false);
 
   const [favoritesPublic, setFavoritesPublic] = useState(false);
   const [watchlistPublic, setWatchlistPublic] = useState(false);
@@ -326,6 +381,12 @@ export default function ProfiloPage() {
               : null;
 
         setGoogleAvatarUrl(metadataAvatar);
+
+        setAuthProvider(
+          typeof user?.app_metadata?.provider === 'string'
+            ? user.app_metadata.provider
+            : 'email'
+        );
 
         const { data, error: profileError } = await supabase
           .from('users')
@@ -511,8 +572,33 @@ export default function ProfiloPage() {
 
     const cleanUsername = normalizeUsername(username);
 
-    if (cleanUsername.length < 3) {
-      setError('Username: minimo 3 caratteri.');
+    const usernameModeration = moderateText(
+      cleanUsername,
+      'username'
+    );
+
+    if (!usernameModeration.allowed) {
+      setError(
+        moderationMessage(
+          usernameModeration,
+          'username'
+        )
+      );
+      return;
+    }
+
+    const bioModeration = moderateText(
+      bio,
+      'bio'
+    );
+
+    if (!bioModeration.allowed) {
+      setError(
+        moderationMessage(
+          bioModeration,
+          'bio'
+        )
+      );
       return;
     }
 
@@ -521,28 +607,52 @@ export default function ProfiloPage() {
     setMessage('');
 
     try {
-      const { error: saveError } = await supabase
-        .from('users')
-        .update({
-          username: cleanUsername,
-          avatar_url: avatarUrl,
-          bio: bio.trim(),
-          favorite_genres: favoriteGenres,
-        })
-        .eq('id', currentUser.id);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (saveError) {
-        if (saveError.code === '23505') {
-          setError('Username già in uso, scegline un altro.');
-          return;
+      const token = session?.access_token;
+
+      if (!token) {
+        throw new Error('Sessione non disponibile.');
+      }
+
+      const response = await fetch(
+        '/api/profile/update',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            username: cleanUsername,
+            bio: bio.trim(),
+            favorite_genres: favoriteGenres,
+            avatar_url: avatarUrl,
+          }),
         }
-        throw saveError;
+      );
+
+      const data = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            'Impossibile salvare il profilo.'
+        );
       }
 
       setUsername(cleanUsername);
       setMessage('Profilo salvato.');
-    } catch (err: any) {
-      setError(err.message ?? 'Errore durante il salvataggio');
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Errore durante il salvataggio'
+      );
     } finally {
       setSaving(false);
     }
@@ -599,19 +709,163 @@ export default function ProfiloPage() {
     }
   };
 
-  const updatePassword = async () => {
-    if (!newPassword || !confirmPassword) {
-      setError('Compila entrambi i campi password.');
+  const updateEmail = async () => {
+    if (
+      !currentUser ||
+      currentUser.isGuest
+    ) {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setError('La password deve avere almeno 8 caratteri.');
+    if (authProvider !== 'email') {
+      setError(
+        'L’email di questo account è gestita dal provider di accesso.'
+      );
+      return;
+    }
+
+    const cleanEmail = newEmail.trim().toLowerCase();
+    const cleanConfirmEmail =
+      confirmEmail.trim().toLowerCase();
+
+    if (!cleanEmail || !cleanConfirmEmail) {
+      setError(
+        'Inserisci e conferma la nuova email.'
+      );
+      return;
+    }
+
+    if (cleanEmail !== cleanConfirmEmail) {
+      setError(
+        'Le nuove email non coincidono.'
+      );
+      return;
+    }
+
+    if (
+      email &&
+      cleanEmail === email.trim().toLowerCase()
+    ) {
+      setError(
+        'La nuova email è uguale a quella attuale.'
+      );
+      return;
+    }
+
+    if (!emailPassword) {
+      setError(
+        'Inserisci la password attuale per confermare il cambio email.'
+      );
+      return;
+    }
+
+    setChangingEmail(true);
+    setError('');
+    setMessage('');
+
+    try {
+      if (!email) {
+        throw new Error(
+          'Email account non disponibile.'
+        );
+      }
+
+      /*
+       * Prima verifichiamo davvero la password attuale.
+       * In questo modo una sessione lasciata aperta non basta
+       * per cambiare l'indirizzo dell'account.
+       */
+      const { error: reauthError } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password: emailPassword,
+        });
+
+      if (reauthError) {
+        throw new Error(
+          'La password attuale non è corretta.'
+        );
+      }
+
+      const { error: emailError } =
+        await supabase.auth.updateUser(
+          {
+            email: cleanEmail,
+          },
+          {
+            emailRedirectTo:
+              `${window.location.origin}/auth/callback`,
+          }
+        );
+
+      if (emailError) {
+        throw emailError;
+      }
+
+      setNewEmail('');
+      setConfirmEmail('');
+      setEmailPassword('');
+
+      setMessage(
+        'Richiesta inviata. Controlla la nuova email e conferma il cambio.'
+      );
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Impossibile cambiare email.'
+      );
+    } finally {
+      setChangingEmail(false);
+    }
+  };
+
+  const updatePassword = async () => {
+    const passwordChecks =
+      getPasswordChecks(newPassword);
+
+    if (
+      authProvider === 'email' &&
+      !currentPassword
+    ) {
+      setError(
+        'Inserisci la password attuale.'
+      );
+      return;
+    }
+
+    if (!newPassword || !confirmPassword) {
+      setError(
+        'Compila la nuova password e la conferma.'
+      );
+      return;
+    }
+
+    if (
+      !passwordChecks.every(
+        (check) => check.ok
+      )
+    ) {
+      setError(
+        'La nuova password non soddisfa tutti i requisiti.'
+      );
+      return;
+    }
+
+    if (
+      authProvider === 'email' &&
+      currentPassword === newPassword
+    ) {
+      setError(
+        'La nuova password deve essere diversa da quella attuale.'
+      );
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError('Le password non coincidono.');
+      setError(
+        'Le password non coincidono.'
+      );
       return;
     }
 
@@ -620,18 +874,57 @@ export default function ProfiloPage() {
     setMessage('');
 
     try {
+      /*
+       * Per gli account email richiediamo una verifica reale
+       * della password attuale prima di consentire il cambio.
+       * Per gli account OAuth, invece, Supabase permette di
+       * impostare una password Cinedate senza avere una
+       * precedente password locale.
+       */
+      if (authProvider === 'email') {
+        if (!email) {
+          throw new Error(
+            'Email account non disponibile.'
+          );
+        }
+
+        const { error: reauthError } =
+          await supabase.auth.signInWithPassword({
+            email,
+            password: currentPassword,
+          });
+
+        if (reauthError) {
+          throw new Error(
+            'La password attuale non è corretta.'
+          );
+        }
+      }
+
       const { error: passwordError } =
         await supabase.auth.updateUser({
           password: newPassword,
         });
 
-      if (passwordError) throw passwordError;
+      if (passwordError) {
+        throw passwordError;
+      }
 
+      setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
-      setMessage('Password aggiornata.');
-    } catch (err: any) {
-      setError(err.message ?? 'Errore durante il cambio password');
+
+      setMessage(
+        authProvider === 'email'
+          ? 'Password aggiornata.'
+          : 'Password Cinedate impostata. Ora puoi accedere anche con email e password.'
+      );
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Errore durante il cambio password'
+      );
     } finally {
       setChangingPassword(false);
     }
@@ -711,6 +1004,106 @@ export default function ProfiloPage() {
       );
     } finally {
       setSavingPrivacy(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (
+      !currentUser ||
+      currentUser.isGuest ||
+      deletingAccount
+    ) {
+      return;
+    }
+
+    const cleanConfirmation =
+      deleteConfirmation.trim().toLowerCase();
+
+    if (
+      cleanConfirmation !==
+      username.trim().toLowerCase()
+    ) {
+      setError(
+        'Scrivi esattamente il tuo username per confermare.'
+      );
+      return;
+    }
+
+    if (
+      authProvider === 'email' &&
+      !deletePassword
+    ) {
+      setError(
+        'Inserisci la password attuale per confermare.'
+      );
+      return;
+    }
+
+    setDeletingAccount(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const token = session?.access_token;
+
+      if (!token) {
+        throw new Error(
+          'Sessione non disponibile.'
+        );
+      }
+
+      const response = await fetch(
+        '/api/account/delete',
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            confirmation: cleanConfirmation,
+            password:
+              authProvider === 'email'
+                ? deletePassword
+                : undefined,
+          }),
+        }
+      );
+
+      const data = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            'Impossibile eliminare l’account.'
+        );
+      }
+
+      try {
+        window.localStorage.removeItem(
+          `cinedate:onboarding:${currentUser.id}`
+        );
+      } catch {
+        // L'account è già stato eliminato.
+      }
+
+      await supabase.auth.signOut();
+
+      window.location.href = '/';
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Impossibile eliminare l’account.'
+      );
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -1400,8 +1793,23 @@ export default function ProfiloPage() {
 
           .cdr-profile-password-grid {
             display:grid;
-            grid-template-columns:1fr 1fr auto;
+            grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
             gap:7px;
+            align-items:start;
+          }
+
+          .cdr-profile-password-checks {
+            grid-column:1 / -1;
+            display:flex;
+            gap:8px 12px;
+            flex-wrap:wrap;
+            margin-top:2px;
+            color:var(--cdr-profile-faint);
+            font-size:10px;
+          }
+
+          .cdr-profile-password-checks span.ok {
+            color:var(--cdr-profile-gold);
           }
 
           .cdr-profile-toggle-list {
@@ -1994,6 +2402,139 @@ export default function ProfiloPage() {
                   <div>
                     <div className="cdr-profile-card-kicker">
                       <LockKey size={12} weight="fill" />
+                      Account
+                    </div>
+                    <h2 className="cdr-profile-card-title">
+                      Email
+                    </h2>
+                    <p className="cdr-profile-card-copy">
+                      {authProvider === 'email'
+                        ? 'Cambia l’indirizzo usato per accedere a Cinedate.'
+                        : `L’accesso è collegato a ${authProvider}. L’email principale è gestita dal provider.`}
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    border: `1px solid ${P.border}`,
+                    background: P.bgSoft,
+                    padding: '10px 11px',
+                    marginBottom: 9,
+                  }}
+                >
+                  <div
+                    style={{
+                      color: P.textFaint,
+                      fontSize: 8.5,
+                      fontWeight: 850,
+                      textTransform: 'uppercase',
+                      letterSpacing: '.08em',
+                    }}
+                  >
+                    Email attuale
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: 3,
+                      color: P.text,
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    {email || 'Non disponibile'}
+                  </div>
+                </div>
+
+                {authProvider === 'email' ? (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns:
+                        'repeat(auto-fit,minmax(180px,1fr))',
+                      gap: 7,
+                    }}
+                  >
+                    <input
+                      className="cdr-profile-input"
+                      type="email"
+                      value={newEmail}
+                      placeholder="Nuova email"
+                      autoComplete="email"
+                      onChange={(event) => {
+                        setNewEmail(event.target.value);
+                        setError('');
+                      }}
+                    />
+
+                    <input
+                      className="cdr-profile-input"
+                      type="email"
+                      value={confirmEmail}
+                      placeholder="Conferma nuova email"
+                      autoComplete="email"
+                      onChange={(event) => {
+                        setConfirmEmail(event.target.value);
+                        setError('');
+                      }}
+                    />
+
+                    <input
+                      className="cdr-profile-input"
+                      type="password"
+                      value={emailPassword}
+                      placeholder="Password attuale"
+                      autoComplete="current-password"
+                      onChange={(event) => {
+                        setEmailPassword(event.target.value);
+                        setError('');
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      className="cdr-profile-action gold"
+                      onClick={() =>
+                        void updateEmail()
+                      }
+                      disabled={
+                        changingEmail ||
+                        !newEmail.trim() ||
+                        !confirmEmail.trim() ||
+                        !emailPassword ||
+                        newEmail.trim().toLowerCase() !==
+                          confirmEmail.trim().toLowerCase()
+                      }
+                    >
+                      {changingEmail
+                        ? 'Invio...'
+                        : 'Cambia email'}
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      borderLeft: `2px solid ${P.accent}`,
+                      background: P.accentGlow,
+                      color: P.textMuted,
+                      padding: '9px 11px',
+                      fontSize: 9.5,
+                      lineHeight: 1.55,
+                    }}
+                  >
+                    Per modificare l’indirizzo principale,
+                    usa le impostazioni del tuo account {authProvider}.
+                  </div>
+                )}
+              </section>
+
+              <section className="cdr-profile-card">
+                <div className="cdr-profile-card-head">
+                  <div>
+                    <div className="cdr-profile-card-kicker">
+                      <LockKey size={12} weight="fill" />
                       Sicurezza
                     </div>
                     <h2 className="cdr-profile-card-title">Password</h2>
@@ -2004,33 +2545,96 @@ export default function ProfiloPage() {
                 </div>
 
                 <div className="cdr-profile-password-grid">
+                  {authProvider === 'email' && (
+                    <input
+                      className="cdr-profile-input"
+                      type="password"
+                      value={currentPassword}
+                      placeholder="Password attuale"
+                      autoComplete="current-password"
+                      onChange={(event) => {
+                        setCurrentPassword(event.target.value);
+                        setError('');
+                      }}
+                    />
+                  )}
+
                   <input
                     className="cdr-profile-input"
                     type="password"
                     value={newPassword}
-                    placeholder="Nuova password"
-                    onChange={(event) =>
-                      setNewPassword(event.target.value)
+                    placeholder={
+                      authProvider === 'email'
+                        ? 'Nuova password'
+                        : 'Imposta password Cinedate'
                     }
+                    autoComplete="new-password"
+                    onChange={(event) => {
+                      setNewPassword(event.target.value);
+                      setError('');
+                    }}
                   />
+
                   <input
                     className="cdr-profile-input"
                     type="password"
                     value={confirmPassword}
                     placeholder="Conferma password"
-                    onChange={(event) =>
-                      setConfirmPassword(event.target.value)
-                    }
+                    autoComplete="new-password"
+                    onChange={(event) => {
+                      setConfirmPassword(event.target.value);
+                      setError('');
+                    }}
                   />
+
                   <button
                     type="button"
                     className="cdr-profile-action gold"
                     onClick={updatePassword}
-                    disabled={changingPassword}
+                    disabled={
+                      changingPassword ||
+                      !isPasswordValid(newPassword) ||
+                      newPassword !== confirmPassword ||
+                      (
+                        authProvider === 'email' &&
+                        !currentPassword
+                      )
+                    }
                   >
-                    {changingPassword ? '...' : 'Aggiorna'}
+                    {changingPassword
+                      ? '...'
+                      : authProvider === 'email'
+                        ? 'Aggiorna'
+                        : 'Imposta'}
                   </button>
+
+                  <div className="cdr-profile-password-checks">
+                    {getPasswordChecks(newPassword).map(
+                      (check) => (
+                        <span
+                          key={check.label}
+                          className={
+                            check.ok ? 'ok' : undefined
+                          }
+                        >
+                          {check.ok ? '✓ ' : '· '}
+                          {check.label}
+                        </span>
+                      )
+                    )}
+                  </div>
                 </div>
+
+                {authProvider !== 'email' && (
+                  <p
+                    className="cdr-profile-card-copy"
+                    style={{ marginTop: 9 }}
+                  >
+                    Il tuo accesso principale è tramite {authProvider}.
+                    Se imposti una password, potrai accedere a Cinedate
+                    anche usando email e password.
+                  </p>
+                )}
               </section>
 
               <section className="cdr-profile-card">
@@ -2288,6 +2892,191 @@ export default function ProfiloPage() {
                   </div>
                 </section>
               )}
+
+              <section
+                className="cdr-profile-card"
+                style={{
+                  borderColor: `${P.primary}55`,
+                }}
+              >
+                <div className="cdr-profile-card-head">
+                  <div>
+                    <div
+                      className="cdr-profile-card-kicker"
+                      style={{ color: P.primary }}
+                    >
+                      <Trash
+                        size={12}
+                        weight="fill"
+                      />
+                      Zona sensibile
+                    </div>
+
+                    <h2 className="cdr-profile-card-title">
+                      Elimina account
+                    </h2>
+
+                    <p className="cdr-profile-card-copy">
+                      Elimina definitivamente il tuo account Cinedate.
+                      Questa operazione non può essere annullata.
+                    </p>
+                  </div>
+
+                  {!deleteAccountOpen && (
+                    <button
+                      type="button"
+                      className="cdr-profile-action danger"
+                      onClick={() => {
+                        setDeleteAccountOpen(true);
+                        setDeleteConfirmation('');
+                        setDeletePassword('');
+                        setError('');
+                      }}
+                    >
+                      <Trash
+                        size={13}
+                        weight="bold"
+                      />
+                      Elimina
+                    </button>
+                  )}
+                </div>
+
+                {deleteAccountOpen && (
+                  <div
+                    style={{
+                      marginTop: 12,
+                      border: `1px solid ${P.primary}45`,
+                      background: P.primaryGlow,
+                      padding: 12,
+                    }}
+                  >
+                    <div
+                      style={{
+                        color: P.text,
+                        fontSize: 10.5,
+                        fontWeight: 850,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Conferma eliminazione definitiva
+                    </div>
+
+                    <p
+                      style={{
+                        margin: '5px 0 11px',
+                        color: P.textMuted,
+                        fontSize: 9.5,
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      Per continuare scrivi
+                      {' '}
+                      <strong style={{ color: P.primary }}>
+                        @{username}
+                      </strong>
+                      {' '}
+                      qui sotto
+                      {authProvider === 'email'
+                        ? ' e inserisci la password attuale.'
+                        : '.'}
+                    </p>
+
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns:
+                          authProvider === 'email'
+                            ? 'repeat(auto-fit,minmax(180px,1fr))'
+                            : '1fr',
+                        gap: 7,
+                      }}
+                    >
+                      <input
+                        className="cdr-profile-input"
+                        value={deleteConfirmation}
+                        placeholder={`Scrivi ${username}`}
+                        autoComplete="off"
+                        onChange={(event) => {
+                          setDeleteConfirmation(
+                            event.target.value
+                          );
+                          setError('');
+                        }}
+                      />
+
+                      {authProvider === 'email' && (
+                        <input
+                          className="cdr-profile-input"
+                          type="password"
+                          value={deletePassword}
+                          placeholder="Password attuale"
+                          autoComplete="current-password"
+                          onChange={(event) => {
+                            setDeletePassword(
+                              event.target.value
+                            );
+                            setError('');
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: 7,
+                        marginTop: 10,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="cdr-profile-action"
+                        onClick={() => {
+                          setDeleteAccountOpen(false);
+                          setDeleteConfirmation('');
+                          setDeletePassword('');
+                          setError('');
+                        }}
+                        disabled={deletingAccount}
+                      >
+                        Annulla
+                      </button>
+
+                      <button
+                        type="button"
+                        className="cdr-profile-action danger"
+                        onClick={() =>
+                          void deleteAccount()
+                        }
+                        disabled={
+                          deletingAccount ||
+                          deleteConfirmation
+                            .trim()
+                            .toLowerCase() !==
+                            username
+                              .trim()
+                              .toLowerCase() ||
+                          (
+                            authProvider === 'email' &&
+                            !deletePassword
+                          )
+                        }
+                      >
+                        <Trash
+                          size={13}
+                          weight="bold"
+                        />
+                        {deletingAccount
+                          ? 'Eliminazione...'
+                          : 'Elimina definitivamente'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
 
               <section className="cdr-profile-card">
                 <div className="cdr-profile-card-head">

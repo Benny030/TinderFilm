@@ -3,6 +3,7 @@
 import { useState, useEffect, type FormEvent, type CSSProperties } from 'react';
 import { useRouter } from 'next/router';
 import AppShell from '@/components/layout/AppShell';
+import BackButton from '@/components/ui/BackButton';
 import { generateRoomCode, normalizeRoomCode } from '@/utils/roomCode';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,7 +14,6 @@ import {
   Funnel,
   TrendUp,
   ArrowRight,
-  ArrowLeft,
   Check,
   Warning,
   Door,
@@ -587,7 +587,7 @@ export default function CreaStanzaPage() {
           padding: 24px 20px 64px;
         }
         @media (max-width: 768px) {
-          .main-container { padding: 16px; }
+          .main-container { padding: 16px 14px 36px; }
         }
 
         .page-title {
@@ -732,6 +732,34 @@ export default function CreaStanzaPage() {
           align-items: center;
           justify-content: center;
           z-index: 3;
+        }
+
+
+        .card-item:focus-visible,
+        .tab-switch-btn:focus-visible,
+        .banner-btn:focus-visible,
+        .btn-primary:focus-visible,
+        .genre-chip:focus-visible,
+        .code-input:focus-visible {
+          outline: 2px solid var(--home-gold);
+          outline-offset: 2px;
+        }
+
+        .card-item:hover {
+          transform: translateY(-2px);
+          background: var(--home-card-hover);
+        }
+
+        .card-item.selected {
+          box-shadow: 0 10px 30px rgba(0,0,0,0.12);
+        }
+
+        .join-wrapper .ticket-card {
+          cursor: default;
+        }
+
+        .step2-container.ticket-card {
+          cursor: default;
         }
 
         .banner-container {
@@ -1012,7 +1040,11 @@ export default function CreaStanzaPage() {
           .feature-grid { grid-template-columns: 1fr; gap: 16px; padding: 16px 0; border: none; }
           .feature-col { flex-direction: row; gap: 12px; border-right: none !important; border-bottom: 1px solid var(--home-border); padding: 0 0 16px 0 !important; }
           .feature-col:last-child { border-bottom: none; padding-bottom: 0 !important; }
-          .cards-grid { grid-template-columns: 1fr; }
+          .cards-grid { grid-template-columns: 1fr; gap: 12px; }
+          .card-item { min-height: 162px; padding: 20px; }
+          .card-icon-bg { opacity: 0.07; right: -6px; }
+          .feature-grid { margin-bottom: 28px; }
+          .step-progress-label { display: none; }
           .banner-container { flex-direction: column; align-items: flex-start; gap: 20px; }
           .banner-left { flex-direction: row; }
           .banner-btn { width: 100%; justify-content: center; }
@@ -1037,24 +1069,20 @@ export default function CreaStanzaPage() {
             {/* HEADER */}
             <div className="header-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
               <div>
-                <button
-                  onClick={() => router.push('/home')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: 0,
-                    color: P.textMuted,
-                    fontWeight: 500,
-                    marginBottom: '12px',
-                    fontSize: '15px',
-                  }}
-                >
-                  <ArrowLeft size={20} style={{ marginRight: '6px' }} />
-                  Home
-                </button>
+                <div style={{ marginBottom: '12px' }}>
+                  <BackButton
+                    onClick={() => {
+                      if (
+                        typeof window !== 'undefined' &&
+                        window.history.length > 1
+                      ) {
+                        router.back();
+                      } else {
+                        void router.push('/home');
+                      }
+                    }}
+                  />
+                </div>
                 <div className="page-title">Crea una stanza</div>
               </div>
               <div className="header-actions">
@@ -1084,6 +1112,93 @@ export default function CreaStanzaPage() {
                 </div>
               </div>
             </div>
+
+
+            {tab === 'create' && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '20px',
+                  color: P.textFaint,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {[
+                  { n: 1, label: 'Modalità' },
+                  { n: 2, label: 'Partecipanti' },
+                  { n: 3, label: 'Privacy' },
+                  { n: 4, label: mode === 'cinema' ? 'Posizione' : mode === 'discover' ? 'Filtri' : 'Pronta' },
+                ].map((item, index) => {
+                  const active = step === item.n;
+                  const complete = step > item.n;
+
+                  return (
+                    <div
+                      key={item.n}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        minWidth: 0,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: '20px',
+                          height: '20px',
+                          borderRadius: '50%',
+                          display: 'grid',
+                          placeItems: 'center',
+                          border: `1px solid ${
+                            active || complete ? P.gold : P.border
+                          }`,
+                          background: complete
+                            ? P.gold
+                            : active
+                              ? P.goldGlow
+                              : 'transparent',
+                          color: complete
+                            ? P.bg
+                            : active
+                              ? P.gold
+                              : P.textFaint,
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {complete ? <Check size={11} weight="bold" /> : item.n}
+                      </span>
+
+                      <span
+                        className="step-progress-label"
+                        style={{
+                          color: active ? P.text : P.textFaint,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {item.label}
+                      </span>
+
+                      {index < 3 && (
+                        <span
+                          style={{
+                            width: '24px',
+                            height: '1px',
+                            background: complete ? P.gold : P.border,
+                            flexShrink: 0,
+                          }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* TAB: ENTRA */}
             {tab === 'join' && (
@@ -1200,11 +1315,18 @@ export default function CreaStanzaPage() {
                   {modeCards.map((card) => {
                     const themeColor = card.color;
                     return (
-                      <div
+                      <button
                         key={card.id}
+                        type="button"
                         onClick={() => setMode(card.id)}
+                        aria-pressed={mode === card.id}
                         className={`card-item ${mode === card.id ? 'selected' : ''}`}
-                        style={{ borderColor: mode === card.id ? themeColor : undefined }}
+                        style={{
+                          borderColor: mode === card.id ? themeColor : undefined,
+                          color: P.text,
+                          textAlign: 'left',
+                          width: '100%',
+                        }}
                       >
                         <div className="card-blur-bg" style={{ background: themeColor }} />
                         <div className="card-icon-bg">
@@ -1226,7 +1348,7 @@ export default function CreaStanzaPage() {
                             <Check size={14} color="#000" weight="bold" />
                           </div>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -1259,10 +1381,11 @@ export default function CreaStanzaPage() {
             {tab === 'create' && step === 2 && (
               <div className="step2-container ticket-card">
                 <button
+                  type="button"
                   onClick={() => setStep(1)}
-                  style={{ background: 'none', border: 'none', color: P.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '18px', fontFamily: FONT }}
+                  style={{ background: 'none', border: 'none', color: P.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '18px', fontFamily: FONT, padding: 0, fontWeight: 700 }}
                 >
-                  <ArrowLeft size={17} /> Indietro
+                  ← Indietro
                 </button>
 
                 <div style={{ fontSize: '22px', fontWeight: 'bold', color: P.text, marginBottom: '6px' }}>
@@ -1313,7 +1436,7 @@ export default function CreaStanzaPage() {
 
                 <button className="btn-primary" disabled={isCreating} onClick={handleRoomKindContinue}
                   style={{ background: isCreating ? P.border : P.gold, color: isCreating ? P.textFaint : P.bg }}>
-                  {isCreating ? '⏳ Creazione...' : (mode === 'discover' ? 'Continua' : 'Crea stanza')}
+                  {isCreating ? '⏳ Creazione...' : 'Continua'}
                 </button>
                 <div className="ticket-tear" style={{ background: P.bg }} />
               </div>
@@ -1325,9 +1448,9 @@ export default function CreaStanzaPage() {
                 <button
                   type="button"
                   onClick={() => setStep(2)}
-                  style={{ background: 'none', border: 'none', color: P.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '18px', fontFamily: FONT }}
+                  style={{ background: 'none', border: 'none', color: P.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '18px', fontFamily: FONT, padding: 0, fontWeight: 700 }}
                 >
-                  <ArrowLeft size={17} /> Indietro
+                  ← Indietro
                 </button>
 
                 <div style={{ fontSize: '22px', fontWeight: 'bold', color: P.text, marginBottom: '6px' }}>
@@ -1395,9 +1518,9 @@ export default function CreaStanzaPage() {
                 <button
                   type="button"
                   onClick={() => setStep(3)}
-                  style={{ background: 'none', border: 'none', color: P.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '18px', fontFamily: FONT }}
+                  style={{ background: 'none', border: 'none', color: P.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '18px', fontFamily: FONT, padding: 0, fontWeight: 700 }}
                 >
-                  <ArrowLeft size={17} /> Indietro
+                  ← Indietro
                 </button>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
@@ -1530,6 +1653,14 @@ export default function CreaStanzaPage() {
             {/* TAB: CREA STANZA — STEP 3: FILTRI */}
             {tab === 'create' && step === 4 && mode === 'discover' && (
               <div className="step2-container ticket-card">
+                <button
+                  type="button"
+                  onClick={() => setStep(3)}
+                  style={{ background: 'none', border: 'none', color: P.textMuted, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px', fontFamily: FONT, padding: 0, fontWeight: 700 }}
+                >
+                  ← Indietro
+                </button>
+
                 <div style={{ fontSize: '20px', fontWeight: 'bold', color: P.text, marginBottom: '24px' }}>
                   Filtri avanzati
                 </div>

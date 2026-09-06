@@ -2,10 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
-import AppShell from '@/components/layout/AppShell';
-import { useTheme } from '@/context/ThemeContext';
 import {
-  ArrowLeft,
   CalendarBlank,
   FilmSlate,
   FunnelSimple,
@@ -16,16 +13,17 @@ import {
   X,
 } from '@phosphor-icons/react';
 
-// ─── Hook media query ──────────────────────────────────────────────────
+import AppShell from '@/components/layout/AppShell';
+import BackButton from '@/components/ui/BackButton';
+import { useTheme } from '@/context/ThemeContext';
+import { FONT, THEME } from '@/styles/token';
+
 function useMediaQuery(query: string) {
   const [matches, setMatches] = useState(false);
 
   useEffect(() => {
     const media = window.matchMedia(query);
-
-    if (media.matches !== matches) {
-      setMatches(media.matches);
-    }
+    setMatches(media.matches);
 
     const listener = (event: MediaQueryListEvent) =>
       setMatches(event.matches);
@@ -34,48 +32,10 @@ function useMediaQuery(query: string) {
 
     return () =>
       media.removeEventListener('change', listener);
-  }, [query, matches]);
+  }, [query]);
 
   return matches;
 }
-
-// ─── Palette dark ──────────────────────────────────────────────────────
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  cardHover: '#241d19',
-  border: '#2d221c',
-  gold: '#f5b92f',
-  goldSoft: '#ffd875',
-  pink: '#ed3d73',
-  pinkGlow: 'rgba(237,61,115,0.15)',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-};
-
-// ─── Palette light ─────────────────────────────────────────────────────
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  cardHover: '#faf5ef',
-  border: '#d6cbbc',
-  gold: '#b8860b',
-  goldSoft: '#e8c84a',
-  pink: '#b83060',
-  pinkGlow: 'rgba(184,48,96,0.10)',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-};
-
-const FONT_SANS =
-  "'Inter','Helvetica Neue',sans-serif";
-
-const FONT_DISPLAY =
-  "'Playfair Display','Georgia',serif";
 
 type ActorMovie = {
   tmdb_id: number;
@@ -110,33 +70,21 @@ const fallbackPoster =
 export default function ActorDetailPage() {
   const router = useRouter();
   const { theme } = useTheme();
+  const T = theme === 'dark' ? THEME.dark : THEME.light;
 
-  const isDark = theme === 'dark';
-  const P = isDark ? D : L;
+  const isMobile = useMediaQuery('(max-width: 640px)');
 
-  const isMobile =
-    useMediaQuery('(max-width: 640px)');
-
-  const [actor, setActor] =
-    useState<ActorDetail | null>(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [currentPage, setCurrentPage] =
-    useState(1);
+  const [actor, setActor] = useState<ActorDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const MOVIES_PER_PAGE = 12;
 
-  // ─── Filtri filmografia ──────────────────────────────────────────────
   const [search, setSearch] = useState('');
-
   const [sortMode, setSortMode] =
     useState<SortMode>('popular');
-
   const [selectedDecade, setSelectedDecade] =
     useState<string>('all');
-
   const [onlyWithCharacter, setOnlyWithCharacter] =
     useState(false);
 
@@ -163,7 +111,6 @@ export default function ActorDetailPage() {
         const data = await response.json();
 
         setActor(data);
-
         setCurrentPage(1);
         setSearch('');
         setSortMode('popular');
@@ -180,23 +127,16 @@ export default function ActorDetailPage() {
     void loadActor();
   }, [actorId]);
 
-  const formatDate = (
-    value: string | null
-  ) => {
+  const formatDate = (value: string | null) => {
     if (!value) return null;
 
-    const date = new Date(
-      `${value}T00:00:00`
-    );
+    const date = new Date(`${value}T00:00:00`);
 
-    return date.toLocaleDateString(
-      'it-IT',
-      {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      }
-    );
+    return date.toLocaleDateString('it-IT', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
   };
 
   const decades = useMemo(() => {
@@ -205,13 +145,11 @@ export default function ActorDetailPage() {
     const values = actor.movies
       .map((movie) => movie.year)
       .filter((year) => year > 0)
-      .map(
-        (year) =>
-          Math.floor(year / 10) * 10
-      );
+      .map((year) => Math.floor(year / 10) * 10);
 
-    return Array.from(new Set(values))
-      .sort((a, b) => b - a);
+    return Array.from(new Set(values)).sort(
+      (a, b) => b - a
+    );
   }, [actor]);
 
   const filteredMovies = useMemo(() => {
@@ -219,20 +157,16 @@ export default function ActorDetailPage() {
 
     let movies = [...actor.movies];
 
-    const cleanSearch =
-      search.trim().toLowerCase();
+    const cleanSearch = search.trim().toLowerCase();
 
     if (cleanSearch) {
       movies = movies.filter((movie) =>
-        movie.title
-          .toLowerCase()
-          .includes(cleanSearch)
+        movie.title.toLowerCase().includes(cleanSearch)
       );
     }
 
     if (selectedDecade !== 'all') {
-      const decade =
-        Number(selectedDecade);
+      const decade = Number(selectedDecade);
 
       movies = movies.filter(
         (movie) =>
@@ -242,9 +176,8 @@ export default function ActorDetailPage() {
     }
 
     if (onlyWithCharacter) {
-      movies = movies.filter(
-        (movie) =>
-          movie.character?.trim()
+      movies = movies.filter((movie) =>
+        movie.character?.trim()
       );
     }
 
@@ -252,19 +185,14 @@ export default function ActorDetailPage() {
       case 'recent':
         movies.sort(
           (a, b) =>
-            (b.year || 0) -
-            (a.year || 0)
+            (b.year || 0) - (a.year || 0)
         );
         break;
 
       case 'oldest':
         movies.sort((a, b) => {
-          const yearA =
-            a.year || 9999;
-
-          const yearB =
-            b.year || 9999;
-
+          const yearA = a.year || 9999;
+          const yearB = b.year || 9999;
           return yearA - yearB;
         });
         break;
@@ -272,8 +200,7 @@ export default function ActorDetailPage() {
       case 'rating':
         movies.sort(
           (a, b) =>
-            (b.rating || 0) -
-            (a.rating || 0)
+            (b.rating || 0) - (a.rating || 0)
         );
         break;
 
@@ -305,21 +232,20 @@ export default function ActorDetailPage() {
     setCurrentPage(1);
   };
 
-  const totalPages = Math.ceil(
-    filteredMovies.length / MOVIES_PER_PAGE
+  const totalPages = Math.max(
+    1,
+    Math.ceil(
+      filteredMovies.length / MOVIES_PER_PAGE
+    )
   );
 
   const startIndex =
     (currentPage - 1) * MOVIES_PER_PAGE;
 
-  const endIndex =
-    startIndex + MOVIES_PER_PAGE;
-
-  const visibleMovies =
-    filteredMovies.slice(
-      startIndex,
-      endIndex
-    );
+  const visibleMovies = filteredMovies.slice(
+    startIndex,
+    startIndex + MOVIES_PER_PAGE
+  );
 
   if (loading) {
     return (
@@ -329,14 +255,14 @@ export default function ActorDetailPage() {
             minHeight: '70vh',
             display: 'grid',
             placeItems: 'center',
-            background: P.bg,
-            color: P.textMuted,
-            fontFamily: FONT_SANS,
+            background: T.bg,
+            color: T.textMuted,
+            fontFamily: FONT.sans,
           }}
         >
           <FilmSlate
             size={38}
-            color={P.pink}
+            color={T.primary}
             weight="duotone"
           />
         </div>
@@ -352,32 +278,50 @@ export default function ActorDetailPage() {
             minHeight: '70vh',
             display: 'grid',
             placeItems: 'center',
-            background: P.bg,
-            color: P.textMuted,
-            fontFamily: FONT_SANS,
+            background: T.bg,
+            color: T.textMuted,
+            fontFamily: FONT.sans,
             padding: 20,
           }}
         >
-          <div
-            style={{
-              textAlign: 'center',
-            }}
-          >
-            <p>
+          <div style={{ textAlign: 'center' }}>
+            <UserCircle
+              size={42}
+              color={T.textFaint}
+              weight="duotone"
+            />
+
+            <p
+              style={{
+                margin: '10px 0 0',
+                fontSize: 12,
+              }}
+            >
               Non siamo riusciti a trovare questa persona.
             </p>
 
             <button
-              onClick={() => router.back()}
+              type="button"
+              onClick={() => {
+                if (
+                  typeof window !== 'undefined' &&
+                  window.history.length > 1
+                ) {
+                  router.back();
+                } else {
+                  void router.push('/esplora');
+                }
+              }}
               style={{
                 marginTop: 14,
-                border: 0,
-                background: P.pink,
-                color: '#fff',
-                padding: '10px 16px',
+                border: `1px solid ${T.primary}`,
+                background: T.primaryGlow,
+                color: T.primary,
+                padding: '9px 12px',
                 cursor: 'pointer',
-                fontWeight: 800,
-                fontFamily: FONT_SANS,
+                fontWeight: 850,
+                fontFamily: FONT.sans,
+                fontSize: 10,
               }}
             >
               Torna indietro
@@ -393,257 +337,199 @@ export default function ActorDetailPage() {
       <main
         style={{
           minHeight: '100vh',
-          background: P.bg,
-          color: P.text,
-          fontFamily: FONT_SANS,
+          background: T.bg,
+          color: T.text,
+          fontFamily: FONT.sans,
           paddingBottom: 90,
         }}
       >
         <section
           style={{
-            minHeight: isMobile
-              ? 360
-              : 430,
-            position: 'relative',
-            overflow: 'hidden',
-            borderBottom:
-              `1px solid ${P.border}`,
-            background: isDark
-              ? `
-                radial-gradient(
-                  circle at 15% 30%,
-                  rgba(237,61,115,0.16),
-                  transparent 35%
-                ),
-                radial-gradient(
-                  circle at 80% 20%,
-                  rgba(245,185,47,0.10),
-                  transparent 30%
-                ),
-                ${P.bgSoft}
-              `
-              : `
-                radial-gradient(
-                  circle at 15% 30%,
-                  rgba(184,48,96,0.10),
-                  transparent 35%
-                ),
-                radial-gradient(
-                  circle at 80% 20%,
-                  rgba(184,134,11,0.08),
-                  transparent 30%
-                ),
-                ${P.bgSoft}
-              `,
+            borderBottom: `1px solid ${T.border}`,
+            background: T.bgSoft,
           }}
         >
-          <button
-            onClick={() => router.back()}
-            aria-label="Torna indietro"
-            style={{
-              position: 'absolute',
-              top: isMobile ? 12 : 20,
-              left: isMobile ? 12 : 20,
-              zIndex: 3,
-              width: isMobile ? 36 : 42,
-              height: isMobile ? 36 : 42,
-              border: `1px solid ${P.border}`,
-              borderRadius: '50%',
-              background: isDark
-                ? 'rgba(10,8,6,0.76)'
-                : 'rgba(255,255,255,0.82)',
-              color: P.text,
-              display: 'grid',
-              placeItems: 'center',
-              cursor: 'pointer',
-              backdropFilter: 'blur(10px)',
-            }}
-          >
-            <ArrowLeft
-              size={isMobile ? 18 : 21}
-            />
-          </button>
-
           <div
             style={{
               maxWidth: 1060,
               margin: '0 auto',
               padding: isMobile
-                ? '72px 16px 32px'
-                : '70px 24px 42px',
-              display: 'grid',
-              gridTemplateColumns: isMobile
-                ? '1fr'
-                : '240px minmax(0,1fr)',
-              alignItems: 'center',
-              gap: isMobile ? 22 : 42,
+                ? '18px 16px 30px'
+                : '24px 24px 38px',
             }}
           >
             <div
               style={{
-                display: 'grid',
-                placeItems: 'center',
+                marginBottom: isMobile ? 18 : 24,
               }}
             >
-              {actor.profile ? (
-                <img
-                  src={actor.profile}
-                  alt={actor.name}
-                  style={{
-                    width: isMobile
-                      ? 180
-                      : 330,
-                    height: isMobile
-                      ? 180
-                      : 330,
-                    borderRadius: '0%',
-                    objectFit: 'cover',
-                    display: 'block',
-                    border:
-                      `3px solid ${P.pink}`,
-                    boxShadow:
-                      '0 18px 45px rgba(0,0,0,0.28)',
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: isMobile
-                      ? 180
-                      : 230,
-                    height: isMobile
-                      ? 180
-                      : 230,
-                    borderRadius: '50%',
-                    background: P.card,
-                    border:
-                      `2px solid ${P.border}`,
-                    display: 'grid',
-                    placeItems: 'center',
-                  }}
-                >
-                  <UserCircle
-                    size={isMobile ? 80 : 110}
-                    color={P.textFaint}
-                  />
-                </div>
-              )}
+              <BackButton
+                onClick={() => {
+                  if (
+                    typeof window !== 'undefined' &&
+                    window.history.length > 1
+                  ) {
+                    router.back();
+                  } else {
+                    void router.push('/esplora');
+                  }
+                }}
+              />
             </div>
 
             <div
               style={{
-                textAlign: isMobile
-                  ? 'center'
-                  : 'left',
+                display: 'grid',
+                gridTemplateColumns: isMobile
+                  ? '1fr'
+                  : '240px minmax(0,1fr)',
+                gap: isMobile ? 22 : 38,
+                alignItems: 'center',
               }}
             >
-              {actor.known_for && (
-                <span
-                  style={{
-                    display: 'inline-block',
-                    padding: '5px 10px',
-                    borderRadius: 999,
-                    border:
-                      `1px solid ${P.pink}`,
-                    background: P.pinkGlow,
-                    color: P.pink,
-                    fontWeight: 800,
-                    fontSize: 11,
-                    textTransform:
-                      'uppercase',
-                    letterSpacing: '.06em',
-                  }}
-                >
-                  {actor.known_for}
-                </span>
-              )}
-
-              <h1
-                style={{
-                  margin: '10px 0 14px',
-                  fontFamily: FONT_DISPLAY,
-                  fontSize: isMobile
-                    ? 'clamp(30px, 10vw, 44px)'
-                    : 'clamp(42px, 5vw, 64px)',
-                  lineHeight: 1,
-                  letterSpacing: '-0.04em',
-                  fontWeight: 800,
-                  color: P.text,
-                }}
-              >
-                {actor.name}
-              </h1>
-
               <div
                 style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  justifyContent: isMobile
+                  display: 'grid',
+                  placeItems: isMobile
                     ? 'center'
-                    : 'flex-start',
-                  gap: '8px 16px',
-                  color: P.textMuted,
-                  fontSize: isMobile
-                    ? 12
-                    : 13,
+                    : 'start',
                 }}
               >
-                {actor.birthday && (
-                  <span
+                {actor.profile ? (
+                  <img
+                    src={actor.profile}
+                    alt={actor.name}
                     style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
+                      width: isMobile ? 170 : 240,
+                      height: isMobile ? 220 : 320,
+                      objectFit: 'cover',
+                      display: 'block',
+                      border: `1px solid ${T.border}`,
+                      background: T.surface,
+                    }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: isMobile ? 170 : 240,
+                      height: isMobile ? 220 : 320,
+                      background: T.surface,
+                      border: `1px solid ${T.border}`,
+                      display: 'grid',
+                      placeItems: 'center',
                     }}
                   >
-                    <CalendarBlank size={16} />
-                    {formatDate(actor.birthday)}
-                  </span>
-                )}
-
-                {actor.place_of_birth && (
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <MapPin size={16} />
-                    {actor.place_of_birth}
-                  </span>
+                    <UserCircle
+                      size={isMobile ? 72 : 96}
+                      color={T.textFaint}
+                      weight="duotone"
+                    />
+                  </div>
                 )}
               </div>
 
-              {actor.deathday && (
+              <div
+                style={{
+                  textAlign: isMobile
+                    ? 'center'
+                    : 'left',
+                }}
+              >
+                {actor.known_for && (
+                  <div
+                    style={{
+                      color: T.primary,
+                      fontSize: 9,
+                      fontWeight: 900,
+                      textTransform: 'uppercase',
+                      letterSpacing: '.12em',
+                    }}
+                  >
+                    {actor.known_for}
+                  </div>
+                )}
+
+                <h1
+                  style={{
+                    margin: '6px 0 12px',
+                    fontFamily: FONT.display,
+                    fontSize: isMobile
+                      ? 'clamp(32px,10vw,44px)'
+                      : 'clamp(44px,5vw,64px)',
+                    lineHeight: 1,
+                    letterSpacing: '-.03em',
+                    color: T.text,
+                  }}
+                >
+                  {actor.name}
+                </h1>
+
                 <div
                   style={{
-                    marginTop: 8,
-                    color: P.textMuted,
-                    fontSize: 12,
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    justifyContent: isMobile
+                      ? 'center'
+                      : 'flex-start',
+                    gap: '8px 16px',
+                    color: T.textMuted,
+                    fontSize: 11,
                   }}
                 >
-                  Deceduto il{' '}
-                  {formatDate(actor.deathday)}
-                </div>
-              )}
+                  {actor.birthday && (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                      }}
+                    >
+                      <CalendarBlank
+                        size={13}
+                        color={T.accent}
+                      />
+                      {formatDate(actor.birthday)}
+                    </span>
+                  )}
 
-              {actor.biography && (
-                <p
-                  style={{
-                    margin:
-                      '20px 0 0',
-                    maxWidth: 680,
-                    color: P.text,
-                    fontSize: isMobile
-                      ? 14
-                      : 15,
-                    lineHeight: 1.7,
-                  }}
-                >
-                  {actor.biography}
-                </p>
-              )}
+                  {actor.place_of_birth && (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                      }}
+                    >
+                      <MapPin
+                        size={13}
+                        color={T.primary}
+                      />
+                      {actor.place_of_birth}
+                    </span>
+                  )}
+
+                  {actor.deathday && (
+                    <span>
+                      † {formatDate(actor.deathday)}
+                    </span>
+                  )}
+                </div>
+
+                {actor.biography && (
+                  <p
+                    style={{
+                      margin: '16px 0 0',
+                      color: T.textMuted,
+                      fontSize: 12,
+                      lineHeight: 1.65,
+                      maxWidth: 720,
+                      whiteSpace: 'pre-line',
+                    }}
+                  >
+                    {actor.biography}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </section>
@@ -653,703 +539,468 @@ export default function ActorDetailPage() {
             maxWidth: 1060,
             margin: '0 auto',
             padding: isMobile
-              ? '30px 12px 0'
-              : '38px 24px 0',
+              ? '24px 16px 0'
+              : '30px 24px 0',
           }}
         >
           <div
             style={{
               display: 'flex',
+              justifyContent: 'space-between',
               alignItems: 'flex-end',
-              justifyContent:
-                'space-between',
-              gap: 12,
-              marginBottom: 18,
+              gap: 14,
+              flexWrap: 'wrap',
+              marginBottom: 14,
             }}
           >
             <div>
-              <span
+              <div
                 style={{
-                  color: P.pink,
-                  fontSize: 10,
-                  fontWeight: 800,
-                  textTransform:
-                    'uppercase',
+                  color: T.accent,
+                  fontSize: 9,
+                  fontWeight: 900,
+                  textTransform: 'uppercase',
                   letterSpacing: '.12em',
                 }}
               >
                 Filmografia
-              </span>
+              </div>
 
               <h2
                 style={{
-                  margin: '4px 0 0',
-                  fontFamily:
-                    FONT_DISPLAY,
-                  fontSize: isMobile
-                    ? 23
-                    : 30,
-                  color: P.text,
+                  margin: '3px 0 0',
+                  fontFamily: FONT.display,
+                  fontSize: 26,
                 }}
               >
-                Film con {actor.name}
+                Film
               </h2>
             </div>
 
-            <span
+            <div
               style={{
-                color: P.textMuted,
-                fontSize: 11,
-                flexShrink: 0,
+                color: T.textFaint,
+                fontSize: 9.5,
               }}
             >
-              {filteredMovies.length}{' '}
-              {filteredMovies.length === 1
-                ? 'risultato'
-                : 'risultati'}
-            </span>
+              {filteredMovies.length} risultati
+            </div>
           </div>
 
           <div
             style={{
-              border:
-                `1px solid ${P.border}`,
-              background: P.card,
-              borderRadius: 0,
-              padding: isMobile
-                ? 12
-                : 14,
-              marginBottom: 24,
+              border: `1px solid ${T.border}`,
+              background: T.surface,
+              padding: 12,
+              marginBottom: 16,
+              display: 'grid',
+              gridTemplateColumns: isMobile
+                ? '1fr'
+                : 'minmax(220px,1.4fr) repeat(3,minmax(140px,.7fr)) auto',
+              gap: 8,
+              alignItems: 'center',
             }}
           >
             <div
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 7,
-                color: P.textMuted,
+                position: 'relative',
+              }}
+            >
+              <MagnifyingGlass
+                size={14}
+                color={T.textFaint}
+                style={{
+                  position: 'absolute',
+                  left: 10,
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                }}
+              />
+
+              <input
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setCurrentPage(1);
+                }}
+                placeholder="Cerca nella filmografia"
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  border: `1px solid ${T.border}`,
+                  background: T.bg,
+                  color: T.text,
+                  padding: '9px 30px 9px 31px',
+                  fontFamily: FONT.sans,
+                  fontSize: 10,
+                  outline: 'none',
+                }}
+              />
+
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearch('');
+                    setCurrentPage(1);
+                  }}
+                  aria-label="Cancella ricerca"
+                  style={{
+                    position: 'absolute',
+                    right: 8,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    border: 0,
+                    background: 'transparent',
+                    color: T.textFaint,
+                    padding: 0,
+                    cursor: 'pointer',
+                    display: 'grid',
+                    placeItems: 'center',
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            <select
+              value={sortMode}
+              onChange={(event) => {
+                setSortMode(
+                  event.target.value as SortMode
+                );
+                setCurrentPage(1);
+              }}
+              style={{
+                width: '100%',
+                border: `1px solid ${T.border}`,
+                background: T.bg,
+                color: T.textMuted,
+                padding: '9px 10px',
+                fontFamily: FONT.sans,
                 fontSize: 10,
+                outline: 'none',
+              }}
+            >
+              <option value="popular">
+                Popolarità
+              </option>
+              <option value="recent">
+                Più recenti
+              </option>
+              <option value="oldest">
+                Più vecchi
+              </option>
+              <option value="rating">
+                Voto più alto
+              </option>
+            </select>
+
+            <select
+              value={selectedDecade}
+              onChange={(event) => {
+                setSelectedDecade(
+                  event.target.value
+                );
+                setCurrentPage(1);
+              }}
+              style={{
+                width: '100%',
+                border: `1px solid ${T.border}`,
+                background: T.bg,
+                color: T.textMuted,
+                padding: '9px 10px',
+                fontFamily: FONT.sans,
+                fontSize: 10,
+                outline: 'none',
+              }}
+            >
+              <option value="all">
+                Tutti gli anni
+              </option>
+
+              {decades.map((decade) => (
+                <option
+                  key={decade}
+                  value={decade}
+                >
+                  Anni {decade}
+                </option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOnlyWithCharacter(
+                  (current) => !current
+                );
+                setCurrentPage(1);
+              }}
+              style={{
+                border: `1px solid ${
+                  onlyWithCharacter
+                    ? T.primary
+                    : T.border
+                }`,
+                background: onlyWithCharacter
+                  ? T.primaryGlow
+                  : T.bg,
+                color: onlyWithCharacter
+                  ? T.primary
+                  : T.textMuted,
+                padding: '9px 10px',
+                fontFamily: FONT.sans,
+                fontSize: 9.5,
                 fontWeight: 800,
-                textTransform:
-                  'uppercase',
-                letterSpacing: '.08em',
-                marginBottom: 11,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 5,
               }}
             >
               <FunnelSimple
-                size={15}
-                color={P.pink}
-                weight="bold"
+                size={12}
+                weight={
+                  onlyWithCharacter
+                    ? 'fill'
+                    : 'regular'
+                }
               />
+              Ruoli
+            </button>
 
-              Filtra filmografia
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                style={{
+                  border: 0,
+                  background: 'transparent',
+                  color: T.textFaint,
+                  padding: '8px 2px',
+                  fontFamily: FONT.sans,
+                  fontSize: 9,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Reimposta
+              </button>
+            )}
+          </div>
+
+          {visibleMovies.length === 0 ? (
+            <div
+              style={{
+                borderTop: `1px solid ${T.border}`,
+                borderBottom: `1px solid ${T.border}`,
+                padding: 32,
+                textAlign: 'center',
+                color: T.textFaint,
+                fontSize: 11,
+              }}
+            >
+              Nessun film corrisponde ai filtri.
             </div>
-
+          ) : (
             <div
               style={{
                 display: 'grid',
                 gridTemplateColumns: isMobile
-                  ? '1fr'
-                  : 'minmax(240px, 1.6fr) minmax(170px, .8fr) minmax(150px, .7fr)',
-                gap: 10,
+                  ? 'repeat(2,minmax(0,1fr))'
+                  : 'repeat(4,minmax(0,1fr))',
+                gap: isMobile ? 10 : 14,
               }}
             >
-              <div
-                style={{
-                  position: 'relative',
-                }}
-              >
-                <MagnifyingGlass
-                  size={16}
-                  color={P.textFaint}
+              {visibleMovies.map((movie) => (
+                <article
+                  key={`${movie.tmdb_id}-${movie.character}`}
                   style={{
-                    position: 'absolute',
-                    left: 11,
-                    top: '50%',
-                    transform:
-                      'translateY(-50%)',
-                    pointerEvents: 'none',
-                  }}
-                />
-
-                <input
-                  value={search}
-                  onChange={(event) => {
-                    setSearch(
-                      event.target.value
-                    );
-                    setCurrentPage(1);
-                  }}
-                  placeholder="Cerca un film..."
-                  style={{
-                    width: '100%',
-                    height: 40,
-                    border:
-                      `1px solid ${P.border}`,
-                    borderRadius: 9,
-                    background: P.bgSoft,
-                    color: P.text,
-                    outline: 0,
-                    padding:
-                      '0 36px 0 35px',
-                    fontFamily:
-                      FONT_SANS,
-                    fontSize: 12,
-                  }}
-                />
-
-                {search && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearch('');
-                      setCurrentPage(1);
-                    }}
-                    aria-label="Cancella ricerca"
-                    style={{
-                      position: 'absolute',
-                      right: 7,
-                      top: '50%',
-                      transform:
-                        'translateY(-50%)',
-                      width: 26,
-                      height: 26,
-                      border: 0,
-                      borderRadius: '50%',
-                      background:
-                        'transparent',
-                      color: P.textMuted,
-                      display: 'grid',
-                      placeItems: 'center',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
-
-              <select
-                value={sortMode}
-                onChange={(event) => {
-                  setSortMode(
-                    event.target
-                      .value as SortMode
-                  );
-                  setCurrentPage(1);
-                }}
-                style={{
-                  width: '100%',
-                  height: 40,
-                  border:
-                    `1px solid ${P.border}`,
-                  borderRadius: 9,
-                  background: P.bgSoft,
-                  color: P.text,
-                  outline: 0,
-                  padding: '0 10px',
-                  fontFamily:
-                    FONT_SANS,
-                  fontSize: 12,
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="popular">
-                  Più popolari
-                </option>
-
-                <option value="recent">
-                  Più recenti
-                </option>
-
-                <option value="oldest">
-                  Più vecchi
-                </option>
-
-                <option value="rating">
-                  Voto più alto
-                </option>
-              </select>
-
-              <select
-                value={selectedDecade}
-                onChange={(event) => {
-                  setSelectedDecade(
-                    event.target.value
-                  );
-                  setCurrentPage(1);
-                }}
-                style={{
-                  width: '100%',
-                  height: 40,
-                  border:
-                    `1px solid ${P.border}`,
-                  borderRadius: 9,
-                  background: P.bgSoft,
-                  color: P.text,
-                  outline: 0,
-                  padding: '0 10px',
-                  fontFamily:
-                    FONT_SANS,
-                  fontSize: 12,
-                  cursor: 'pointer',
-                }}
-              >
-                <option value="all">
-                  Tutti gli anni
-                </option>
-
-                {decades.map(
-                  (decade) => (
-                    <option
-                      key={decade}
-                      value={decade}
-                    >
-                      {decade}–{decade + 9}
-                    </option>
-                  )
-                )}
-              </select>
-            </div>
-
-            <div
-              style={{
-                marginTop: 10,
-                display: 'flex',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: 8,
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => {
-                  setOnlyWithCharacter(
-                    (value) => !value
-                  );
-                  setCurrentPage(1);
-                }}
-                style={{
-                  border: `1px solid ${
-                    onlyWithCharacter
-                      ? P.pink
-                      : P.border
-                  }`,
-                  background:
-                    onlyWithCharacter
-                      ? P.pinkGlow
-                      : P.bgSoft,
-                  color:
-                    onlyWithCharacter
-                      ? P.pink
-                      : P.textMuted,
-                  padding: '7px 10px',
-                  borderRadius: 999,
-                  cursor: 'pointer',
-                  fontFamily:
-                    FONT_SANS,
-                  fontSize: 10,
-                  fontWeight: 800,
-                }}
-              >
-                {onlyWithCharacter
-                  ? '✓ '
-                  : ''}
-                Con personaggio
-              </button>
-
-              {hasActiveFilters && (
-                <button
-                  type="button"
-                  onClick={resetFilters}
-                  style={{
-                    border: 0,
-                    background:
-                      'transparent',
-                    color: P.pink,
-                    padding: '7px 5px',
-                    cursor: 'pointer',
-                    fontFamily:
-                      FONT_SANS,
-                    fontSize: 10,
-                    fontWeight: 800,
+                    border: `1px solid ${T.border}`,
+                    background: T.surface,
+                    overflow: 'hidden',
                   }}
                 >
-                  Reset filtri
-                </button>
-              )}
-            </div>
-          </div>
-
-          {filteredMovies.length > 0 ? (
-            <>
-              <div
-                style={{
-                  display: 'grid',
-
-                  gridTemplateColumns:
-                    isMobile
-                      ? 'repeat(2, minmax(0,1fr))'
-                      : 'repeat(6, minmax(0,1fr))',
-
-                  gap: isMobile
-                    ? 14
-                    : 18,
-                }}
-              >
-                {visibleMovies.map(
-                  (movie) => (
-                    <button
-                      key={movie.tmdb_id}
-                      type="button"
-                      onClick={() =>
-                        router.push(
-                          `/film/${movie.tmdb_id}`
-                        )
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void router.push(
+                        `/film/${movie.tmdb_id}`
+                      )
+                    }
+                    style={{
+                      width: '100%',
+                      border: 0,
+                      padding: 0,
+                      background: 'transparent',
+                      color: T.text,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontFamily: FONT.sans,
+                    }}
+                  >
+                    <img
+                      src={
+                        movie.cover || fallbackPoster
                       }
+                      alt={movie.title}
                       style={{
-                        border: 0,
-                        background:
-                          'transparent',
-                        padding: 0,
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        fontFamily:
-                          FONT_SANS,
-                        color: P.text,
-                        minWidth: 0,
-                        transition:
-                          'transform 0.2s ease',
+                        width: '100%',
+                        aspectRatio: '2 / 3',
+                        objectFit: 'cover',
+                        display: 'block',
+                        background: T.bgSoft,
                       }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform =
-                          'translateY(-4px)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform =
-                          'translateY(0)';
+                    />
+
+                    <div
+                      style={{
+                        padding: '9px 9px 10px',
                       }}
                     >
-                      <img
-                        src={
-                          movie.cover ||
-                          fallbackPoster
-                        }
-                        alt={movie.title}
+                      <div
                         style={{
-                          width: '100%',
-                          aspectRatio: '2 / 3',
-                          objectFit: 'cover',
-                          display: 'block',
-                          borderRadius: 14,
-                          background: P.bgSoft,
-                          boxShadow:
-                            '0 6px 18px rgba(0,0,0,0.16)',
-                        }}
-                      />
-
-                      <strong
-                        style={{
-                          display: 'block',
-                          marginTop: 7,
-                          fontSize: isMobile
-                            ? 12
-                            : 13,
-                          color: P.text,
-                          overflow: 'hidden',
-                          textOverflow:
-                            'ellipsis',
+                          color: T.text,
+                          fontSize: 11,
+                          fontWeight: 850,
                           whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
                         }}
                       >
                         {movie.title}
-                      </strong>
+                      </div>
 
                       <div
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           gap: 5,
-                          marginTop: 3,
-                          color: P.textMuted,
-                          fontSize: isMobile
-                            ? 10
-                            : 11,
+                          marginTop: 4,
+                          color: T.accent,
+                          fontSize: 9,
+                          fontWeight: 800,
                         }}
                       >
-                        <span>
-                          {movie.year ||
-                            '—'}
-                        </span>
+                        <Star
+                          size={10}
+                          weight="fill"
+                        />
+                        {movie.rating
+                          ? movie.rating.toFixed(1)
+                          : '—'}
 
-                        {movie.rating > 0 && (
-                          <>
-                            <span>·</span>
-
-                            <Star
-                              size={11}
-                              color={P.gold}
-                              weight="fill"
-                            />
-
-                            <span
-                              style={{
-                                color:
-                                  P.gold,
-                              }}
-                            >
-                              {movie.rating.toFixed(
-                                1
-                              )}
-                            </span>
-                          </>
-                        )}
+                        {movie.year
+                          ? ` · ${movie.year}`
+                          : ''}
                       </div>
 
-                      {movie.character && (
-                        <span
-                          style={{
-                            display:
-                              'block',
-                            marginTop: 3,
-                            color:
-                              P.textFaint,
-                            fontSize:
-                              isMobile
-                                ? 9
-                                : 10,
-                            overflow:
-                              'hidden',
-                            textOverflow:
-                              'ellipsis',
-                            whiteSpace:
-                              'nowrap',
-                          }}
-                        >
-                          {movie.character}
-                        </span>
-                      )}
-                    </button>
-                  )
-                )}
-              </div>
-
-              {totalPages > 1 && (
-                <div
-                  style={{
-                    marginTop: 30,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <button
-                    type="button"
-                    disabled={currentPage === 1}
-                    onClick={() =>
-                      setCurrentPage((page) =>
-                        Math.max(1, page - 1)
-                      )
-                    }
-                    style={{
-                      width: 36,
-                      height: 36,
-                      border: `1px solid ${P.border}`,
-                      background: P.card,
-                      color:
-                        currentPage === 1
-                          ? P.textFaint
-                          : P.text,
-                      cursor:
-                        currentPage === 1
-                          ? 'default'
-                          : 'pointer',
-                      opacity:
-                        currentPage === 1
-                          ? 0.45
-                          : 1,
-                      fontFamily: FONT_SANS,
-                      fontWeight: 800,
-                      fontSize: 15,
-                    }}
-                  >
-                    ‹
-                  </button>
-
-                  {Array.from(
-                    { length: totalPages },
-                    (_, index) => index + 1
-                  )
-                    .filter((page) => {
-                      if (totalPages <= 7) {
-                        return true;
-                      }
-
-                      if (currentPage <= 4) {
-                        return page <= 5;
-                      }
-
-                      if (
-                        currentPage >=
-                        totalPages - 3
-                      ) {
-                        return (
-                          page >=
-                          totalPages - 4
-                        );
-                      }
-
-                      return (
-                        page >=
-                          currentPage - 2 &&
-                        page <=
-                          currentPage + 2
-                      );
-                    })
-                    .map((page) => (
-                      <button
-                        key={page}
-                        type="button"
-                        onClick={() =>
-                          setCurrentPage(page)
-                        }
+                      <div
                         style={{
-                          minWidth: 36,
-                          height: 36,
-                          padding: '0 10px',
-
-                          border:
-                            page === currentPage
-                              ? `1px solid ${P.pink}`
-                              : `1px solid ${P.border}`,
-
-                          background:
-                            page === currentPage
-                              ? P.pink
-                              : P.card,
-
-                          color:
-                            page === currentPage
-                              ? '#fff'
-                              : P.text,
-
-                          cursor: 'pointer',
-                          fontFamily:
-                            FONT_SANS,
-                          fontWeight: 800,
-                          fontSize: 11,
-                          transition:
-                            'all 0.15s ease',
+                          marginTop: 6,
+                          color: T.textFaint,
+                          fontSize: 9,
+                          lineHeight: 1.4,
+                          minHeight: 26,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
                         }}
                       >
-                        {page}
-                      </button>
-                    ))}
-
-                  <button
-                    type="button"
-                    disabled={
-                      currentPage ===
-                      totalPages
-                    }
-                    onClick={() =>
-                      setCurrentPage((page) =>
-                        Math.min(
-                          totalPages,
-                          page + 1
-                        )
-                      )
-                    }
-                    style={{
-                      width: 36,
-                      height: 36,
-                      border: `1px solid ${P.border}`,
-                      background: P.card,
-                      color:
-                        currentPage ===
-                        totalPages
-                          ? P.textFaint
-                          : P.text,
-                      cursor:
-                        currentPage ===
-                        totalPages
-                          ? 'default'
-                          : 'pointer',
-                      opacity:
-                        currentPage ===
-                        totalPages
-                          ? 0.45
-                          : 1,
-                      fontFamily:
-                        FONT_SANS,
-                      fontWeight: 800,
-                      fontSize: 15,
-                    }}
-                  >
-                    ›
+                        {movie.character?.trim()
+                          ? movie.character
+                          : 'Ruolo non disponibile'}
+                      </div>
+                    </div>
                   </button>
-                </div>
-              )}
-            </>
-          ) : (
+                </article>
+              ))}
+            </div>
+          )}
+
+          {totalPages > 1 && (
             <div
               style={{
-                minHeight: 190,
-                display: 'grid',
-                placeItems: 'center',
-                border:
-                  `1px dashed ${P.border}`,
-                borderRadius: 16,
-                background: P.bgSoft,
-                color: P.textMuted,
-                textAlign: 'center',
-                padding: 20,
+                marginTop: 20,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 10,
               }}
             >
-              <div>
-                <FilmSlate
-                  size={30}
-                  color={P.textFaint}
-                  weight="duotone"
-                />
+              <button
+                type="button"
+                disabled={currentPage <= 1}
+                onClick={() =>
+                  setCurrentPage((page) =>
+                    Math.max(1, page - 1)
+                  )
+                }
+                style={{
+                  border: `1px solid ${T.border}`,
+                  background: T.surface,
+                  color: T.textMuted,
+                  padding: '8px 10px',
+                  fontFamily: FONT.sans,
+                  fontSize: 9.5,
+                  fontWeight: 800,
+                  cursor:
+                    currentPage <= 1
+                      ? 'default'
+                      : 'pointer',
+                  opacity:
+                    currentPage <= 1 ? 0.45 : 1,
+                }}
+              >
+                Precedente
+              </button>
 
-                <p
-                  style={{
-                    margin:
-                      '10px 0 0',
-                    fontSize: 13,
-                  }}
-                >
-                  Nessun film corrisponde ai filtri.
-                </p>
+              <span
+                style={{
+                  color: T.textFaint,
+                  fontSize: 9.5,
+                }}
+              >
+                {currentPage} / {totalPages}
+              </span>
 
-                {hasActiveFilters && (
-                  <button
-                    type="button"
-                    onClick={resetFilters}
-                    style={{
-                      marginTop: 12,
-                      border:
-                        `1px solid ${P.pink}`,
-                      background:
-                        P.pinkGlow,
-                      color: P.pink,
-                      padding:
-                        '8px 12px',
-                      borderRadius: 8,
-                      cursor: 'pointer',
-                      fontFamily:
-                        FONT_SANS,
-                      fontWeight: 800,
-                      fontSize: 11,
-                    }}
-                  >
-                    Azzera filtri
-                  </button>
-                )}
-              </div>
+              <button
+                type="button"
+                disabled={currentPage >= totalPages}
+                onClick={() =>
+                  setCurrentPage((page) =>
+                    Math.min(
+                      totalPages,
+                      page + 1
+                    )
+                  )
+                }
+                style={{
+                  border: `1px solid ${T.border}`,
+                  background: T.surface,
+                  color: T.textMuted,
+                  padding: '8px 10px',
+                  fontFamily: FONT.sans,
+                  fontSize: 9.5,
+                  fontWeight: 800,
+                  cursor:
+                    currentPage >= totalPages
+                      ? 'default'
+                      : 'pointer',
+                  opacity:
+                    currentPage >= totalPages
+                      ? 0.45
+                      : 1,
+                }}
+              >
+                Successiva
+              </button>
             </div>
           )}
         </section>

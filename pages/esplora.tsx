@@ -751,7 +751,6 @@ export default function EsploraFilmPage() {
             overflow: hidden;
             border: 1px solid ${P.border};
             background: ${P.bgSoft};
-            border-radius: 12px;
             transition: transform .23s ease, border-color .23s ease, box-shadow .23s ease;
           }
 

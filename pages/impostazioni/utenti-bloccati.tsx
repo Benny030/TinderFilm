@@ -2,42 +2,17 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import AppShell from '@/components/layout/AppShell';
-import { useAuth } from '@/hooks/useAuth';
-import { useTheme } from '@/context/ThemeContext';
-import { createBrowserClient } from '@/utils/supabase/browser';
 import {
-  ArrowLeft,
   Prohibit,
   UserCircle,
 } from '@phosphor-icons/react';
 
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  border: '#2d221c',
-  pink: '#ed3d73',
-  gold: '#f5b92f',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-};
-
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  border: '#d6cbbc',
-  pink: '#b83060',
-  gold: '#b8860b',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-};
-
-const FONT = "'Inter','Helvetica Neue',sans-serif";
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
+import AppShell from '@/components/layout/AppShell';
+import BackButton from '@/components/ui/BackButton';
+import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/context/ThemeContext';
+import { createBrowserClient } from '@/utils/supabase/browser';
+import { C, FONT, THEME } from '@/styles/token';
 
 type BlockedUser = {
   user_id: string;
@@ -59,8 +34,7 @@ export default function UtentiBloccatiPage() {
   const router = useRouter();
   const { currentUser, isGuest, isLoading } = useAuth();
   const { theme } = useTheme();
-  const P = theme === 'dark' ? D : L;
-
+  const T = theme === 'dark' ? THEME.dark : THEME.light;
   const supabase = useRef(createBrowserClient()).current;
 
   const [users, setUsers] = useState<BlockedUser[]>([]);
@@ -161,14 +135,18 @@ export default function UtentiBloccatiPage() {
       <div
         style={{
           minHeight: '100vh',
-          background: P.bg,
-          color: P.textMuted,
+          background: T.bg,
+          color: T.textMuted,
           display: 'grid',
           placeItems: 'center',
-          fontFamily: FONT,
+          fontFamily: FONT.sans,
         }}
       >
-        Caricamento...
+        <Prohibit
+          size={38}
+          color={T.primary}
+          weight="duotone"
+        />
       </div>
     );
   }
@@ -178,9 +156,9 @@ export default function UtentiBloccatiPage() {
       <main
         style={{
           minHeight: '100vh',
-          background: P.bg,
-          color: P.text,
-          fontFamily: FONT,
+          background: T.bg,
+          color: T.text,
+          fontFamily: FONT.sans,
           padding: '26px 18px 80px',
         }}
       >
@@ -191,29 +169,26 @@ export default function UtentiBloccatiPage() {
             margin: '0 auto',
           }}
         >
-          <button
-            type="button"
-            onClick={() => router.back()}
-            style={{
-              border: 0,
-              background: 'transparent',
-              color: P.textMuted,
-              padding: 0,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 18,
-              fontWeight: 700,
-            }}
-          >
-            <ArrowLeft size={16} />
-            Indietro
-          </button>
+          <div style={{ marginBottom: 18 }}>
+            <BackButton
+              onClick={() => {
+                if (
+                  typeof window !== 'undefined' &&
+                  window.history.length > 1
+                ) {
+                  router.back();
+                } else {
+                  void router.push('/profilo');
+                }
+              }}
+            />
+          </div>
 
           <header
             style={{
               marginBottom: 18,
+              borderBottom: `1px solid ${T.border}`,
+              paddingBottom: 18,
             }}
           >
             <div
@@ -221,7 +196,7 @@ export default function UtentiBloccatiPage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 7,
-                color: P.textFaint,
+                color: T.textFaint,
                 fontSize: 10,
                 textTransform: 'uppercase',
                 letterSpacing: '.09em',
@@ -229,7 +204,7 @@ export default function UtentiBloccatiPage() {
             >
               <Prohibit
                 size={16}
-                color={P.pink}
+                color={T.primary}
                 weight="fill"
               />
               Privacy e sicurezza
@@ -238,8 +213,8 @@ export default function UtentiBloccatiPage() {
             <h1
               style={{
                 margin: '6px 0 5px',
-                color: P.text,
-                fontFamily: FONT_DISPLAY,
+                color: T.text,
+                fontFamily: FONT.display,
                 fontSize: 30,
               }}
             >
@@ -249,9 +224,10 @@ export default function UtentiBloccatiPage() {
             <p
               style={{
                 margin: 0,
-                color: P.textMuted,
+                color: T.textMuted,
                 fontSize: 12,
                 lineHeight: 1.5,
+                maxWidth: 620,
               }}
             >
               Gli utenti bloccati non possono seguirti né
@@ -263,9 +239,9 @@ export default function UtentiBloccatiPage() {
             <div
               style={{
                 marginBottom: 12,
-                border: '1px solid rgba(239,68,68,.3)',
-                background: 'rgba(239,68,68,.08)',
-                color: '#fb7185',
+                border: `1px solid ${C.error}45`,
+                background: C.errorLight,
+                color: C.error,
                 padding: 11,
                 fontSize: 11,
               }}
@@ -277,35 +253,35 @@ export default function UtentiBloccatiPage() {
           {loading ? (
             <div
               style={{
-                border: `1px solid ${P.border}`,
-                background: P.card,
+                border: `1px solid ${T.border}`,
+                background: T.surface,
                 padding: 34,
                 textAlign: 'center',
-                color: P.textFaint,
+                color: T.textFaint,
                 fontSize: 12,
               }}
             >
-              Caricamento...
+              Caricamento…
             </div>
           ) : users.length === 0 ? (
             <div
               style={{
-                border: `1px dashed ${P.border}`,
-                background: P.card,
+                border: `1px dashed ${T.border}`,
+                background: T.surface,
                 padding: 40,
                 textAlign: 'center',
-                color: P.textFaint,
+                color: T.textFaint,
               }}
             >
               <UserCircle
                 size={34}
-                color={P.textFaint}
+                color={T.textFaint}
                 style={{ marginBottom: 7 }}
               />
 
               <div
                 style={{
-                  color: P.text,
+                  color: T.text,
                   fontSize: 13,
                   fontWeight: 800,
                   marginBottom: 4,
@@ -337,8 +313,8 @@ export default function UtentiBloccatiPage() {
                   <article
                     key={user.user_id}
                     style={{
-                      border: `1px solid ${P.border}`,
-                      background: P.card,
+                      border: `1px solid ${T.border}`,
+                      background: T.surface,
                       padding: 12,
                       display: 'grid',
                       gridTemplateColumns:
@@ -358,21 +334,23 @@ export default function UtentiBloccatiPage() {
                         width: 48,
                         height: 48,
                         borderRadius: '50%',
-                        border: 0,
+                        border: `1px solid ${T.border}`,
                         padding: 0,
                         overflow: 'hidden',
-                        background: P.bgSoft,
-                        color: P.pink,
+                        background: T.bgSoft,
+                        color: T.primary,
                         display: 'grid',
                         placeItems: 'center',
                         cursor: 'pointer',
                         fontWeight: 900,
+                        fontFamily: FONT.sans,
                       }}
                     >
                       {user.avatar_url ? (
                         <img
                           src={user.avatar_url}
-                          alt=""
+                          alt={`Avatar di ${user.username}`}
+                          referrerPolicy="no-referrer"
                           style={{
                             width: '100%',
                             height: '100%',
@@ -400,11 +378,11 @@ export default function UtentiBloccatiPage() {
                           border: 0,
                           background: 'transparent',
                           padding: 0,
-                          color: P.text,
+                          color: T.text,
                           cursor: 'pointer',
                           fontWeight: 800,
                           fontSize: 12,
-                          fontFamily: FONT,
+                          fontFamily: FONT.sans,
                         }}
                       >
                         @{user.username}
@@ -412,7 +390,7 @@ export default function UtentiBloccatiPage() {
 
                       <div
                         style={{
-                          color: P.textFaint,
+                          color: T.textFaint,
                           fontSize: 9,
                           marginTop: 3,
                           overflow: 'hidden',
@@ -425,7 +403,7 @@ export default function UtentiBloccatiPage() {
 
                       <div
                         style={{
-                          color: P.textFaint,
+                          color: T.textFaint,
                           fontSize: 8,
                           marginTop: 4,
                         }}
@@ -439,19 +417,19 @@ export default function UtentiBloccatiPage() {
                       onClick={() => void unblock(user)}
                       disabled={busy}
                       style={{
-                        border: `1px solid ${P.gold}`,
-                        background: 'transparent',
-                        color: P.gold,
+                        border: `1px solid ${T.accent}`,
+                        background: T.accentGlow,
+                        color: T.accent,
                         padding: '8px 10px',
                         cursor: busy ? 'wait' : 'pointer',
                         opacity: busy ? 0.55 : 1,
-                        fontFamily: FONT,
+                        fontFamily: FONT.sans,
                         fontSize: 9,
                         fontWeight: 800,
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {busy ? 'Attendi...' : 'Sblocca'}
+                      {busy ? 'Attendi…' : 'Sblocca'}
                     </button>
                   </article>
                 );

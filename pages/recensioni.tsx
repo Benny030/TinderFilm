@@ -32,6 +32,10 @@ import { useTheme } from '@/context/ThemeContext';
 import { FONT, THEME } from '@/styles/token';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import { ensureTmdbMovie } from '@/utils/movieEntries';
+import {
+  moderateText,
+  moderationMessage,
+} from '@/utils/contentModeration';
 
 type PublicReview = {
   entry_id: string;
@@ -203,6 +207,7 @@ export default function RecensioniPage() {
   >(null);
   const [commentDraft, setCommentDraft] = useState('');
   const [commentSaving, setCommentSaving] = useState(false);
+  const [commentError, setCommentError] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentText, setEditingCommentText] = useState('');
 
@@ -546,23 +551,58 @@ export default function RecensioniPage() {
     const cleanText = commentDraft.trim();
     if (!cleanText || commentSaving) return;
 
+    const moderation = moderateText(cleanText, 'comment');
+
+    if (!moderation.allowed) {
+      setCommentError(
+        moderationMessage(moderation, 'comment')
+      );
+      return;
+    }
+
     setCommentSaving(true);
+    setCommentError('');
 
     try {
-      const { error } = await supabase
-        .from('user_movie_review_comments')
-        .insert({
-          entry_id: entryId,
-          user_id: currentUser.id,
-          text: cleanText,
-        });
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (error) throw error;
+      const token = session?.access_token;
+
+      if (!token) {
+        throw new Error('Sessione non disponibile.');
+      }
+
+      const response = await fetch('/api/reviews/comment', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          entry_id: entryId,
+          text: cleanText,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || 'Impossibile pubblicare il commento.'
+        );
+      }
 
       setCommentDraft('');
       await loadComments(entryId);
     } catch (error) {
       console.error('Review comment create failed:', error);
+      setCommentError(
+        error instanceof Error
+          ? error.message
+          : 'Impossibile pubblicare il commento.'
+      );
     } finally {
       setCommentSaving(false);
     }
@@ -577,22 +617,59 @@ export default function RecensioniPage() {
     const cleanText = editingCommentText.trim();
     if (!cleanText || commentSaving) return;
 
+    const moderation = moderateText(cleanText, 'comment');
+
+    if (!moderation.allowed) {
+      setCommentError(
+        moderationMessage(moderation, 'comment')
+      );
+      return;
+    }
+
     setCommentSaving(true);
+    setCommentError('');
 
     try {
-      const { error } = await supabase
-        .from('user_movie_review_comments')
-        .update({ text: cleanText })
-        .eq('id', commentId)
-        .eq('user_id', currentUser.id);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (error) throw error;
+      const token = session?.access_token;
+
+      if (!token) {
+        throw new Error('Sessione non disponibile.');
+      }
+
+      const response = await fetch('/api/reviews/comment', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          comment_id: commentId,
+          text: cleanText,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || 'Impossibile aggiornare il commento.'
+        );
+      }
 
       setEditingCommentId(null);
       setEditingCommentText('');
       await loadComments(entryId);
     } catch (error) {
       console.error('Review comment update failed:', error);
+      setCommentError(
+        error instanceof Error
+          ? error.message
+          : 'Impossibile aggiornare il commento.'
+      );
     } finally {
       setCommentSaving(false);
     }
@@ -800,6 +877,15 @@ export default function RecensioniPage() {
       return;
     }
 
+    const moderation = moderateText(cleanText, 'review');
+
+    if (!moderation.allowed) {
+      setModalError(
+        moderationMessage(moderation, 'review')
+      );
+      return;
+    }
+
     setSavingReview(true);
     setModalError('');
 
@@ -809,41 +895,36 @@ export default function RecensioniPage() {
         selectedMovie.tmdb_id
       );
 
-      const { data: existing, error: existingError } = await supabase
-        .from('user_movie_entries')
-        .select('id')
-        .eq('user_id', currentUser.id)
-        .eq('movie_id', movie.id)
-        .maybeSingle();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      if (existingError) throw existingError;
+      const token = session?.access_token;
 
-      const payload = {
-        rating,
-        review_text: cleanText,
-        review_visibility: 'public',
-        rating_visibility:
-          rating !== null && publishRating ? 'public' : 'private',
-      };
+      if (!token) {
+        throw new Error('Sessione non disponibile.');
+      }
 
-      if (existing?.id) {
-        const { error } = await supabase
-          .from('user_movie_entries')
-          .update(payload)
-          .eq('id', existing.id)
-          .eq('user_id', currentUser.id);
+      const response = await fetch('/api/reviews/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          movie_id: movie.id,
+          review_text: cleanText,
+          rating,
+          publish_rating: publishRating,
+        }),
+      });
 
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from('user_movie_entries')
-          .insert({
-            user_id: currentUser.id,
-            movie_id: movie.id,
-            ...payload,
-          });
+      const data = await response.json().catch(() => ({}));
 
-        if (error) throw error;
+      if (!response.ok) {
+        throw new Error(
+          data.error || 'Impossibile pubblicare la recensione.'
+        );
       }
 
       closeModal();
@@ -2593,14 +2674,28 @@ export default function RecensioniPage() {
                                     )}
                                   </div>
 
+                                  {commentError && (
+                                    <div
+                                      style={{
+                                        marginBottom: 7,
+                                        color: P.primary,
+                                        fontSize: 9,
+                                        lineHeight: 1.45,
+                                      }}
+                                    >
+                                      {commentError}
+                                    </div>
+                                  )}
+
                                   <div className="cdr-community-compose">
                                     <textarea
                                       value={commentDraft}
                                       maxLength={1000}
                                       placeholder="Scrivi un commento..."
-                                      onChange={(event) =>
-                                        setCommentDraft(event.target.value)
-                                      }
+                                      onChange={(event) => {
+                                        setCommentDraft(event.target.value);
+                                        setCommentError('');
+                                      }}
                                       onKeyDown={(event) => {
                                         if (
                                           event.key === 'Enter' &&

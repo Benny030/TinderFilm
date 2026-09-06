@@ -1825,7 +1825,7 @@ export default function AdminSegnalazioniPage() {
           </div>
         )}
 
-        <style jsx global>{`
+        <style>{`
           @media (max-width: 720px) {
             .admin-report-stats,
             .admin-report-info-grid {

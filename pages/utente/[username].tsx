@@ -2,13 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import AppShell from '@/components/layout/AppShell';
-import ReportModal from '@/components/social/ReportModal';
-import { useAuth } from '@/hooks/useAuth';
-import { useTheme } from '@/context/ThemeContext';
-import { createBrowserClient } from '@/utils/supabase/browser';
 import {
-  ArrowLeft,
   ChatCircle,
   DotsThreeVertical,
   FilmSlate,
@@ -22,34 +16,13 @@ import {
   UsersThree,
 } from '@phosphor-icons/react';
 
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  border: '#2d221c',
-  gold: '#f5b92f',
-  pink: '#ed3d73',
-  pinkGlow: 'rgba(237,61,115,0.15)',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-};
-
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  border: '#d6cbbc',
-  gold: '#b8860b',
-  pink: '#b83060',
-  pinkGlow: 'rgba(184,48,96,0.10)',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-};
-
-const FONT = "'Inter','Helvetica Neue',sans-serif";
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
+import AppShell from '@/components/layout/AppShell';
+import BackButton from '@/components/ui/BackButton';
+import ReportModal from '@/components/social/ReportModal';
+import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/context/ThemeContext';
+import { createBrowserClient } from '@/utils/supabase/browser';
+import { FONT, THEME } from '@/styles/token';
 
 type PublicProfile = {
   user_id: string;
@@ -116,8 +89,7 @@ export default function PublicUserPage() {
   const router = useRouter();
   const { currentUser, isGuest, isLoading } = useAuth();
   const { theme } = useTheme();
-
-  const P = theme === 'dark' ? D : L;
+  const T = theme === 'dark' ? THEME.dark : THEME.light;
   const supabase = useRef(createBrowserClient()).current;
 
   const username =
@@ -127,9 +99,7 @@ export default function PublicUserPage() {
 
   const [profile, setProfile] = useState<PublicProfile | null>(null);
   const [reviews, setReviews] = useState<PublicReview[]>([]);
-  const [publicLibrary, setPublicLibrary] = useState<
-    PublicLibraryItem[]
-  >([]);
+  const [publicLibrary, setPublicLibrary] = useState<PublicLibraryItem[]>([]);
   const [privacy, setPrivacy] = useState<PublicPrivacy | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -149,7 +119,6 @@ export default function PublicUserPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [compatibility, setCompatibility] = useState<Compatibility | null>(null);
-
 
   useEffect(() => {
     if (isLoading) return;
@@ -180,7 +149,6 @@ export default function PublicUserPage() {
           supabase.rpc('get_public_user_profile', {
             p_username: username,
           }),
-
           supabase.rpc('get_public_user_reviews', {
             p_username: username,
             p_limit: 50,
@@ -197,20 +165,13 @@ export default function PublicUserPage() {
             ? (profileResult.data[0] as PublicProfile)
             : null;
 
-        /*
-         * Se get_public_user_profile non restituisce il profilo,
-         * controlliamo se non esiste oppure se non è disponibile.
-         */
         if (!profileRow) {
           const {
             data: accessStatus,
             error: accessError,
-          } = await supabase.rpc(
-            'get_public_user_access_status',
-            {
-              p_username: username,
-            }
-          );
+          } = await supabase.rpc('get_public_user_access_status', {
+            p_username: username,
+          });
 
           if (accessError) throw accessError;
 
@@ -233,10 +194,6 @@ export default function PublicUserPage() {
 
         setProfile(profileRow);
 
-        /*
-         * COMPATIBILITÀ CON IL PROFILO VISITATO
-         * Riutilizza get_people_suggestions v2 e prende solo questo utente.
-         */
         if (currentUser.id !== profileRow.user_id) {
           const { data: compatibilityRows, error: compatibilityError } =
             await supabase.rpc('get_people_compatibilities', {
@@ -273,14 +230,10 @@ export default function PublicUserPage() {
           setCompatibility(null);
         }
 
-        /*
-         * PRIVACY + LIBRERIA PUBBLICA
-         */
         const [privacyResult, libraryResult] = await Promise.all([
           supabase.rpc('get_public_user_privacy', {
             p_user_id: profileRow.user_id,
           }),
-
           supabase.rpc('get_public_user_library', {
             p_user_id: profileRow.user_id,
           }),
@@ -296,26 +249,15 @@ export default function PublicUserPage() {
             : null;
 
         setPrivacy(privacyRow);
+        setPublicLibrary((libraryResult.data ?? []) as PublicLibraryItem[]);
 
-        setPublicLibrary(
-          (libraryResult.data ?? []) as PublicLibraryItem[]
-        );
-
-        /*
-         * RECENSIONI
-         */
         setReviews(
-          ((reviewsResult.data ?? []) as PublicReview[]).map(
-            (review) => ({
-              ...review,
-              likes_count: Number(review.likes_count ?? 0),
-            })
-          )
+          ((reviewsResult.data ?? []) as PublicReview[]).map((review) => ({
+            ...review,
+            likes_count: Number(review.likes_count ?? 0),
+          }))
         );
 
-        /*
-         * FOLLOW
-         */
         const [
           followersResult,
           followingResult,
@@ -323,20 +265,12 @@ export default function PublicUserPage() {
         ] = await Promise.all([
           supabase
             .from('user_follows')
-            .select('*', {
-              count: 'exact',
-              head: true,
-            })
+            .select('*', { count: 'exact', head: true })
             .eq('following_id', profileRow.user_id),
-
           supabase
             .from('user_follows')
-            .select('*', {
-              count: 'exact',
-              head: true,
-            })
+            .select('*', { count: 'exact', head: true })
             .eq('follower_id', profileRow.user_id),
-
           currentUser.id === profileRow.user_id
             ? Promise.resolve({
                 data: null,
@@ -358,24 +292,19 @@ export default function PublicUserPage() {
         setFollowingCount(followingResult.count ?? 0);
         setIsFollowing(Boolean(myFollowResult.data));
 
-        /*
-         * BLOCCO
-         */
         if (currentUser.id !== profileRow.user_id) {
-          const [myBlockResult, anyBlockResult] =
-            await Promise.all([
-              supabase
-                .from('user_blocks')
-                .select('blocker_id')
-                .eq('blocker_id', currentUser.id)
-                .eq('blocked_id', profileRow.user_id)
-                .maybeSingle(),
-
-              supabase.rpc('users_are_blocked', {
-                p_user_a: currentUser.id,
-                p_user_b: profileRow.user_id,
-              }),
-            ]);
+          const [myBlockResult, anyBlockResult] = await Promise.all([
+            supabase
+              .from('user_blocks')
+              .select('blocker_id')
+              .eq('blocker_id', currentUser.id)
+              .eq('blocked_id', profileRow.user_id)
+              .maybeSingle(),
+            supabase.rpc('users_are_blocked', {
+              p_user_a: currentUser.id,
+              p_user_b: profileRow.user_id,
+            }),
+          ]);
 
           if (myBlockResult.error) throw myBlockResult.error;
           if (anyBlockResult.error) throw anyBlockResult.error;
@@ -407,16 +336,8 @@ export default function PublicUserPage() {
     };
 
     void load();
-  }, [
-    router.isReady,
-    username,
-    currentUser,
-    supabase,
-  ]);
+  }, [router.isReady, username, currentUser, supabase]);
 
-  /*
-   * FOLLOW / UNFOLLOW
-   */
   const toggleFollow = async () => {
     if (
       !profile ||
@@ -444,11 +365,7 @@ export default function PublicUserPage() {
         if (unfollowError) throw unfollowError;
 
         setIsFollowing(false);
-
-        setFollowersCount((current) =>
-          Math.max(0, current - 1)
-        );
-
+        setFollowersCount((current) => Math.max(0, current - 1));
         return;
       }
 
@@ -476,9 +393,6 @@ export default function PublicUserPage() {
     }
   };
 
-  /*
-   * BLOCCA / SBLOCCA
-   */
   const toggleBlock = async () => {
     if (
       !profile ||
@@ -515,7 +429,6 @@ export default function PublicUserPage() {
 
         setIsBlocked(false);
         setBlockedByOther(false);
-
         return;
       }
 
@@ -531,24 +444,16 @@ export default function PublicUserPage() {
       setIsBlocked(true);
       setIsFollowing(false);
 
-      const [followersResult, followingResult] =
-        await Promise.all([
-          supabase
-            .from('user_follows')
-            .select('*', {
-              count: 'exact',
-              head: true,
-            })
-            .eq('following_id', profile.user_id),
-
-          supabase
-            .from('user_follows')
-            .select('*', {
-              count: 'exact',
-              head: true,
-            })
-            .eq('follower_id', profile.user_id),
-        ]);
+      const [followersResult, followingResult] = await Promise.all([
+        supabase
+          .from('user_follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('following_id', profile.user_id),
+        supabase
+          .from('user_follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('follower_id', profile.user_id),
+      ]);
 
       if (!followersResult.error) {
         setFollowersCount(followersResult.count ?? 0);
@@ -570,20 +475,14 @@ export default function PublicUserPage() {
     }
   };
 
-  /*
-   * STATISTICHE
-   */
   const averageRating = useMemo(() => {
-    const rated = reviews.filter(
-      (review) => review.rating !== null
-    );
+    const rated = reviews.filter((review) => review.rating !== null);
 
     if (rated.length === 0) return null;
 
     return (
       rated.reduce(
-        (total, review) =>
-          total + Number(review.rating),
+        (total, review) => total + Number(review.rating),
         0
       ) / rated.length
     );
@@ -592,13 +491,11 @@ export default function PublicUserPage() {
   const totalLikes = useMemo(
     () =>
       reviews.reduce(
-        (total, review) =>
-          total + Number(review.likes_count ?? 0),
+        (total, review) => total + Number(review.likes_count ?? 0),
         0
       ),
     [reviews]
   );
-
 
   const recentActivity = useMemo(
     () =>
@@ -617,9 +514,6 @@ export default function PublicUserPage() {
     [reviews]
   );
 
-  /*
-   * LIBRERIA PUBBLICA
-   */
   const publicFavorites = useMemo(
     () =>
       publicLibrary.filter(
@@ -654,31 +548,34 @@ export default function PublicUserPage() {
       <div
         style={{
           minHeight: '100vh',
-          background: P.bg,
+          background: T.bg,
           display: 'grid',
           placeItems: 'center',
-          color: P.textMuted,
-          fontFamily: FONT,
+          color: T.textMuted,
+          fontFamily: FONT.sans,
         }}
       >
         <FilmSlate
           size={42}
-          color={P.pink}
+          color={T.primary}
           weight="duotone"
         />
       </div>
     );
   }
 
+  const blocked = isBlocked || blockedByOther;
+  const isOwnProfile = profile?.user_id === currentUser.id;
+
   return (
     <AppShell activeNav="recensioni">
       <main
         style={{
           minHeight: '100vh',
-          background: P.bg,
-          color: P.text,
-          fontFamily: FONT,
-          padding: '26px 18px 80px',
+          background: T.bg,
+          color: T.text,
+          fontFamily: FONT.sans,
+          padding: '24px 18px 80px',
         }}
       >
         <div
@@ -688,44 +585,39 @@ export default function PublicUserPage() {
             margin: '0 auto',
           }}
         >
-          <button
-            type="button"
-            onClick={() => router.back()}
-            style={{
-              border: 0,
-              background: 'transparent',
-              color: P.textMuted,
-              padding: 0,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              cursor: 'pointer',
-              fontWeight: 700,
-              marginBottom: 18,
-            }}
-          >
-            <ArrowLeft size={16} />
-            Indietro
-          </button>
+          <div style={{ marginBottom: 18 }}>
+            <BackButton
+              onClick={() => {
+                if (
+                  typeof window !== 'undefined' &&
+                  window.history.length > 1
+                ) {
+                  router.back();
+                } else {
+                  void router.push('/home');
+                }
+              }}
+            />
+          </div>
 
           {loading ? (
             <div
               style={{
-                border: `1px solid ${P.border}`,
-                background: P.card,
+                border: `1px solid ${T.border}`,
+                background: T.surface,
                 padding: 40,
                 textAlign: 'center',
-                color: P.textFaint,
+                color: T.textFaint,
               }}
             >
-              Caricamento profilo...
+              Caricamento profilo…
             </div>
           ) : error ? (
             <div
               style={{
-                border: '1px solid rgba(239,68,68,.3)',
-                background: 'rgba(239,68,68,.08)',
-                color: '#fb7185',
+                border: `1px solid ${T.primary}55`,
+                background: T.primaryGlow,
+                color: T.primary,
                 padding: 18,
               }}
             >
@@ -734,23 +626,23 @@ export default function PublicUserPage() {
           ) : unavailable ? (
             <div
               style={{
-                border: `1px solid ${P.border}`,
-                background: P.card,
+                border: `1px solid ${T.border}`,
+                background: T.surface,
                 padding: 40,
                 textAlign: 'center',
               }}
             >
               <Prohibit
                 size={40}
-                color={P.textFaint}
+                color={T.textFaint}
                 weight="duotone"
               />
 
               <h1
                 style={{
-                  fontFamily: FONT_DISPLAY,
-                  color: P.text,
-                  fontSize: 24,
+                  fontFamily: FONT.display,
+                  color: T.text,
+                  fontSize: 26,
                   marginBottom: 8,
                 }}
               >
@@ -760,31 +652,30 @@ export default function PublicUserPage() {
               <p
                 style={{
                   margin: 0,
-                  color: P.textMuted,
+                  color: T.textMuted,
                   fontSize: 12,
                   lineHeight: 1.6,
                 }}
               >
-                Questo profilo non è disponibile per il tuo
-                account.
+                Questo profilo non è disponibile per il tuo account.
               </p>
             </div>
           ) : notFound || !profile ? (
             <div
               style={{
-                border: `1px solid ${P.border}`,
-                background: P.card,
+                border: `1px solid ${T.border}`,
+                background: T.surface,
                 padding: 40,
                 textAlign: 'center',
               }}
             >
-              <UserCircle size={40} color={P.textFaint} />
+              <UserCircle size={40} color={T.textFaint} />
 
               <h1
                 style={{
-                  fontFamily: FONT_DISPLAY,
-                  color: P.text,
-                  fontSize: 24,
+                  fontFamily: FONT.display,
+                  color: T.text,
+                  fontSize: 26,
                 }}
               >
                 Profilo non trovato
@@ -792,32 +683,32 @@ export default function PublicUserPage() {
             </div>
           ) : (
             <>
-              {/* PROFILO */}
-
               <section
-                className="public-profile-head"
+                className="cdr-public-profile-head"
                 style={{
-                  border: `1px solid ${P.border}`,
-                  background: P.card,
-                  padding: 24,
+                  position: 'relative',
+                  borderTop: `1px solid ${T.border}`,
+                  borderBottom: `1px solid ${T.border}`,
+                  padding: '24px 0 22px',
                   display: 'grid',
-                  gridTemplateColumns: '96px minmax(0,1fr)',
-                  gap: 20,
+                  gridTemplateColumns: '112px minmax(0,1fr)',
+                  gap: 24,
                   alignItems: 'center',
-                  marginBottom: 18,
+                  marginBottom: 22,
                 }}
               >
                 <div
                   style={{
-                    width: 96,
-                    height: 96,
+                    width: 112,
+                    height: 112,
                     borderRadius: '50%',
                     overflow: 'hidden',
-                    background: P.pinkGlow,
+                    background: T.primaryGlow,
+                    border: `1px solid ${T.border}`,
                     display: 'grid',
                     placeItems: 'center',
-                    color: P.pink,
-                    fontSize: 36,
+                    color: T.primary,
+                    fontSize: 40,
                     fontWeight: 900,
                   }}
                 >
@@ -825,6 +716,7 @@ export default function PublicUserPage() {
                     <img
                       src={profile.avatar_url}
                       alt={`Avatar di ${profile.username}`}
+                      referrerPolicy="no-referrer"
                       style={{
                         width: '100%',
                         height: '100%',
@@ -839,10 +731,11 @@ export default function PublicUserPage() {
                 <div style={{ minWidth: 0 }}>
                   <div
                     style={{
-                      color: P.textFaint,
-                      fontSize: 10,
+                      color: T.accent,
+                      fontSize: 9,
                       textTransform: 'uppercase',
-                      letterSpacing: '.1em',
+                      letterSpacing: '.13em',
+                      fontWeight: 900,
                     }}
                   >
                     Profilo pubblico
@@ -859,17 +752,18 @@ export default function PublicUserPage() {
                   >
                     <h1
                       style={{
-                        margin: '4px 0 7px',
-                        fontFamily: FONT_DISPLAY,
-                        color: P.text,
-                        fontSize: 'clamp(26px,4vw,36px)',
+                        margin: '5px 0 8px',
+                        fontFamily: FONT.display,
+                        color: T.text,
+                        fontSize: 'clamp(30px,4vw,42px)',
+                        lineHeight: 1,
                         overflowWrap: 'anywhere',
                       }}
                     >
                       @{profile.username}
                     </h1>
 
-                    {currentUser.id !== profile.user_id && (
+                    {!isOwnProfile && (
                       <div
                         style={{
                           display: 'flex',
@@ -878,24 +772,22 @@ export default function PublicUserPage() {
                           position: 'relative',
                         }}
                       >
-                        {!isBlocked && !blockedByOther && (
+                        {!blocked && (
                           <button
                             type="button"
                             onClick={() => void toggleFollow()}
                             disabled={followLoading}
                             style={{
                               border: `1px solid ${
-                                isFollowing
-                                  ? P.border
-                                  : P.pink
+                                isFollowing ? T.border : T.primary
                               }`,
                               background: isFollowing
-                                ? P.bgSoft
-                                : P.pink,
+                                ? T.surface
+                                : T.primary,
                               color: isFollowing
-                                ? P.textMuted
-                                : '#ffffff',
-                              padding: '10px 14px',
+                                ? T.textMuted
+                                : '#fff',
+                              padding: '9px 13px',
                               cursor: followLoading
                                 ? 'wait'
                                 : 'pointer',
@@ -903,43 +795,35 @@ export default function PublicUserPage() {
                               display: 'inline-flex',
                               alignItems: 'center',
                               gap: 7,
-                              fontFamily: FONT,
-                              fontSize: 11,
-                              fontWeight: 800,
+                              fontFamily: FONT.sans,
+                              fontSize: 10.5,
+                              fontWeight: 850,
                             }}
                           >
                             {isFollowing ? (
-                              <UserCheck
-                                size={16}
-                                weight="fill"
-                              />
+                              <UserCheck size={15} weight="fill" />
                             ) : (
-                              <UserPlus
-                                size={16}
-                                weight="bold"
-                              />
+                              <UserPlus size={15} weight="bold" />
                             )}
 
                             {followLoading
-                              ? 'Attendi...'
+                              ? 'Attendi…'
                               : isFollowing
-                              ? 'Segui già'
-                              : 'Segui'}
+                                ? 'Segui già'
+                                : 'Segui'}
                           </button>
                         )}
 
                         <button
                           type="button"
-                          onClick={() =>
-                            setMenuOpen((open) => !open)
-                          }
+                          onClick={() => setMenuOpen((open) => !open)}
                           aria-label="Altre azioni"
                           style={{
-                            width: 38,
-                            height: 38,
-                            border: `1px solid ${P.border}`,
-                            background: P.bgSoft,
-                            color: P.textMuted,
+                            width: 36,
+                            height: 36,
+                            border: `1px solid ${T.border}`,
+                            background: 'transparent',
+                            color: T.textMuted,
                             cursor: 'pointer',
                             display: 'grid',
                             placeItems: 'center',
@@ -956,14 +840,13 @@ export default function PublicUserPage() {
                             style={{
                               position: 'absolute',
                               right: 0,
-                              top: 44,
+                              top: 42,
                               zIndex: 30,
                               minWidth: 180,
-                              border: `1px solid ${P.border}`,
-                              background: P.card,
+                              border: `1px solid ${T.border}`,
+                              background: T.surface,
                               padding: 5,
-                              boxShadow:
-                                '0 14px 36px rgba(0,0,0,.28)',
+                              boxShadow: '0 14px 36px rgba(0,0,0,.22)',
                             }}
                           >
                             {!isBlocked && (
@@ -977,14 +860,11 @@ export default function PublicUserPage() {
                                   width: '100%',
                                   border: 0,
                                   background: 'transparent',
-                                  color: P.textMuted,
+                                  color: T.textMuted,
                                   padding: '9px 10px',
                                   cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 7,
                                   textAlign: 'left',
-                                  fontFamily: FONT,
+                                  fontFamily: FONT.sans,
                                   fontSize: 10,
                                   fontWeight: 800,
                                 }}
@@ -995,40 +875,30 @@ export default function PublicUserPage() {
 
                             <button
                               type="button"
-                              onClick={() =>
-                                void toggleBlock()
-                              }
+                              onClick={() => void toggleBlock()}
                               disabled={blockLoading}
                               style={{
                                 width: '100%',
                                 border: 0,
                                 background: 'transparent',
-                                color: isBlocked
-                                  ? P.gold
-                                  : '#ef4444',
+                                color: isBlocked ? T.accent : '#ef4444',
                                 padding: '9px 10px',
-                                cursor: blockLoading
-                                  ? 'wait'
-                                  : 'pointer',
+                                cursor: blockLoading ? 'wait' : 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
                                 gap: 7,
                                 textAlign: 'left',
-                                fontFamily: FONT,
+                                fontFamily: FONT.sans,
                                 fontSize: 10,
                                 fontWeight: 800,
                               }}
                             >
-                              <Prohibit
-                                size={15}
-                                weight="bold"
-                              />
-
+                              <Prohibit size={15} weight="bold" />
                               {blockLoading
-                                ? 'Attendi...'
+                                ? 'Attendi…'
                                 : isBlocked
-                                ? 'Sblocca utente'
-                                : 'Blocca utente'}
+                                  ? 'Sblocca utente'
+                                  : 'Blocca utente'}
                             </button>
                           </div>
                         )}
@@ -1039,24 +909,23 @@ export default function PublicUserPage() {
                   <p
                     style={{
                       margin: 0,
-                      color: P.textMuted,
+                      color: T.textMuted,
                       fontSize: 13,
-                      lineHeight: 1.6,
-                      maxWidth: 620,
+                      lineHeight: 1.65,
+                      maxWidth: 650,
                       overflowWrap: 'anywhere',
                     }}
                   >
-                    {profile.bio?.trim() ||
-                      'Nessuna bio pubblica.'}
+                    {profile.bio?.trim() || 'Nessuna bio pubblica.'}
                   </p>
 
-                  {(isBlocked || blockedByOther) && (
+                  {blocked && (
                     <div
                       style={{
-                        marginTop: 10,
-                        border: `1px solid ${P.border}`,
-                        background: P.bgSoft,
-                        color: P.textFaint,
+                        marginTop: 11,
+                        borderLeft: `2px solid ${T.textFaint}`,
+                        background: T.bgSoft,
+                        color: T.textFaint,
                         padding: '8px 10px',
                         fontSize: 10,
                         lineHeight: 1.5,
@@ -1068,13 +937,13 @@ export default function PublicUserPage() {
                     </div>
                   )}
 
-                  {!isBlocked && !blockedByOther && (
+                  {!blocked && (
                     <div
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: 18,
-                        marginTop: 12,
+                        marginTop: 13,
                         flexWrap: 'wrap',
                       }}
                     >
@@ -1091,25 +960,23 @@ export default function PublicUserPage() {
                           border: 0,
                           background: 'transparent',
                           padding: 0,
-                          color: P.textMuted,
-                          fontSize: 11,
+                          color: T.textMuted,
+                          fontSize: 10.5,
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: 5,
-                          fontFamily: FONT,
+                          fontFamily: FONT.sans,
                         }}
                       >
                         <UsersThree
                           size={14}
-                          color={P.pink}
+                          color={T.primary}
                           weight="fill"
                         />
-
-                        <strong style={{ color: P.text }}>
+                        <strong style={{ color: T.text }}>
                           {followersCount}
                         </strong>
-
                         follower
                       </button>
 
@@ -1126,25 +993,23 @@ export default function PublicUserPage() {
                           border: 0,
                           background: 'transparent',
                           padding: 0,
-                          color: P.textMuted,
-                          fontSize: 11,
+                          color: T.textMuted,
+                          fontSize: 10.5,
                           cursor: 'pointer',
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: 5,
-                          fontFamily: FONT,
+                          fontFamily: FONT.sans,
                         }}
                       >
                         <UserCheck
                           size={14}
-                          color={P.gold}
+                          color={T.accent}
                           weight="fill"
                         />
-
-                        <strong style={{ color: P.text }}>
+                        <strong style={{ color: T.text }}>
                           {followingCount}
                         </strong>
-
                         seguiti
                       </button>
                     </div>
@@ -1152,38 +1017,72 @@ export default function PublicUserPage() {
                 </div>
               </section>
 
-              {!isBlocked &&
-                !blockedByOther &&
-                currentUser.id !== profile.user_id &&
+              {!blocked &&
+                !isOwnProfile &&
                 compatibility &&
                 compatibility.compatibility_score > 0 && (
                   <section
                     style={{
-                      border: `1px solid ${P.border}`,
-                      background: P.card,
-                      padding: 16,
-                      marginBottom: 18,
+                      borderTop: `1px solid ${T.border}`,
+                      borderBottom: `1px solid ${T.border}`,
+                      padding: '18px 0',
+                      marginBottom: 22,
                     }}
                   >
                     <div
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 7,
-                        color: P.gold,
-                        fontSize: 10,
-                        fontWeight: 900,
-                        textTransform: 'uppercase',
-                        letterSpacing: '.09em',
-                        marginBottom: 10,
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        marginBottom: 12,
                       }}
                     >
-                      <Sparkle size={15} weight="fill" />
-                      Gusti in comune
+                      <div>
+                        <div
+                          style={{
+                            color: T.accent,
+                            fontSize: 9,
+                            fontWeight: 900,
+                            textTransform: 'uppercase',
+                            letterSpacing: '.12em',
+                          }}
+                        >
+                          <Sparkle
+                            size={13}
+                            weight="fill"
+                            style={{ marginRight: 5, verticalAlign: -2 }}
+                          />
+                          Affinità
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 4,
+                            fontFamily: FONT.display,
+                            color: T.text,
+                            fontSize: 21,
+                            fontWeight: 800,
+                          }}
+                        >
+                          Gusti in comune
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          color: T.accent,
+                          fontFamily: FONT.display,
+                          fontSize: 27,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {Math.round(compatibility.compatibility_score)}%
+                      </div>
                     </div>
 
                     <div
-                      className="compatibility-grid"
+                      className="cdr-compatibility-grid"
                       style={{
                         display: 'grid',
                         gridTemplateColumns: 'repeat(3,minmax(0,1fr))',
@@ -1207,23 +1106,25 @@ export default function PublicUserPage() {
                         <div
                           key={item.label}
                           style={{
-                            border: `1px solid ${P.border}`,
-                            background: P.bgSoft,
-                            padding: 11,
+                            border: `1px solid ${T.border}`,
+                            background: T.surface,
+                            padding: 12,
                           }}
                         >
                           <strong
                             style={{
                               display: 'block',
-                              color: P.text,
-                              fontSize: 18,
+                              color: T.text,
+                              fontSize: 20,
+                              fontFamily: FONT.display,
                             }}
                           >
                             {item.value}
                           </strong>
+
                           <span
                             style={{
-                              color: P.textFaint,
+                              color: T.textFaint,
                               fontSize: 9,
                             }}
                           >
@@ -1238,329 +1139,278 @@ export default function PublicUserPage() {
                         style={{
                           display: 'flex',
                           flexWrap: 'wrap',
-                          gap: 6,
-                          marginTop: 10,
+                          gap: 10,
+                          marginTop: 11,
+                          color: T.accent,
+                          fontSize: 9.5,
+                          fontWeight: 800,
                         }}
                       >
-                        {compatibility.shared_genres.slice(0, 5).map((genre) => (
-                          <span
-                            key={genre}
-                            style={{
-                              border: `1px solid ${P.gold}55`,
-                              background: `${P.gold}12`,
-                              color: P.gold,
-                              padding: '4px 7px',
-                              fontSize: 9,
-                              fontWeight: 800,
-                            }}
-                          >
-                            {genre}
-                          </span>
-                        ))}
+                        {compatibility.shared_genres
+                          .slice(0, 5)
+                          .map((genre, index) => (
+                            <span key={genre}>
+                              {index > 0 ? '· ' : ''}
+                              {genre}
+                            </span>
+                          ))}
                       </div>
                     )}
                   </section>
                 )}
 
-              {!isBlocked &&
-                !blockedByOther &&
-                recentActivity.length > 0 && (
-                  <section
+              {!blocked && recentActivity.length > 0 && (
+                <section
+                  style={{
+                    marginBottom: 24,
+                  }}
+                >
+                  <div
                     style={{
-                      border: `1px solid ${P.border}`,
-                      background: P.card,
-                      padding: 16,
-                      marginBottom: 18,
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      marginBottom: 10,
                     }}
                   >
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                        marginBottom: 10,
-                      }}
-                    >
+                    <div>
                       <div
                         style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 7,
-                          color: P.gold,
-                          fontSize: 10,
+                          color: T.primary,
+                          fontSize: 9,
                           fontWeight: 900,
                           textTransform: 'uppercase',
-                          letterSpacing: '.09em',
+                          letterSpacing: '.12em',
                         }}
                       >
-                        <ChatCircle size={15} weight="fill" />
-                        Attività recente
+                        Attività
                       </div>
 
+                      <h2
+                        style={{
+                          margin: '3px 0 0',
+                          fontFamily: FONT.display,
+                          fontSize: 22,
+                        }}
+                      >
+                        Recensioni recenti
+                      </h2>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void router.push(
+                          `/recensioni?utente=${encodeURIComponent(
+                            profile.username
+                          )}`
+                        )
+                      }
+                      style={{
+                        border: 0,
+                        background: 'transparent',
+                        color: T.textFaint,
+                        cursor: 'pointer',
+                        fontFamily: FONT.sans,
+                        fontSize: 9,
+                        fontWeight: 800,
+                        padding: 0,
+                      }}
+                    >
+                      Vedi tutte
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'grid',
+                      gap: 7,
+                    }}
+                  >
+                    {recentActivity.map((review) => (
                       <button
+                        key={`activity-${review.entry_id}`}
                         type="button"
                         onClick={() =>
-                          router.push(
-                            `/recensioni?utente=${encodeURIComponent(
-                              profile.username
+                          void router.push(
+                            `/recensioni?review=${encodeURIComponent(
+                              review.entry_id
                             )}`
                           )
                         }
                         style={{
-                          border: 0,
-                          background: 'transparent',
-                          color: P.textFaint,
+                          width: '100%',
+                          border: `1px solid ${T.border}`,
+                          background: T.surface,
+                          color: T.text,
+                          padding: 9,
+                          display: 'grid',
+                          gridTemplateColumns: '42px minmax(0,1fr) auto',
+                          gap: 9,
+                          alignItems: 'center',
+                          textAlign: 'left',
                           cursor: 'pointer',
-                          fontFamily: FONT,
-                          fontSize: 9,
-                          fontWeight: 800,
-                          padding: 0,
+                          fontFamily: FONT.sans,
                         }}
                       >
-                        Vedi recensioni
-                      </button>
-                    </div>
-
-                    <div
-                      style={{
-                        display: 'grid',
-                        gap: 8,
-                      }}
-                    >
-                      {recentActivity.map((review) => (
-                        <button
-                          key={`activity-${review.entry_id}`}
-                          type="button"
-                          onClick={() =>
-                            router.push(
-                              `/recensioni?review=${encodeURIComponent(
-                                review.entry_id
-                              )}`
-                            )
-                          }
+                        <div
                           style={{
-                            width: '100%',
-                            border: `1px solid ${P.border}`,
-                            background: P.bgSoft,
-                            color: P.text,
-                            padding: 9,
+                            width: 42,
+                            aspectRatio: '2 / 3',
+                            background: T.bgSoft,
+                            overflow: 'hidden',
                             display: 'grid',
-                            gridTemplateColumns:
-                              '42px minmax(0,1fr) auto',
-                            gap: 9,
-                            alignItems: 'center',
-                            textAlign: 'left',
-                            cursor: 'pointer',
-                            fontFamily: FONT,
+                            placeItems: 'center',
+                            color: T.textFaint,
                           }}
                         >
+                          {review.cover ? (
+                            <img
+                              src={review.cover}
+                              alt={review.title}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                              }}
+                            />
+                          ) : (
+                            <FilmSlate size={18} weight="duotone" />
+                          )}
+                        </div>
+
+                        <div style={{ minWidth: 0 }}>
                           <div
                             style={{
-                              width: 42,
-                              aspectRatio: '2 / 3',
-                              background: P.card,
-                              overflow: 'hidden',
-                              display: 'grid',
-                              placeItems: 'center',
-                              color: P.textFaint,
-                            }}
-                          >
-                            {review.cover ? (
-                              <img
-                                src={review.cover}
-                                alt={review.title}
-                                style={{
-                                  width: '100%',
-                                  height: '100%',
-                                  objectFit: 'cover',
-                                }}
-                              />
-                            ) : (
-                              <FilmSlate
-                                size={18}
-                                weight="duotone"
-                              />
-                            )}
-                          </div>
-
-                          <div style={{ minWidth: 0 }}>
-                            <div
-                              style={{
-                                fontSize: 11,
-                                fontWeight: 850,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              }}
-                            >
-                              {review.title}
-                            </div>
-
-                            <div
-                              style={{
-                                color: P.textFaint,
-                                fontSize: 9,
-                                marginTop: 3,
-                                overflow: 'hidden',
-                                whiteSpace: 'nowrap',
-                                textOverflow: 'ellipsis',
-                              }}
-                            >
-                              {review.review_text}
-                            </div>
-                          </div>
-
-                          <div
-                            style={{
-                              color: P.textFaint,
-                              fontSize: 8,
+                              fontSize: 11,
+                              fontWeight: 850,
                               whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
                             }}
                           >
-                            {formatDate(
-                              review.review_updated_at ||
-                                review.created_at
-                            )}
+                            {review.title}
                           </div>
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                )}
 
-              {!isBlocked && !blockedByOther && (
+                          <div
+                            style={{
+                              color: T.textFaint,
+                              fontSize: 9,
+                              marginTop: 3,
+                              overflow: 'hidden',
+                              whiteSpace: 'nowrap',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {review.review_text}
+                          </div>
+                        </div>
+
+                        <div
+                          style={{
+                            color: T.textFaint,
+                            fontSize: 8,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {formatDate(
+                            review.review_updated_at || review.created_at
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {!blocked && (
                 <>
-                  {/* STATISTICHE */}
-
-                  <div
-                    className="public-stats"
+                  <section
+                    className="cdr-public-stats"
                     style={{
                       display: 'grid',
-                      gridTemplateColumns:
-                        'repeat(3,minmax(0,1fr))',
-                      gap: 10,
-                      marginBottom: 22,
+                      gridTemplateColumns: 'repeat(3,minmax(0,1fr))',
+                      borderTop: `1px solid ${T.border}`,
+                      borderBottom: `1px solid ${T.border}`,
+                      marginBottom: 24,
                     }}
                   >
-                    <div
-                      style={{
-                        border: `1px solid ${P.border}`,
-                        background: P.card,
-                        padding: 14,
-                      }}
-                    >
-                      <ChatCircle
-                        size={17}
-                        color={P.pink}
-                        weight="fill"
-                      />
+                    {[
+                      {
+                        icon: ChatCircle,
+                        value: reviews.length,
+                        label: 'Recensioni',
+                        color: T.primary,
+                      },
+                      {
+                        icon: Star,
+                        value:
+                          averageRating !== null
+                            ? averageRating.toFixed(1)
+                            : '—',
+                        label: 'Media voti',
+                        color: T.accent,
+                      },
+                      {
+                        icon: Heart,
+                        value: totalLikes,
+                        label: 'Like ricevuti',
+                        color: T.primary,
+                      },
+                    ].map((item, index) => {
+                      const Icon = item.icon;
 
-                      <strong
-                        style={{
-                          display: 'block',
-                          fontSize: 21,
-                          color: P.text,
-                          marginTop: 7,
-                        }}
-                      >
-                        {reviews.length}
-                      </strong>
+                      return (
+                        <div
+                          key={item.label}
+                          style={{
+                            padding: '16px 14px',
+                            borderRight:
+                              index < 2
+                                ? `1px solid ${T.border}`
+                                : undefined,
+                          }}
+                        >
+                          <Icon
+                            size={15}
+                            color={item.color}
+                            weight="fill"
+                          />
 
-                      <span
-                        style={{
-                          color: P.textFaint,
-                          fontSize: 10,
-                        }}
-                      >
-                        Recensioni pubbliche
-                      </span>
-                    </div>
+                          <strong
+                            style={{
+                              display: 'block',
+                              fontSize: 22,
+                              color: T.text,
+                              marginTop: 6,
+                              fontFamily: FONT.display,
+                            }}
+                          >
+                            {item.value}
+                          </strong>
 
-                    <div
-                      style={{
-                        border: `1px solid ${P.border}`,
-                        background: P.card,
-                        padding: 14,
-                      }}
-                    >
-                      <Star
-                        size={17}
-                        color={P.gold}
-                        weight="fill"
-                      />
+                          <span
+                            style={{
+                              color: T.textFaint,
+                              fontSize: 9.5,
+                            }}
+                          >
+                            {item.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </section>
 
-                      <strong
-                        style={{
-                          display: 'block',
-                          fontSize: 21,
-                          color: P.text,
-                          marginTop: 7,
-                        }}
-                      >
-                        {averageRating !== null
-                          ? averageRating.toFixed(1)
-                          : '—'}
-                      </strong>
-
-                      <span
-                        style={{
-                          color: P.textFaint,
-                          fontSize: 10,
-                        }}
-                      >
-                        Media voti pubblici
-                      </span>
-                    </div>
-
-                    <div
-                      style={{
-                        border: `1px solid ${P.border}`,
-                        background: P.card,
-                        padding: 14,
-                      }}
-                    >
-                      <Heart
-                        size={17}
-                        color={P.pink}
-                        weight="fill"
-                      />
-
-                      <strong
-                        style={{
-                          display: 'block',
-                          fontSize: 21,
-                          color: P.text,
-                          marginTop: 7,
-                        }}
-                      >
-                        {totalLikes}
-                      </strong>
-
-                      <span
-                        style={{
-                          color: P.textFaint,
-                          fontSize: 10,
-                        }}
-                      >
-                        Like ricevuti
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* LIBRERIA PUBBLICA */}
-
-                  {(privacy?.favorites_visibility ===
-                    'public' ||
-                    privacy?.watchlist_visibility ===
-                      'public' ||
-                    privacy?.watched_visibility ===
-                      'public') && (
+                  {(privacy?.favorites_visibility === 'public' ||
+                    privacy?.watchlist_visibility === 'public' ||
+                    privacy?.watched_visibility === 'public') && (
                     <div
                       style={{
                         display: 'grid',
-                        gap: 14,
-                        marginBottom: 22,
+                        gap: 22,
+                        marginBottom: 28,
                       }}
                     >
                       {[
@@ -1568,62 +1418,48 @@ export default function PublicUserPage() {
                           key: 'preferiti',
                           title: 'Preferiti',
                           visible:
-                            privacy?.favorites_visibility ===
-                            'public',
+                            privacy?.favorites_visibility === 'public',
                           items: publicFavorites,
-                          color: P.pink,
-                          empty:
-                            'Nessun film preferito pubblico.',
+                          color: T.primary,
+                          empty: 'Nessun film preferito pubblico.',
                         },
                         {
                           key: 'watchlist',
                           title: 'Watchlist',
                           visible:
-                            privacy?.watchlist_visibility ===
-                            'public',
+                            privacy?.watchlist_visibility === 'public',
                           items: publicWatchlist,
-                          color: P.gold,
-                          empty:
-                            'La watchlist pubblica è vuota.',
+                          color: T.accent,
+                          empty: 'La watchlist pubblica è vuota.',
                         },
                         {
                           key: 'visti',
                           title: 'Visti',
                           visible:
-                            privacy?.watched_visibility ===
-                            'public',
+                            privacy?.watched_visibility === 'public',
                           items: publicWatched,
-                          color: P.textMuted,
-                          empty:
-                            'Nessun film visto pubblico.',
+                          color: T.textMuted,
+                          empty: 'Nessun film visto pubblico.',
                         },
                       ]
                         .filter((section) => section.visible)
                         .map((section) => (
-                          <section
-                            key={section.key}
-                            style={{
-                              border: `1px solid ${P.border}`,
-                              background: P.card,
-                              padding: 16,
-                            }}
-                          >
+                          <section key={section.key}>
                             <div
                               style={{
                                 display: 'flex',
-                                alignItems: 'center',
-                                justifyContent:
-                                  'space-between',
+                                alignItems: 'baseline',
+                                justifyContent: 'space-between',
                                 gap: 12,
-                                marginBottom: 12,
+                                marginBottom: 10,
                               }}
                             >
                               <h2
                                 style={{
                                   margin: 0,
-                                  color: P.text,
-                                  fontFamily: FONT_DISPLAY,
-                                  fontSize: 19,
+                                  color: T.text,
+                                  fontFamily: FONT.display,
+                                  fontSize: 21,
                                 }}
                               >
                                 {section.title}
@@ -1632,7 +1468,7 @@ export default function PublicUserPage() {
                               <span
                                 style={{
                                   color: section.color,
-                                  fontSize: 10,
+                                  fontSize: 9.5,
                                   fontWeight: 800,
                                 }}
                               >
@@ -1643,11 +1479,10 @@ export default function PublicUserPage() {
                             {section.items.length === 0 ? (
                               <div
                                 style={{
-                                  border: `1px dashed ${P.border}`,
-                                  background: P.bgSoft,
-                                  color: P.textFaint,
-                                  padding: 18,
-                                  textAlign: 'center',
+                                  borderTop: `1px solid ${T.border}`,
+                                  borderBottom: `1px solid ${T.border}`,
+                                  color: T.textFaint,
+                                  padding: '15px 0',
                                   fontSize: 10,
                                 }}
                               >
@@ -1667,35 +1502,33 @@ export default function PublicUserPage() {
                                     key={`${section.key}-${item.entry_id}`}
                                     type="button"
                                     onClick={() => {
-                                      if (
-                                        item.provider === 'tmdb'
-                                      ) {
+                                      if (item.provider === 'tmdb') {
                                         void router.push(
                                           `/film/${item.provider_movie_id}`
                                         );
                                       }
                                     }}
                                     style={{
-                                      width: 94,
-                                      minWidth: 94,
+                                      width: 104,
+                                      minWidth: 104,
                                       border: 0,
                                       padding: 0,
-                                      background:
-                                        'transparent',
-                                      color: P.text,
+                                      background: 'transparent',
+                                      color: T.text,
                                       textAlign: 'left',
                                       cursor:
                                         item.provider === 'tmdb'
                                           ? 'pointer'
                                           : 'default',
+                                      fontFamily: FONT.sans,
                                     }}
                                   >
                                     <div
                                       style={{
-                                        width: 94,
+                                        width: 104,
                                         aspectRatio: '2/3',
-                                        border: `1px solid ${P.border}`,
-                                        background: P.bgSoft,
+                                        border: `1px solid ${T.border}`,
+                                        background: T.bgSoft,
                                         overflow: 'hidden',
                                       }}
                                     >
@@ -1715,11 +1548,14 @@ export default function PublicUserPage() {
                                             width: '100%',
                                             height: '100%',
                                             display: 'grid',
-                                            placeItems:
-                                              'center',
+                                            placeItems: 'center',
                                           }}
                                         >
-                                          <FilmSlate size={24} color={P.textFaint} weight="duotone" />
+                                          <FilmSlate
+                                            size={24}
+                                            color={T.textFaint}
+                                            weight="duotone"
+                                          />
                                         </div>
                                       )}
                                     </div>
@@ -1728,12 +1564,11 @@ export default function PublicUserPage() {
                                       style={{
                                         display: 'block',
                                         marginTop: 6,
-                                        color: P.text,
-                                        fontSize: 10,
+                                        color: T.text,
+                                        fontSize: 10.5,
                                         whiteSpace: 'nowrap',
                                         overflow: 'hidden',
-                                        textOverflow:
-                                          'ellipsis',
+                                        textOverflow: 'ellipsis',
                                       }}
                                     >
                                       {item.title}
@@ -1743,12 +1578,11 @@ export default function PublicUserPage() {
                                       style={{
                                         display: 'block',
                                         marginTop: 2,
-                                        color: P.textFaint,
-                                        fontSize: 8,
+                                        color: T.textFaint,
+                                        fontSize: 8.5,
                                         whiteSpace: 'nowrap',
                                         overflow: 'hidden',
-                                        textOverflow:
-                                          'ellipsis',
+                                        textOverflow: 'ellipsis',
                                       }}
                                     >
                                       {[item.year, item.genre]
@@ -1764,74 +1598,71 @@ export default function PublicUserPage() {
                     </div>
                   )}
 
-                  {/* RECENSIONI */}
-
                   <section>
                     <div
                       style={{
                         display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        marginBottom: 12,
+                        alignItems: 'baseline',
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        marginBottom: 11,
                       }}
                     >
-                      <ChatCircle
-                        size={18}
-                        color={P.gold}
-                        weight="fill"
-                      />
-
                       <h2
                         style={{
                           margin: 0,
-                          fontFamily: FONT_DISPLAY,
-                          fontSize: 21,
+                          fontFamily: FONT.display,
+                          fontSize: 23,
                         }}
                       >
-                        Recensioni pubbliche
+                        Recensioni
                       </h2>
+
+                      <span
+                        style={{
+                          color: T.textFaint,
+                          fontSize: 9.5,
+                        }}
+                      >
+                        {reviews.length} pubbliche
+                      </span>
                     </div>
 
                     {reviews.length === 0 ? (
                       <div
                         style={{
-                          border: `1px dashed ${P.border}`,
-                          background: P.card,
-                          padding: 30,
-                          textAlign: 'center',
-                          color: P.textFaint,
-                          fontSize: 12,
+                          borderTop: `1px solid ${T.border}`,
+                          borderBottom: `1px solid ${T.border}`,
+                          padding: '24px 0',
+                          color: T.textFaint,
+                          fontSize: 11,
                         }}
                       >
-                        Questo utente non ha ancora pubblicato
-                        recensioni.
+                        Questo utente non ha ancora pubblicato recensioni.
                       </div>
                     ) : (
                       <div
                         style={{
                           display: 'grid',
-                          gap: 10,
+                          gap: 9,
                         }}
                       >
                         {reviews.map((review) => (
                           <article
                             key={review.entry_id}
                             style={{
-                              border: `1px solid ${P.border}`,
-                              background: P.card,
+                              border: `1px solid ${T.border}`,
+                              background: T.surface,
                               padding: 12,
                               display: 'grid',
-                              gridTemplateColumns:
-                                '62px minmax(0,1fr)',
+                              gridTemplateColumns: '62px minmax(0,1fr)',
                               gap: 13,
                             }}
                           >
                             <button
                               type="button"
                               onClick={() => {
-                                if (
-                                  review.provider === 'tmdb'
-                                ) {
+                                if (review.provider === 'tmdb') {
                                   void router.push(
                                     `/film/${review.provider_movie_id}`
                                   );
@@ -1840,8 +1671,8 @@ export default function PublicUserPage() {
                               style={{
                                 width: 62,
                                 height: 92,
-                                border: `1px solid ${P.border}`,
-                                background: P.bgSoft,
+                                border: `1px solid ${T.border}`,
+                                background: T.bgSoft,
                                 padding: 0,
                                 overflow: 'hidden',
                                 cursor:
@@ -1861,12 +1692,12 @@ export default function PublicUserPage() {
                                   }}
                                 />
                               ) : (
-                                <span
-                                  style={{
-                                    fontSize: 24,
-                                  }}
-                                >
-                                  <FilmSlate size={24} color={P.textFaint} weight="duotone" />
+                                <span style={{ fontSize: 24 }}>
+                                  <FilmSlate
+                                    size={24}
+                                    color={T.textFaint}
+                                    weight="duotone"
+                                  />
                                 </span>
                               )}
                             </button>
@@ -1875,8 +1706,7 @@ export default function PublicUserPage() {
                               <div
                                 style={{
                                   display: 'flex',
-                                  justifyContent:
-                                    'space-between',
+                                  justifyContent: 'space-between',
                                   gap: 12,
                                   alignItems: 'flex-start',
                                 }}
@@ -1885,10 +1715,9 @@ export default function PublicUserPage() {
                                   <strong
                                     style={{
                                       display: 'block',
-                                      color: P.text,
+                                      color: T.text,
                                       fontSize: 13,
-                                      overflowWrap:
-                                        'anywhere',
+                                      overflowWrap: 'anywhere',
                                     }}
                                   >
                                     {review.title}
@@ -1896,15 +1725,12 @@ export default function PublicUserPage() {
 
                                   <div
                                     style={{
-                                      color: P.textFaint,
+                                      color: T.textFaint,
                                       fontSize: 9,
                                       marginTop: 3,
                                     }}
                                   >
-                                    {[
-                                      review.year,
-                                      review.genre,
-                                    ]
+                                    {[review.year, review.genre]
                                       .filter(Boolean)
                                       .join(' · ')}
                                   </div>
@@ -1913,36 +1739,31 @@ export default function PublicUserPage() {
                                 {review.rating !== null && (
                                   <span
                                     style={{
-                                      color: P.gold,
+                                      color: T.accent,
                                       fontSize: 11,
                                       fontWeight: 800,
-                                      display:
-                                        'inline-flex',
+                                      display: 'inline-flex',
                                       alignItems: 'center',
                                       gap: 4,
                                       flexShrink: 0,
                                     }}
                                   >
-                                    <Star
-                                      size={12}
-                                      weight="fill"
-                                    />
-
-                                    {Number(
-                                      review.rating
-                                    ).toFixed(1)}
+                                    <Star size={12} weight="fill" />
+                                    {Number(review.rating).toFixed(1)}
                                   </span>
                                 )}
                               </div>
 
                               <p
                                 style={{
-                                  color: P.textMuted,
-                                  fontSize: 11,
+                                  color: T.textMuted,
+                                  fontSize: 11.5,
                                   lineHeight: 1.6,
                                   margin: '9px 0',
                                   whiteSpace: 'pre-wrap',
                                   overflowWrap: 'anywhere',
+                                  borderLeft: `2px solid ${T.primary}`,
+                                  paddingLeft: 10,
                                 }}
                               >
                                 {review.review_text}
@@ -1951,10 +1772,9 @@ export default function PublicUserPage() {
                               <div
                                 style={{
                                   display: 'flex',
-                                  justifyContent:
-                                    'space-between',
+                                  justifyContent: 'space-between',
                                   gap: 12,
-                                  color: P.textFaint,
+                                  color: T.textFaint,
                                   fontSize: 9,
                                 }}
                               >
@@ -1979,9 +1799,8 @@ export default function PublicUserPage() {
                                         ? 'fill'
                                         : 'regular'
                                     }
-                                    color={P.pink}
+                                    color={T.primary}
                                   />
-
                                   {review.likes_count}
                                 </span>
                               </div>
@@ -1997,19 +1816,32 @@ export default function PublicUserPage() {
           )}
         </div>
 
-        <style jsx global>{`
+        <style>{`
           @media (max-width: 620px) {
-            .public-profile-head {
+            .cdr-public-profile-head {
               grid-template-columns: 1fr !important;
               text-align: center;
               justify-items: center;
             }
 
-            .public-profile-head > div:last-child {
+            .cdr-public-profile-head > div:last-child {
               width: 100%;
             }
 
-            .public-stats {
+            .cdr-public-stats {
+              grid-template-columns: 1fr !important;
+            }
+
+            .cdr-public-stats > div {
+              border-right: 0 !important;
+              border-bottom: 1px solid ${T.border};
+            }
+
+            .cdr-public-stats > div:last-child {
+              border-bottom: 0;
+            }
+
+            .cdr-compatibility-grid {
               grid-template-columns: 1fr !important;
             }
           }

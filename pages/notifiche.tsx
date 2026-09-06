@@ -2,12 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import AppShell from '@/components/layout/AppShell';
-import { useAuth } from '@/hooks/useAuth';
-import { useTheme } from '@/context/ThemeContext';
-import { createBrowserClient } from '@/utils/supabase/browser';
 import {
-  ArrowLeft,
   Bell,
   Check,
   Heart,
@@ -18,38 +13,23 @@ import {
   UsersThree,
 } from '@phosphor-icons/react';
 
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  border: '#2d221c',
-  pink: '#ed3d73',
-  gold: '#f5b92f',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-};
-
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  border: '#d6cbbc',
-  pink: '#b83060',
-  gold: '#b8860b',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-};
-
-const FONT = "'Inter','Helvetica Neue',sans-serif";
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
+import AppShell from '@/components/layout/AppShell';
+import BackButton from '@/components/ui/BackButton';
+import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/context/ThemeContext';
+import { createBrowserClient } from '@/utils/supabase/browser';
+import { FONT, THEME } from '@/styles/token';
 
 type NotificationRow = {
   id: string;
   user_id: string;
   actor_user_id: string | null;
-  type: 'new_follower' | 'review_like' | 'review_comment' | 'report_resolved' | 'report_dismissed';
+  type:
+    | 'new_follower'
+    | 'review_like'
+    | 'review_comment'
+    | 'report_resolved'
+    | 'report_dismissed';
   review_entry_id: string | null;
   report_id: string | null;
   is_read: boolean;
@@ -79,16 +59,20 @@ type NotificationFilter = 'tutte' | 'non_lette' | 'social' | 'sistema';
 function relativeDate(value: string) {
   const date = new Date(value);
   const diff = Date.now() - date.getTime();
-
   const minutes = Math.floor(diff / 60000);
+
   if (minutes < 1) return 'adesso';
   if (minutes < 60) return `${minutes} min fa`;
 
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} ${hours === 1 ? 'ora' : 'ore'} fa`;
+  if (hours < 24) {
+    return `${hours} ${hours === 1 ? 'ora' : 'ore'} fa`;
+  }
 
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days} ${days === 1 ? 'giorno' : 'giorni'} fa`;
+  if (days < 7) {
+    return `${days} ${days === 1 ? 'giorno' : 'giorni'} fa`;
+  }
 
   return date.toLocaleDateString('it-IT', {
     day: '2-digit',
@@ -101,7 +85,7 @@ export default function NotifichePage() {
   const router = useRouter();
   const { currentUser, isGuest, isLoading } = useAuth();
   const { theme } = useTheme();
-  const P = theme === 'dark' ? D : L;
+  const T = theme === 'dark' ? THEME.dark : THEME.light;
   const supabase = useRef(createBrowserClient()).current;
 
   const [notifications, setNotifications] = useState<DisplayNotification[]>([]);
@@ -171,16 +155,19 @@ export default function NotifichePage() {
         }
 
         if (reviewIds.length > 0) {
-          const { data, error: reviewError } = await supabase
-            .rpc('get_notification_review_targets', {
-              p_entry_ids: reviewIds,
-            });
+          const { data, error: reviewError } = await supabase.rpc(
+            'get_notification_review_targets',
+            { p_entry_ids: reviewIds }
+          );
 
           if (reviewError) throw reviewError;
           reviewTargets = (data ?? []) as ReviewTarget[];
         }
 
         const actorMap = new Map(actors.map((actor) => [actor.id, actor]));
+        const reviewMap = new Map(
+          reviewTargets.map((review) => [review.entry_id, review])
+        );
 
         if (actorIds.length > 0) {
           const { data: followingRows, error: followingError } = await supabase
@@ -201,9 +188,6 @@ export default function NotifichePage() {
         } else {
           setFollowingActorIds(new Set());
         }
-        const reviewMap = new Map(
-          reviewTargets.map((review) => [review.entry_id, review])
-        );
 
         setNotifications(
           raw.map((item) => ({
@@ -241,9 +225,7 @@ export default function NotifichePage() {
           filter: `user_id=eq.${currentUser.id}`,
         },
         () => {
-          if (!cancelled) {
-            void load();
-          }
+          if (!cancelled) void load();
         }
       )
       .subscribe();
@@ -292,10 +274,7 @@ export default function NotifichePage() {
       return;
     }
 
-    if (
-      notification.type === 'review_like' &&
-      notification.review_entry_id
-    ) {
+    if (notification.type === 'review_like' && notification.review_entry_id) {
       void router.push(
         `/recensioni?review=${encodeURIComponent(
           notification.review_entry_id
@@ -318,7 +297,7 @@ export default function NotifichePage() {
 
   const toggleFollowBack = async (
     actorUserId: string,
-    notificationId: string,
+    notificationId: string
   ) => {
     if (!currentUser || currentUser.isGuest) return;
 
@@ -357,8 +336,8 @@ export default function NotifichePage() {
 
       const target = notifications.find((item) => item.id === notificationId);
       if (target) await markRead(target);
-    } catch (error) {
-      console.error('Follow back failed:', error);
+    } catch (followError) {
+      console.error('Follow back failed:', followError);
     } finally {
       setFollowBusyActorId(null);
     }
@@ -436,63 +415,97 @@ export default function NotifichePage() {
       <div
         style={{
           minHeight: '100vh',
-          background: P.bg,
+          background: T.bg,
           display: 'grid',
           placeItems: 'center',
-          color: P.textMuted,
-          fontFamily: FONT,
+          color: T.textMuted,
+          fontFamily: FONT.sans,
         }}
       >
-        Caricamento...
+        <Bell size={38} color={T.primary} weight="duotone" />
       </div>
     );
   }
+
+  const filters: Array<{
+    id: NotificationFilter;
+    label: string;
+    count: number;
+    icon: typeof Bell;
+    color: string;
+  }> = [
+    {
+      id: 'tutte',
+      label: 'Tutte',
+      count: notifications.length,
+      icon: Bell,
+      color: T.textMuted,
+    },
+    {
+      id: 'non_lette',
+      label: 'Non lette',
+      count: unreadCount,
+      icon: Check,
+      color: T.primary,
+    },
+    {
+      id: 'social',
+      label: 'Social',
+      count: socialCount,
+      icon: UsersThree,
+      color: T.accent,
+    },
+    {
+      id: 'sistema',
+      label: 'Sistema',
+      count: systemCount,
+      icon: Flag,
+      color: T.textFaint,
+    },
+  ];
 
   return (
     <AppShell activeNav="home">
       <main
         style={{
           minHeight: '100vh',
-          background: P.bg,
-          color: P.text,
-          fontFamily: FONT,
-          padding: '26px 18px 80px',
+          background: T.bg,
+          color: T.text,
+          fontFamily: FONT.sans,
+          padding: '24px 18px 80px',
         }}
       >
         <div
           style={{
             width: '100%',
-            maxWidth: 760,
+            maxWidth: 780,
             margin: '0 auto',
           }}
         >
-          <button
-            type="button"
-            onClick={() => router.back()}
-            style={{
-              border: 0,
-              background: 'transparent',
-              color: P.textMuted,
-              padding: 0,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 18,
-              fontWeight: 700,
-            }}
-          >
-            <ArrowLeft size={16} />
-            Indietro
-          </button>
+          <div style={{ marginBottom: 18 }}>
+            <BackButton
+              onClick={() => {
+                if (
+                  typeof window !== 'undefined' &&
+                  window.history.length > 1
+                ) {
+                  router.back();
+                } else {
+                  void router.push('/home');
+                }
+              }}
+            />
+          </div>
 
           <header
             style={{
+              borderBottom: `1px solid ${T.border}`,
+              paddingBottom: 18,
+              marginBottom: 15,
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'flex-end',
               gap: 16,
-              marginBottom: 18,
               flexWrap: 'wrap',
             }}
           >
@@ -501,23 +514,25 @@ export default function NotifichePage() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 7,
-                  color: P.textFaint,
-                  fontSize: 10,
+                  gap: 6,
+                  color: T.accent,
+                  fontSize: 9,
+                  fontWeight: 900,
                   textTransform: 'uppercase',
-                  letterSpacing: '.09em',
+                  letterSpacing: '.12em',
                 }}
               >
-                <Bell size={16} color={P.pink} weight="fill" />
+                <Bell size={13} color={T.primary} weight="fill" />
                 Attività
               </div>
 
               <h1
                 style={{
-                  margin: '6px 0 4px',
-                  color: P.text,
-                  fontFamily: FONT_DISPLAY,
-                  fontSize: 30,
+                  margin: '5px 0 5px',
+                  color: T.text,
+                  fontFamily: FONT.display,
+                  fontSize: 'clamp(30px,5vw,40px)',
+                  lineHeight: 1,
                 }}
               >
                 Notifiche
@@ -525,13 +540,17 @@ export default function NotifichePage() {
 
               <p
                 style={{
-                  color: P.textMuted,
-                  fontSize: 12,
+                  color: T.textMuted,
+                  fontSize: 11,
                   margin: 0,
                 }}
               >
                 {unreadCount > 0
-                  ? `${unreadCount} ${unreadCount === 1 ? 'notifica non letta' : 'notifiche non lette'}`
+                  ? `${unreadCount} ${
+                      unreadCount === 1
+                        ? 'notifica non letta'
+                        : 'notifiche non lette'
+                    }`
                   : 'Sei in pari con tutto.'}
               </p>
             </div>
@@ -542,64 +561,35 @@ export default function NotifichePage() {
                 onClick={() => void markAllRead()}
                 disabled={markingAll}
                 style={{
-                  border: `1px solid ${P.border}`,
-                  background: P.card,
-                  color: P.textMuted,
-                  padding: '9px 11px',
+                  border: 0,
+                  background: 'transparent',
+                  color: T.textMuted,
+                  padding: 0,
                   cursor: markingAll ? 'wait' : 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
-                  fontSize: 10,
+                  gap: 5,
+                  fontFamily: FONT.sans,
+                  fontSize: 9.5,
                   fontWeight: 800,
                 }}
               >
-                <Check size={14} weight="bold" />
-                Segna tutte lette
+                <Check size={13} weight="bold" />
+                {markingAll ? 'Aggiornamento…' : 'Segna tutte lette'}
               </button>
             )}
           </header>
 
           <div
+            className="cdr-notification-filters"
             style={{
-              display: 'flex',
-              gap: 7,
-              overflowX: 'auto',
-              paddingBottom: 4,
-              marginBottom: 14,
-              scrollbarWidth: 'none',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(4,minmax(0,1fr))',
+              border: `1px solid ${T.border}`,
+              marginBottom: 16,
             }}
           >
-            {[
-              {
-                id: 'tutte',
-                label: 'Tutte',
-                count: notifications.length,
-                icon: Bell,
-                color: P.textMuted,
-              },
-              {
-                id: 'non_lette',
-                label: 'Non lette',
-                count: unreadCount,
-                icon: Check,
-                color: P.pink,
-              },
-              {
-                id: 'social',
-                label: 'Social',
-                count: socialCount,
-                icon: UsersThree,
-                color: P.gold,
-              },
-              {
-                id: 'sistema',
-                label: 'Sistema',
-                count: systemCount,
-                icon: Flag,
-                color: P.textFaint,
-              },
-            ].map((item) => {
+            {filters.map((item, index) => {
               const active = filter === item.id;
               const Icon = item.icon;
 
@@ -607,38 +597,43 @@ export default function NotifichePage() {
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() =>
-                    setFilter(item.id as NotificationFilter)
-                  }
+                  onClick={() => setFilter(item.id)}
                   style={{
-                    border: `1px solid ${
-                      active ? item.color : P.border
-                    }`,
-                    background: active ? P.bgSoft : P.card,
-                    color: active ? item.color : P.textMuted,
-                    padding: '8px 10px',
+                    border: 0,
+                    borderRight:
+                      index < 3
+                        ? `1px solid ${T.border}`
+                        : undefined,
+                    background: active
+                      ? item.id === 'non_lette'
+                        ? T.primaryGlow
+                        : item.id === 'social'
+                        ? T.accentGlow
+                        : T.bgSoft
+                      : T.surface,
+                    color: active ? item.color : T.textMuted,
+                    minHeight: 48,
+                    padding: '9px 8px',
                     cursor: 'pointer',
-                    fontFamily: FONT,
-                    fontSize: 10,
-                    fontWeight: 800,
-                    display: 'inline-flex',
+                    fontFamily: FONT.sans,
+                    fontSize: 9.5,
+                    fontWeight: 850,
+                    display: 'flex',
                     alignItems: 'center',
-                    gap: 6,
-                    whiteSpace: 'nowrap',
+                    justifyContent: 'center',
+                    gap: 5,
                   }}
                 >
-                  <Icon size={13} weight={active ? 'fill' : 'regular'} />
+                  <Icon
+                    size={12}
+                    weight={active ? 'fill' : 'regular'}
+                  />
                   {item.label}
                   <span
                     style={{
-                      minWidth: 18,
-                      height: 18,
-                      padding: '0 4px',
-                      display: 'grid',
-                      placeItems: 'center',
-                      background: active ? P.card : P.bgSoft,
-                      color: active ? item.color : P.textFaint,
+                      color: active ? item.color : T.textFaint,
                       fontSize: 8,
+                      fontWeight: 900,
                     }}
                   >
                     {item.count}
@@ -652,9 +647,9 @@ export default function NotifichePage() {
             <div
               style={{
                 marginBottom: 12,
-                border: '1px solid rgba(239,68,68,.3)',
-                background: 'rgba(239,68,68,.08)',
-                color: '#fb7185',
+                border: `1px solid ${T.primary}55`,
+                background: T.primaryGlow,
+                color: T.primary,
                 padding: 11,
                 fontSize: 11,
               }}
@@ -666,27 +661,27 @@ export default function NotifichePage() {
           {loading ? (
             <div
               style={{
-                border: `1px solid ${P.border}`,
-                background: P.card,
+                borderTop: `1px solid ${T.border}`,
+                borderBottom: `1px solid ${T.border}`,
                 padding: 32,
                 textAlign: 'center',
-                color: P.textFaint,
+                color: T.textFaint,
               }}
             >
-              Caricamento notifiche...
+              Caricamento notifiche…
             </div>
           ) : visibleNotifications.length === 0 ? (
             <div
               style={{
-                border: `1px dashed ${P.border}`,
-                background: P.card,
-                padding: 38,
+                borderTop: `1px solid ${T.border}`,
+                borderBottom: `1px solid ${T.border}`,
+                padding: '34px 0',
                 textAlign: 'center',
-                color: P.textFaint,
-                fontSize: 12,
+                color: T.textFaint,
+                fontSize: 11,
               }}
             >
-              <Bell size={30} style={{ marginBottom: 8 }} />
+              <Bell size={29} style={{ marginBottom: 8 }} />
               <div>
                 {filter === 'non_lette'
                   ? 'Non hai notifiche non lette.'
@@ -698,75 +693,109 @@ export default function NotifichePage() {
               </div>
             </div>
           ) : (
-            <div style={{ display: 'grid', gap: 8 }}>
+            <div
+              style={{
+                display: 'grid',
+                borderTop: `1px solid ${T.border}`,
+              }}
+            >
               {visibleNotifications.map((notification) => {
                 const actorName =
                   notification.actor?.username || 'Un utente';
 
                 const isFollow =
                   notification.type === 'new_follower';
-
                 const isComment =
                   notification.type === 'review_comment';
-
                 const isReportResolved =
                   notification.type === 'report_resolved';
-
                 const isReportDismissed =
                   notification.type === 'report_dismissed';
-
                 const isReportResult =
                   isReportResolved || isReportDismissed;
+
+                const alreadyFollowing =
+                  notification.actor_user_id
+                    ? followingActorIds.has(
+                        notification.actor_user_id
+                      )
+                    : false;
 
                 return (
                   <article
                     key={notification.id}
-                    onClick={() => void openNotification(notification)}
+                    onClick={() =>
+                      void openNotification(notification)
+                    }
                     onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
+                      if (
+                        event.key === 'Enter' ||
+                        event.key === ' '
+                      ) {
                         event.preventDefault();
                         void openNotification(notification);
                       }
                     }}
                     role="button"
                     tabIndex={0}
+                    className="cdr-notification-row"
                     style={{
+                      position: 'relative',
                       width: '100%',
-                      border: `1px solid ${
-                        notification.is_read ? P.border : `${P.pink}55`
-                      }`,
+                      borderBottom: `1px solid ${T.border}`,
                       background: notification.is_read
-                        ? P.card
-                        : theme === 'dark'
-                        ? 'rgba(237,61,115,.07)'
-                        : 'rgba(184,48,96,.06)',
-                      padding: 12,
+                        ? 'transparent'
+                        : T.primaryGlow,
+                      padding: '13px 0',
                       display: 'grid',
-                      gridTemplateColumns: '44px minmax(0,1fr) auto',
-                      gap: 11,
+                      gridTemplateColumns:
+                        '46px minmax(0,1fr) auto',
+                      gap: 12,
                       alignItems: 'center',
                       textAlign: 'left',
                       cursor: 'pointer',
-                      fontFamily: FONT,
+                      fontFamily: FONT.sans,
                     }}
                   >
+                    {!notification.is_read && (
+                      <div
+                        aria-hidden="true"
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          bottom: 0,
+                          left: -18,
+                          width: 2,
+                          background: T.primary,
+                        }}
+                      />
+                    )}
+
                     <div
                       style={{
-                        width: 44,
-                        height: 44,
+                        width: 46,
+                        height: 46,
                         borderRadius: '50%',
-                        background: P.bgSoft,
+                        border: `1px solid ${T.border}`,
+                        background: isReportResult
+                          ? T.bgSoft
+                          : T.primaryGlow,
                         overflow: 'hidden',
                         display: 'grid',
                         placeItems: 'center',
-                        color: P.pink,
+                        color: isReportResult
+                          ? T.accent
+                          : T.primary,
                         fontWeight: 900,
                       }}
                     >
-                      {notification.actor?.avatar_url ? (
+                      {isReportResult ? (
+                        <Flag size={18} weight="duotone" />
+                      ) : notification.actor?.avatar_url ? (
                         <img
                           src={notification.actor.avatar_url}
                           alt=""
+                          referrerPolicy="no-referrer"
                           style={{
                             width: '100%',
                             height: '100%',
@@ -781,20 +810,29 @@ export default function NotifichePage() {
                     <div style={{ minWidth: 0 }}>
                       <div
                         style={{
-                          color: P.text,
-                          fontSize: 11,
-                          lineHeight: 1.45,
+                          color: T.text,
+                          fontSize: 11.5,
+                          lineHeight: 1.5,
                         }}
                       >
-                        <strong>@{actorName}</strong>{' '}
                         {isReportResolved ? (
-                          'La tua segnalazione è stata risolta.'
+                          <>
+                            <strong>Segnalazione risolta.</strong>{' '}
+                            Abbiamo completato la verifica.
+                          </>
                         ) : isReportDismissed ? (
-                          'La tua segnalazione è stata archiviata.'
+                          <>
+                            <strong>Segnalazione archiviata.</strong>{' '}
+                            La verifica è stata conclusa.
+                          </>
                         ) : isFollow ? (
-                          'ha iniziato a seguirti.'
+                          <>
+                            <strong>@{actorName}</strong>{' '}
+                            ha iniziato a seguirti.
+                          </>
                         ) : isComment ? (
                           <>
+                            <strong>@{actorName}</strong>{' '}
                             ha commentato la tua recensione
                             {notification.review?.title
                               ? ` di “${notification.review.title}”.`
@@ -802,6 +840,7 @@ export default function NotifichePage() {
                           </>
                         ) : (
                           <>
+                            <strong>@{actorName}</strong>{' '}
                             ha messo mi piace alla tua recensione
                             {notification.review?.title
                               ? ` di “${notification.review.title}”.`
@@ -812,98 +851,121 @@ export default function NotifichePage() {
 
                       <div
                         style={{
-                          color: P.textFaint,
-                          fontSize: 9,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 7,
                           marginTop: 4,
+                          color: T.textFaint,
+                          fontSize: 9,
                         }}
                       >
-                        {relativeDate(notification.created_at)}
+                        <span>
+                          {relativeDate(notification.created_at)}
+                        </span>
+
+                        {!notification.is_read && (
+                          <>
+                            <span>·</span>
+                            <span
+                              style={{
+                                color: T.primary,
+                                fontWeight: 850,
+                              }}
+                            >
+                              nuova
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
 
-                    {isFollow &&
-                      notification.actor_user_id &&
-                      currentUser.id !== notification.actor_user_id && (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void toggleFollowBack(
-                              notification.actor_user_id as string,
-                              notification.id
-                            );
-                          }}
-                          disabled={
-                            followBusyActorId === notification.actor_user_id
-                          }
-                          style={{
-                            border: `1px solid ${
-                              followingActorIds.has(
-                                notification.actor_user_id
-                              )
-                                ? P.border
-                                : P.pink
-                            }`,
-                            background: followingActorIds.has(
-                              notification.actor_user_id
-                            )
-                              ? P.bgSoft
-                              : 'rgba(237,61,115,.08)',
-                            color: followingActorIds.has(
-                              notification.actor_user_id
-                            )
-                              ? P.textMuted
-                              : P.pink,
-                            padding: '6px 8px',
-                            cursor:
-                              followBusyActorId ===
-                              notification.actor_user_id
-                                ? 'wait'
-                                : 'pointer',
-                            fontFamily: FONT,
-                            fontSize: 8,
-                            fontWeight: 850,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 4,
-                          }}
-                        >
-                          {followingActorIds.has(
-                            notification.actor_user_id
-                          ) ? (
-                            <UserCheck size={11} weight="fill" />
-                          ) : (
-                            <UserPlus size={11} weight="bold" />
-                          )}
-                          {followingActorIds.has(
-                            notification.actor_user_id
-                          )
-                            ? 'Segui già'
-                            : 'Ricambia'}
-                        </button>
-                      )}
-
                     <div
                       style={{
-                        width: 30,
-                        height: 30,
-                        display: 'grid',
-                        placeItems: 'center',
-                        background: isFollow
-                          ? 'rgba(237,61,115,.10)'
-                          : 'rgba(245,185,47,.10)',
-                        color: isFollow ? P.pink : P.gold,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 7,
                       }}
                     >
-                      {isReportResult ? (
-                        <Bell size={15} weight="fill" />
-                      ) : isFollow ? (
-                        <UserPlus size={15} weight="fill" />
-                      ) : isComment ? (
-                        <Bell size={15} weight="fill" />
-                      ) : (
-                        <Heart size={15} weight="fill" />
-                      )}
+                      {isFollow &&
+                        notification.actor_user_id &&
+                        currentUser.id !==
+                          notification.actor_user_id && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void toggleFollowBack(
+                                notification.actor_user_id as string,
+                                notification.id
+                              );
+                            }}
+                            disabled={
+                              followBusyActorId ===
+                              notification.actor_user_id
+                            }
+                            style={{
+                              border: `1px solid ${
+                                alreadyFollowing
+                                  ? T.border
+                                  : T.primary
+                              }`,
+                              background: alreadyFollowing
+                                ? 'transparent'
+                                : T.primary,
+                              color: alreadyFollowing
+                                ? T.textMuted
+                                : '#fff',
+                              padding: '7px 9px',
+                              cursor:
+                                followBusyActorId ===
+                                notification.actor_user_id
+                                  ? 'wait'
+                                  : 'pointer',
+                              fontFamily: FONT.sans,
+                              fontSize: 8.5,
+                              fontWeight: 850,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {alreadyFollowing ? (
+                              <UserCheck size={11} weight="fill" />
+                            ) : (
+                              <UserPlus size={11} weight="bold" />
+                            )}
+
+                            {alreadyFollowing
+                              ? 'Segui già'
+                              : 'Ricambia'}
+                          </button>
+                        )}
+
+                      <div
+                        aria-hidden="true"
+                        style={{
+                          width: 30,
+                          height: 30,
+                          display: 'grid',
+                          placeItems: 'center',
+                          color: isReportResult
+                            ? T.accent
+                            : isComment
+                            ? T.accent
+                            : T.primary,
+                        }}
+                      >
+                        {isReportResult ? (
+                          <Flag size={15} weight="fill" />
+                        ) : isFollow ? (
+                          <UserPlus size={15} weight="fill" />
+                        ) : isComment ? (
+                          <ChatCircle size={15} weight="fill" />
+                        ) : (
+                          <Heart size={15} weight="fill" />
+                        )}
+                      </div>
                     </div>
                   </article>
                 );
@@ -911,6 +973,32 @@ export default function NotifichePage() {
             </div>
           )}
         </div>
+
+        <style>{`
+          @media (max-width: 620px) {
+            .cdr-notification-filters {
+              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            }
+
+            .cdr-notification-filters > button:nth-child(2) {
+              border-right: 0 !important;
+            }
+
+            .cdr-notification-filters > button:nth-child(-n + 2) {
+              border-bottom: 1px solid ${T.border} !important;
+            }
+
+            .cdr-notification-row {
+              grid-template-columns: 42px minmax(0, 1fr) !important;
+            }
+
+            .cdr-notification-row > div:last-child {
+              grid-column: 2;
+              justify-self: start;
+              margin-top: -2px;
+            }
+          }
+        `}</style>
       </main>
     </AppShell>
   );

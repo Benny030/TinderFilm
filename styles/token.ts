@@ -28,7 +28,7 @@ export const C = {
   borderSoft: '#E9E0D6',
 
   success: '#22C55E',
-  successLight: '#DCFCE7',
+  successLight: '#DCFCE7', 
   error: '#EF4444',
   errorLight: '#FEE2E2',
   warning: '#F59E0B',

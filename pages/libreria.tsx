@@ -745,7 +745,7 @@ export default function LibreriaPage() {
           )}
         </div>
 
-        <style jsx global>{`
+        <style >{`
           .cdr-library {
             min-height:100vh;
             background:var(--cdr-library-bg);

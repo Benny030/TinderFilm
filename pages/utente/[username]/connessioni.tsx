@@ -2,44 +2,20 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import AppShell from '@/components/layout/AppShell';
-import { useAuth } from '@/hooks/useAuth';
-import { useTheme } from '@/context/ThemeContext';
-import { createBrowserClient } from '@/utils/supabase/browser';
 import {
-  ArrowLeft,
   FilmSlate,
   UserCheck,
   UserPlus,
   UsersThree,
+  Sparkle,
 } from '@phosphor-icons/react';
 
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  border: '#2d221c',
-  pink: '#ed3d73',
-  gold: '#f5b92f',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-};
-
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  border: '#d6cbbc',
-  pink: '#b83060',
-  gold: '#b8860b',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-};
-
-const FONT = "'Inter','Helvetica Neue',sans-serif";
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
+import AppShell from '@/components/layout/AppShell';
+import BackButton from '@/components/ui/BackButton';
+import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/context/ThemeContext';
+import { createBrowserClient } from '@/utils/supabase/browser';
+import { FONT, THEME } from '@/styles/token';
 
 type Tab = 'follower' | 'seguiti';
 
@@ -61,7 +37,7 @@ export default function UserConnectionsPage() {
   const router = useRouter();
   const { currentUser, isGuest, isLoading } = useAuth();
   const { theme } = useTheme();
-  const P = theme === 'dark' ? D : L;
+  const T = theme === 'dark' ? THEME.dark : THEME.light;
   const supabase = useRef(createBrowserClient()).current;
 
   const username =
@@ -87,7 +63,7 @@ export default function UserConnectionsPage() {
     if (isLoading) return;
 
     if (!currentUser || currentUser.isGuest || isGuest) {
-      router.replace('/auth');
+      void router.replace('/auth');
     }
   }, [currentUser, isGuest, isLoading, router]);
 
@@ -267,14 +243,14 @@ export default function UserConnectionsPage() {
       <div
         style={{
           minHeight: '100vh',
-          background: P.bg,
+          background: T.bg,
           display: 'grid',
           placeItems: 'center',
-          color: P.textMuted,
-          fontFamily: FONT,
+          color: T.textMuted,
+          fontFamily: FONT.sans,
         }}
       >
-        <FilmSlate size={42} color={P.pink} weight="duotone" />
+        <FilmSlate size={42} color={T.primary} weight="duotone" />
       </div>
     );
   }
@@ -284,60 +260,68 @@ export default function UserConnectionsPage() {
       <main
         style={{
           minHeight: '100vh',
-          background: P.bg,
-          color: P.text,
-          fontFamily: FONT,
-          padding: '26px 18px 80px',
+          background: T.bg,
+          color: T.text,
+          fontFamily: FONT.sans,
+          padding: '24px 18px 80px',
         }}
       >
         <div
           style={{
             width: '100%',
-            maxWidth: 760,
+            maxWidth: 780,
             margin: '0 auto',
           }}
         >
-          <button
-            onClick={() => router.back()}
+          <div style={{ marginBottom: 18 }}>
+            <BackButton
+              onClick={() => {
+                if (
+                  typeof window !== 'undefined' &&
+                  window.history.length > 1
+                ) {
+                  router.back();
+                } else if (username) {
+                  void router.push(
+                    `/utente/${encodeURIComponent(username)}`
+                  );
+                } else {
+                  void router.push('/home');
+                }
+              }}
+            />
+          </div>
+
+          <header
             style={{
-              border: 0,
-              background: 'transparent',
-              color: P.textMuted,
-              padding: 0,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              cursor: 'pointer',
-              fontWeight: 700,
-              marginBottom: 18,
+              borderBottom: `1px solid ${T.border}`,
+              paddingBottom: 17,
+              marginBottom: 16,
             }}
           >
-            <ArrowLeft size={16} />
-            Indietro
-          </button>
-
-          <header style={{ marginBottom: 18 }}>
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 7,
-                color: P.textFaint,
-                fontSize: 10,
+                gap: 6,
+                color: T.accent,
+                fontSize: 9,
                 textTransform: 'uppercase',
-                letterSpacing: '.09em',
+                letterSpacing: '.12em',
+                fontWeight: 900,
               }}
             >
-              <UsersThree size={15} weight="fill" color={P.pink} />
+              <UsersThree size={13} weight="fill" />
               @{username}
             </div>
 
             <h1
               style={{
-                margin: '6px 0 0',
-                fontFamily: FONT_DISPLAY,
-                fontSize: 30,
-                color: P.text,
+                margin: '5px 0 0',
+                fontFamily: FONT.display,
+                fontSize: 'clamp(30px,5vw,40px)',
+                lineHeight: 1,
+                color: T.text,
               }}
             >
               Connessioni
@@ -348,48 +332,52 @@ export default function UserConnectionsPage() {
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
-              gap: 5,
-              padding: 4,
-              background: P.bgSoft,
-              border: `1px solid ${P.border}`,
-              marginBottom: 16,
+              border: `1px solid ${T.border}`,
+              marginBottom: 14,
             }}
           >
             <button
+              type="button"
               onClick={() => changeTab('follower')}
               style={{
                 border: 0,
+                borderRight: `1px solid ${T.border}`,
                 background:
                   tab === 'follower'
-                    ? P.card
-                    : 'transparent',
+                    ? T.primaryGlow
+                    : T.surface,
                 color:
                   tab === 'follower'
-                    ? P.pink
-                    : P.textMuted,
+                    ? T.primary
+                    : T.textMuted,
                 padding: '11px 12px',
                 cursor: 'pointer',
-                fontWeight: 800,
+                fontFamily: FONT.sans,
+                fontSize: 10.5,
+                fontWeight: 850,
               }}
             >
               Follower
             </button>
 
             <button
+              type="button"
               onClick={() => changeTab('seguiti')}
               style={{
                 border: 0,
                 background:
                   tab === 'seguiti'
-                    ? P.card
-                    : 'transparent',
+                    ? T.accentGlow
+                    : T.surface,
                 color:
                   tab === 'seguiti'
-                    ? P.gold
-                    : P.textMuted,
+                    ? T.accent
+                    : T.textMuted,
                 padding: '11px 12px',
                 cursor: 'pointer',
-                fontWeight: 800,
+                fontFamily: FONT.sans,
+                fontSize: 10.5,
+                fontWeight: 850,
               }}
             >
               Seguiti
@@ -400,28 +388,47 @@ export default function UserConnectionsPage() {
             <div
               style={{
                 display: 'flex',
-                justifyContent: 'flex-end',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: 10,
                 marginBottom: 12,
               }}
             >
+              <span
+                style={{
+                  color: T.textFaint,
+                  fontSize: 9.5,
+                }}
+              >
+                {users.length}{' '}
+                {tab === 'follower' ? 'follower' : 'profili seguiti'}
+              </span>
+
               <button
                 type="button"
                 onClick={() =>
                   setSortByCompatibility((current) => !current)
                 }
                 style={{
-                  border: `1px solid ${
-                    sortByCompatibility ? P.gold : P.border
-                  }`,
-                  background: sortByCompatibility ? `${P.gold}12` : P.card,
-                  color: sortByCompatibility ? P.gold : P.textMuted,
-                  padding: '7px 9px',
+                  border: 0,
+                  background: 'transparent',
+                  color: sortByCompatibility
+                    ? T.accent
+                    : T.textMuted,
+                  padding: 0,
                   cursor: 'pointer',
-                  fontFamily: FONT,
-                  fontSize: 9,
+                  fontFamily: FONT.sans,
+                  fontSize: 9.5,
                   fontWeight: 800,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
                 }}
               >
+                <Sparkle
+                  size={12}
+                  weight={sortByCompatibility ? 'fill' : 'regular'}
+                />
                 {sortByCompatibility
                   ? 'Ordine originale'
                   : 'Più compatibili'}
@@ -433,9 +440,9 @@ export default function UserConnectionsPage() {
             <div
               style={{
                 marginBottom: 14,
-                border: '1px solid rgba(239,68,68,.3)',
-                background: 'rgba(239,68,68,.08)',
-                color: '#fb7185',
+                border: `1px solid ${T.primary}55`,
+                background: T.primaryGlow,
+                color: T.primary,
                 padding: 12,
                 fontSize: 11,
               }}
@@ -447,24 +454,24 @@ export default function UserConnectionsPage() {
           {loading ? (
             <div
               style={{
-                border: `1px solid ${P.border}`,
-                background: P.card,
+                borderTop: `1px solid ${T.border}`,
+                borderBottom: `1px solid ${T.border}`,
                 padding: 34,
-                color: P.textFaint,
+                color: T.textFaint,
                 textAlign: 'center',
               }}
             >
-              Caricamento...
+              Caricamento…
             </div>
           ) : users.length === 0 ? (
             <div
               style={{
-                border: `1px dashed ${P.border}`,
-                background: P.card,
+                borderTop: `1px solid ${T.border}`,
+                borderBottom: `1px solid ${T.border}`,
                 padding: 36,
-                color: P.textFaint,
+                color: T.textFaint,
                 textAlign: 'center',
-                fontSize: 12,
+                fontSize: 11,
               }}
             >
               {tab === 'follower'
@@ -472,50 +479,64 @@ export default function UserConnectionsPage() {
                 : 'Questo utente non segue ancora nessuno.'}
             </div>
           ) : (
-            <div style={{ display: 'grid', gap: 8 }}>
+            <div
+              style={{
+                display: 'grid',
+                borderTop: `1px solid ${T.border}`,
+              }}
+            >
               {visibleUsers.map((user) => {
                 const isMe = currentUser.id === user.user_id;
                 const busy = busyId === user.user_id;
+                const compatibility = Number(
+                  user.compatibility_score ?? 0
+                );
 
                 return (
                   <article
                     key={user.user_id}
+                    className="cdr-connection-row"
                     style={{
-                      border: `1px solid ${P.border}`,
-                      background: P.card,
-                      padding: 12,
+                      borderBottom: `1px solid ${T.border}`,
+                      padding: '13px 0',
                       display: 'grid',
                       gridTemplateColumns:
-                        '46px minmax(0,1fr) auto',
-                      gap: 11,
+                        '48px minmax(0,1fr) auto',
+                      gap: 12,
                       alignItems: 'center',
                     }}
                   >
                     <button
+                      type="button"
                       onClick={() =>
-                        router.push(
-                          `/utente/${encodeURIComponent(user.username)}`
+                        void router.push(
+                          `/utente/${encodeURIComponent(
+                            user.username
+                          )}`
                         )
                       }
+                      aria-label={`Apri il profilo di ${user.username}`}
                       style={{
-                        width: 46,
-                        height: 46,
+                        width: 48,
+                        height: 48,
                         borderRadius: '50%',
                         overflow: 'hidden',
-                        border: 0,
-                        background: P.bgSoft,
-                        color: P.pink,
+                        border: `1px solid ${T.border}`,
+                        background: T.primaryGlow,
+                        color: T.primary,
                         display: 'grid',
                         placeItems: 'center',
                         cursor: 'pointer',
                         padding: 0,
                         fontWeight: 900,
+                        fontFamily: FONT.sans,
                       }}
                     >
                       {user.avatar_url ? (
                         <img
                           src={user.avatar_url}
-                          alt=""
+                          alt={`Avatar di ${user.username}`}
+                          referrerPolicy="no-referrer"
                           style={{
                             width: '100%',
                             height: '100%',
@@ -528,9 +549,12 @@ export default function UserConnectionsPage() {
                     </button>
 
                     <button
+                      type="button"
                       onClick={() =>
-                        router.push(
-                          `/utente/${encodeURIComponent(user.username)}`
+                        void router.push(
+                          `/utente/${encodeURIComponent(
+                            user.username
+                          )}`
                         )
                       }
                       style={{
@@ -540,13 +564,17 @@ export default function UserConnectionsPage() {
                         textAlign: 'left',
                         minWidth: 0,
                         cursor: 'pointer',
+                        fontFamily: FONT.sans,
                       }}
                     >
                       <strong
                         style={{
                           display: 'block',
-                          color: P.text,
-                          fontSize: 12,
+                          color: T.text,
+                          fontSize: 12.5,
+                          overflow: 'hidden',
+                          whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis',
                         }}
                       >
                         @{user.username}
@@ -555,9 +583,9 @@ export default function UserConnectionsPage() {
                       <span
                         style={{
                           display: '-webkit-box',
-                          color: P.textFaint,
-                          fontSize: 9,
-                          lineHeight: 1.4,
+                          color: T.textFaint,
+                          fontSize: 9.5,
+                          lineHeight: 1.45,
                           marginTop: 3,
                           WebkitLineClamp: 2,
                           WebkitBoxOrient: 'vertical',
@@ -567,70 +595,65 @@ export default function UserConnectionsPage() {
                         {user.bio?.trim() || 'Nessuna bio.'}
                       </span>
 
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: 5,
-                          flexWrap: 'wrap',
-                          marginTop: 6,
-                        }}
-                      >
-                        {(user.compatibility_score ?? 0) > 0 && (
-                          <span
-                            style={{
-                              border: `1px solid ${P.gold}55`,
-                              background: `${P.gold}12`,
-                              color: P.gold,
-                              padding: '3px 6px',
-                              fontSize: 8,
-                              fontWeight: 850,
-                            }}
-                          >
-                            Compatibilità {user.compatibility_score}
-                          </span>
-                        )}
+                      {(compatibility > 0 || user.follows_you) && (
+                        <span
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            flexWrap: 'wrap',
+                            marginTop: 6,
+                            color: T.textFaint,
+                            fontSize: 8.5,
+                            fontWeight: 800,
+                          }}
+                        >
+                          {compatibility > 0 && (
+                            <span style={{ color: T.accent }}>
+                              {Math.round(compatibility)}% compatibilità
+                            </span>
+                          )}
 
-                        {user.follows_you && (
-                          <span
-                            style={{
-                              border: `1px solid ${P.pink}55`,
-                              background: `${P.pink}10`,
-                              color: P.pink,
-                              padding: '3px 6px',
-                              fontSize: 8,
-                              fontWeight: 850,
-                            }}
-                          >
-                            Ti segue
-                          </span>
-                        )}
-                      </div>
+                          {compatibility > 0 && user.follows_you && (
+                            <span>·</span>
+                          )}
+
+                          {user.follows_you && (
+                            <span style={{ color: T.primary }}>
+                              Ti segue
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </button>
 
                     {!isMe && (
                       <button
+                        type="button"
                         onClick={() => void toggleFollow(user)}
                         disabled={busy}
                         style={{
                           border: `1px solid ${
                             user.is_following
-                              ? P.border
-                              : P.pink
+                              ? T.border
+                              : T.primary
                           }`,
                           background: user.is_following
-                            ? P.bgSoft
-                            : P.pink,
+                            ? 'transparent'
+                            : T.primary,
                           color: user.is_following
-                            ? P.textMuted
+                            ? T.textMuted
                             : '#fff',
                           padding: '8px 10px',
                           cursor: busy ? 'wait' : 'pointer',
                           opacity: busy ? 0.6 : 1,
+                          fontFamily: FONT.sans,
                           fontSize: 9,
-                          fontWeight: 800,
+                          fontWeight: 850,
                           display: 'inline-flex',
                           alignItems: 'center',
                           gap: 5,
+                          whiteSpace: 'nowrap',
                         }}
                       >
                         {user.is_following ? (
@@ -640,10 +663,10 @@ export default function UserConnectionsPage() {
                         )}
 
                         {busy
-                          ? '...'
+                          ? '…'
                           : user.is_following
-                          ? 'Segui già'
-                          : 'Segui'}
+                            ? 'Segui già'
+                            : 'Segui'}
                       </button>
                     )}
                   </article>
@@ -652,6 +675,20 @@ export default function UserConnectionsPage() {
             </div>
           )}
         </div>
+
+        <style>{`
+          @media (max-width: 560px) {
+            .cdr-connection-row {
+              grid-template-columns: 44px minmax(0,1fr) !important;
+            }
+
+            .cdr-connection-row > button:last-child {
+              grid-column: 2;
+              justify-self: start;
+              margin-top: -2px;
+            }
+          }
+        `}</style>
       </main>
     </AppShell>
   );

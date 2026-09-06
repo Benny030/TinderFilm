@@ -2,12 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
-import AppShell from '@/components/layout/AppShell';
-import { useAuth } from '@/hooks/useAuth';
-import { useTheme } from '@/context/ThemeContext';
-import { createBrowserClient } from '@/utils/supabase/browser';
 import {
-  ArrowLeft,
   CheckCircle,
   Clock,
   Flag,
@@ -15,36 +10,12 @@ import {
   XCircle,
 } from '@phosphor-icons/react';
 
-const D = {
-  bg: '#0a0806',
-  bgSoft: '#14100e',
-  card: '#1c1613',
-  border: '#2d221c',
-  gold: '#f5b92f',
-  pink: '#ed3d73',
-  text: '#f0ebe6',
-  textMuted: '#b5a89e',
-  textFaint: '#7a6b60',
-  error: '#ef4444',
-  success: '#22c55e',
-};
-
-const L = {
-  bg: '#f5efe8',
-  bgSoft: '#ece3d9',
-  card: '#ffffff',
-  border: '#d6cbbc',
-  gold: '#b8860b',
-  pink: '#b83060',
-  text: '#1f1a16',
-  textMuted: '#5c5248',
-  textFaint: '#8a7c6e',
-  error: '#dc2626',
-  success: '#16a34a',
-};
-
-const FONT = "'Inter','Helvetica Neue',sans-serif";
-const FONT_DISPLAY = "'Playfair Display','Georgia',serif";
+import AppShell from '@/components/layout/AppShell';
+import BackButton from '@/components/ui/BackButton';
+import { useAuth } from '@/hooks/useAuth';
+import { useTheme } from '@/context/ThemeContext';
+import { createBrowserClient } from '@/utils/supabase/browser';
+import { C, FONT, THEME } from '@/styles/token';
 
 type ReportStatus =
   | 'pending'
@@ -106,8 +77,7 @@ export default function SegnalazioniPage() {
   const router = useRouter();
   const { currentUser, isGuest, isLoading } = useAuth();
   const { theme } = useTheme();
-  const P = theme === 'dark' ? D : L;
-
+  const T = theme === 'dark' ? THEME.dark : THEME.light;
   const supabase = useRef(createBrowserClient()).current;
 
   const [reports, setReports] = useState<ReportRow[]>([]);
@@ -161,7 +131,8 @@ export default function SegnalazioniPage() {
     if (status === 'reviewing') {
       return {
         label: 'In revisione',
-        color: P.gold,
+        color: T.accent,
+        background: T.accentGlow,
         Icon: HourglassMedium,
       };
     }
@@ -169,7 +140,8 @@ export default function SegnalazioniPage() {
     if (status === 'resolved') {
       return {
         label: 'Risolta',
-        color: P.success,
+        color: C.success,
+        background: C.successLight,
         Icon: CheckCircle,
       };
     }
@@ -177,14 +149,16 @@ export default function SegnalazioniPage() {
     if (status === 'dismissed') {
       return {
         label: 'Archiviata',
-        color: P.textFaint,
+        color: T.textFaint,
+        background: T.bgSoft,
         Icon: XCircle,
       };
     }
 
     return {
       label: 'In attesa',
-      color: P.pink,
+      color: T.primary,
+      background: T.primaryGlow,
       Icon: Clock,
     };
   };
@@ -199,14 +173,18 @@ export default function SegnalazioniPage() {
       <div
         style={{
           minHeight: '100vh',
-          background: P.bg,
+          background: T.bg,
           display: 'grid',
           placeItems: 'center',
-          color: P.textMuted,
-          fontFamily: FONT,
+          color: T.textMuted,
+          fontFamily: FONT.sans,
         }}
       >
-        Caricamento...
+        <Flag
+          size={40}
+          color={T.primary}
+          weight="duotone"
+        />
       </div>
     );
   }
@@ -216,9 +194,9 @@ export default function SegnalazioniPage() {
       <main
         style={{
           minHeight: '100vh',
-          background: P.bg,
-          color: P.text,
-          fontFamily: FONT,
+          background: T.bg,
+          color: T.text,
+          fontFamily: FONT.sans,
           padding: '26px 18px 80px',
         }}
       >
@@ -229,26 +207,20 @@ export default function SegnalazioniPage() {
             margin: '0 auto',
           }}
         >
-          <button
-            type="button"
-            onClick={() => router.back()}
-            style={{
-              border: 0,
-              background: 'transparent',
-              color: P.textMuted,
-              padding: 0,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              marginBottom: 18,
-              fontWeight: 700,
-              fontFamily: FONT,
-            }}
-          >
-            <ArrowLeft size={16} />
-            Indietro
-          </button>
+          <div style={{ marginBottom: 18 }}>
+            <BackButton
+              onClick={() => {
+                if (
+                  typeof window !== 'undefined' &&
+                  window.history.length > 1
+                ) {
+                  router.back();
+                } else {
+                  void router.push('/profilo');
+                }
+              }}
+            />
+          </div>
 
           <header style={{ marginBottom: 18 }}>
             <div
@@ -256,21 +228,25 @@ export default function SegnalazioniPage() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 7,
-                color: P.textFaint,
+                color: T.textFaint,
                 fontSize: 10,
                 textTransform: 'uppercase',
                 letterSpacing: '.09em',
               }}
             >
-              <Flag size={15} color={P.pink} weight="fill" />
+              <Flag
+                size={15}
+                color={T.primary}
+                weight="fill"
+              />
               Sicurezza community
             </div>
 
             <h1
               style={{
                 margin: '6px 0 5px',
-                color: P.text,
-                fontFamily: FONT_DISPLAY,
+                color: T.text,
+                fontFamily: FONT.display,
                 fontSize: 30,
               }}
             >
@@ -280,9 +256,10 @@ export default function SegnalazioniPage() {
             <p
               style={{
                 margin: 0,
-                color: P.textMuted,
+                color: T.textMuted,
                 fontSize: 12,
                 lineHeight: 1.6,
+                maxWidth: 620,
               }}
             >
               Qui puoi controllare lo stato delle segnalazioni che
@@ -294,9 +271,9 @@ export default function SegnalazioniPage() {
             <div
               style={{
                 marginBottom: 12,
-                border: `1px solid ${P.error}45`,
-                background: 'rgba(239,68,68,.08)',
-                color: P.error,
+                border: `1px solid ${C.error}45`,
+                background: C.errorLight,
+                color: C.error,
                 padding: 11,
                 fontSize: 11,
               }}
@@ -308,34 +285,34 @@ export default function SegnalazioniPage() {
           {loading ? (
             <div
               style={{
-                border: `1px solid ${P.border}`,
-                background: P.card,
+                border: `1px solid ${T.border}`,
+                background: T.surface,
                 padding: 34,
                 textAlign: 'center',
-                color: P.textFaint,
+                color: T.textFaint,
                 fontSize: 12,
               }}
             >
-              Caricamento segnalazioni...
+              Caricamento segnalazioni…
             </div>
           ) : reports.length === 0 ? (
             <div
               style={{
-                border: `1px dashed ${P.border}`,
-                background: P.card,
+                border: `1px dashed ${T.border}`,
+                background: T.surface,
                 padding: 40,
                 textAlign: 'center',
               }}
             >
               <Flag
                 size={34}
-                color={P.textFaint}
+                color={T.textFaint}
                 weight="duotone"
               />
 
               <div
                 style={{
-                  color: P.text,
+                  color: T.text,
                   fontSize: 13,
                   fontWeight: 800,
                   marginTop: 8,
@@ -346,7 +323,7 @@ export default function SegnalazioniPage() {
 
               <div
                 style={{
-                  color: P.textFaint,
+                  color: T.textFaint,
                   fontSize: 10,
                   marginTop: 4,
                 }}
@@ -369,8 +346,8 @@ export default function SegnalazioniPage() {
                   <article
                     key={report.id}
                     style={{
-                      border: `1px solid ${P.border}`,
-                      background: P.card,
+                      border: `1px solid ${T.border}`,
+                      background: T.surface,
                       padding: 14,
                     }}
                   >
@@ -386,7 +363,7 @@ export default function SegnalazioniPage() {
                       <div>
                         <div
                           style={{
-                            color: P.textFaint,
+                            color: T.textFaint,
                             fontSize: 9,
                             textTransform: 'uppercase',
                             letterSpacing: '.07em',
@@ -398,7 +375,7 @@ export default function SegnalazioniPage() {
 
                         <div
                           style={{
-                            color: P.text,
+                            color: T.text,
                             fontSize: 13,
                             fontWeight: 800,
                           }}
@@ -414,13 +391,16 @@ export default function SegnalazioniPage() {
                           gap: 5,
                           color: meta.color,
                           border: `1px solid ${meta.color}45`,
-                          background: `${meta.color}10`,
+                          background: meta.background,
                           padding: '5px 7px',
                           fontSize: 9,
                           fontWeight: 800,
                         }}
                       >
-                        <StatusIcon size={13} weight="fill" />
+                        <StatusIcon
+                          size={13}
+                          weight="fill"
+                        />
                         {meta.label}
                       </div>
                     </div>
@@ -428,7 +408,7 @@ export default function SegnalazioniPage() {
                     {report.details && (
                       <p
                         style={{
-                          color: P.textMuted,
+                          color: T.textMuted,
                           fontSize: 10,
                           lineHeight: 1.55,
                           margin: '10px 0 0',
@@ -444,12 +424,12 @@ export default function SegnalazioniPage() {
                       style={{
                         marginTop: 10,
                         paddingTop: 9,
-                        borderTop: `1px solid ${P.border}`,
+                        borderTop: `1px solid ${T.border}`,
                         display: 'flex',
                         justifyContent: 'space-between',
                         gap: 10,
                         flexWrap: 'wrap',
-                        color: P.textFaint,
+                        color: T.textFaint,
                         fontSize: 8,
                       }}
                     >

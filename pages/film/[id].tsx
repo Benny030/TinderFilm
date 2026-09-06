@@ -5649,7 +5649,7 @@ export default function FilmDetailPage() {
             </div>
           </div>
         )}
-        <style jsx global>{`
+        <style>{`
           .cdr-film-cinedate-scope ::selection {
             background: ${P.pinkGlow};
             color: ${P.text};
