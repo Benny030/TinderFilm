@@ -466,6 +466,36 @@ export default function NotifichePage() {
 
   return (
     <AppShell activeNav="home">
+      <style>{`
+        @keyframes cdrNotifFadeUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes cdrNotifRowIn {
+          from { opacity: 0; transform: translateX(10px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .cdr-notif-animate,
+          .cdr-notification-row {
+            animation: none !important;
+            transition: none !important;
+            transform: none !important;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .cdr-notif-filters {
+            grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+          }
+
+          .cdr-notification-row {
+            grid-template-columns: 42px minmax(0,1fr) !important;
+          }
+        }
+      `}</style>
       <main
         style={{
           minHeight: '100vh',
@@ -498,7 +528,9 @@ export default function NotifichePage() {
           </div>
 
           <header
+            className="cdr-notif-animate"
             style={{
+              animation: 'cdrNotifFadeUp 380ms ease both',
               borderBottom: `1px solid ${T.border}`,
               paddingBottom: 18,
               marginBottom: 15,
@@ -699,7 +731,7 @@ export default function NotifichePage() {
                 borderTop: `1px solid ${T.border}`,
               }}
             >
-              {visibleNotifications.map((notification) => {
+              {visibleNotifications.map((notification, index) => {
                 const actorName =
                   notification.actor?.username || 'Un utente';
 
@@ -739,6 +771,14 @@ export default function NotifichePage() {
                     role="button"
                     tabIndex={0}
                     className="cdr-notification-row"
+                    onMouseEnter={(event) => {
+                      event.currentTarget.style.transform =
+                        'translateX(3px)';
+                    }}
+                    onMouseLeave={(event) => {
+                      event.currentTarget.style.transform =
+                        'translateX(0)';
+                    }}
                     style={{
                       position: 'relative',
                       width: '100%',
@@ -755,6 +795,10 @@ export default function NotifichePage() {
                       textAlign: 'left',
                       cursor: 'pointer',
                       fontFamily: FONT.sans,
+                      animation:
+                        `cdrNotifRowIn 360ms ${120 + index * 34}ms ease both`,
+                      transition:
+                        'transform 160ms ease, background 160ms ease',
                     }}
                   >
                     {!notification.is_read && (
@@ -974,31 +1018,7 @@ export default function NotifichePage() {
           )}
         </div>
 
-        <style>{`
-          @media (max-width: 620px) {
-            .cdr-notification-filters {
-              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-            }
 
-            .cdr-notification-filters > button:nth-child(2) {
-              border-right: 0 !important;
-            }
-
-            .cdr-notification-filters > button:nth-child(-n + 2) {
-              border-bottom: 1px solid ${T.border} !important;
-            }
-
-            .cdr-notification-row {
-              grid-template-columns: 42px minmax(0, 1fr) !important;
-            }
-
-            .cdr-notification-row > div:last-child {
-              grid-column: 2;
-              justify-self: start;
-              margin-top: -2px;
-            }
-          }
-        `}</style>
       </main>
     </AppShell>
   );

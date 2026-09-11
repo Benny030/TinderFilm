@@ -569,6 +569,82 @@ export default function PublicUserPage() {
 
   return (
     <AppShell activeNav="recensioni">
+      <style>{`
+        @keyframes cdrPublicFadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes cdrPublicAvatarIn {
+          from {
+            opacity: 0;
+            transform: scale(.94);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+
+        @keyframes cdrPublicShine {
+          0% {
+            transform: translateX(-130%);
+            opacity: 0;
+          }
+          25% {
+            opacity: .3;
+          }
+          100% {
+            transform: translateX(180%);
+            opacity: 0;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .cdr-public-animate,
+          .cdr-public-avatar,
+          .cdr-public-card {
+            animation: none !important;
+            transition: none !important;
+            transform: none !important;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .cdr-public-profile-head {
+            grid-template-columns: 1fr !important;
+            text-align: center;
+            justify-items: center;
+          }
+
+          .cdr-public-profile-head > div:last-child {
+            width: 100%;
+          }
+
+          .cdr-public-stats {
+            grid-template-columns: 1fr !important;
+          }
+
+          .cdr-public-stats > div {
+            border-right: 0 !important;
+            border-bottom: 1px solid ${T.border};
+          }
+
+          .cdr-public-stats > div:last-child {
+            border-bottom: 0;
+          }
+
+          .cdr-compatibility-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
       <main
         style={{
           minHeight: '100vh',
@@ -687,17 +763,33 @@ export default function PublicUserPage() {
                 className="cdr-public-profile-head"
                 style={{
                   position: 'relative',
-                  borderTop: `1px solid ${T.border}`,
-                  borderBottom: `1px solid ${T.border}`,
-                  padding: '24px 0 22px',
+                  border: `1px solid ${T.border}`,
+                  background: T.surface,
+                  padding: '24px 22px',
                   display: 'grid',
                   gridTemplateColumns: '112px minmax(0,1fr)',
                   gap: 24,
                   alignItems: 'center',
                   marginBottom: 22,
+                  overflow: 'hidden',
+                  animation:
+                    'cdrPublicFadeUp 420ms ease both',
                 }}
               >
                 <div
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 3,
+                    background: T.primary,
+                  }}
+                />
+
+                <div
+                  className="cdr-public-avatar"
                   style={{
                     width: 112,
                     height: 112,
@@ -710,6 +802,8 @@ export default function PublicUserPage() {
                     color: T.primary,
                     fontSize: 40,
                     fontWeight: 900,
+                    animation:
+                      'cdrPublicAvatarIn 460ms 80ms cubic-bezier(.2,.7,.2,1) both',
                   }}
                 >
                   {profile.avatar_url ? (
@@ -728,7 +822,14 @@ export default function PublicUserPage() {
                   )}
                 </div>
 
-                <div style={{ minWidth: 0 }}>
+                <div
+                  className="cdr-public-animate"
+                  style={{
+                    minWidth: 0,
+                    animation:
+                      'cdrPublicFadeUp 460ms 120ms ease both',
+                  }}
+                >
                   <div
                     style={{
                       color: T.accent,
@@ -919,6 +1020,31 @@ export default function PublicUserPage() {
                     {profile.bio?.trim() || 'Nessuna bio pubblica.'}
                   </p>
 
+                  {!blocked &&
+                    !isOwnProfile &&
+                    compatibility &&
+                    compatibility.compatibility_score > 0 && (
+                      <div
+                        style={{
+                          marginTop: 10,
+                          color: T.textFaint,
+                          fontSize: 9.5,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        Affinità con te{' '}
+                        <strong
+                          style={{
+                            color: T.accent,
+                          }}
+                        >
+                          {Math.round(
+                            compatibility.compatibility_score
+                          )}%
+                        </strong>
+                      </div>
+                    )}
+
                   {blocked && (
                     <div
                       style={{
@@ -1022,11 +1148,15 @@ export default function PublicUserPage() {
                 compatibility &&
                 compatibility.compatibility_score > 0 && (
                   <section
+                    className="cdr-public-animate"
                     style={{
-                      borderTop: `1px solid ${T.border}`,
-                      borderBottom: `1px solid ${T.border}`,
-                      padding: '18px 0',
+                      border: `1px solid ${T.border}`,
+                      background:
+                        `linear-gradient(135deg, ${T.accentGlow} 0%, ${T.surface} 62%)`,
+                      padding: '18px',
                       marginBottom: 22,
+                      animation:
+                        'cdrPublicFadeUp 460ms 160ms ease both',
                     }}
                   >
                     <div
@@ -1073,8 +1203,9 @@ export default function PublicUserPage() {
                         style={{
                           color: T.accent,
                           fontFamily: FONT.display,
-                          fontSize: 27,
+                          fontSize: 32,
                           fontWeight: 800,
+                          lineHeight: 1,
                         }}
                       >
                         {Math.round(compatibility.compatibility_score)}%
@@ -1161,8 +1292,11 @@ export default function PublicUserPage() {
 
               {!blocked && recentActivity.length > 0 && (
                 <section
+                  className="cdr-public-animate"
                   style={{
                     marginBottom: 24,
+                    animation:
+                      'cdrPublicFadeUp 460ms 210ms ease both',
                   }}
                 >
                   <div
@@ -1327,13 +1461,15 @@ export default function PublicUserPage() {
               {!blocked && (
                 <>
                   <section
-                    className="cdr-public-stats"
+                    className="cdr-public-stats cdr-public-animate"
                     style={{
                       display: 'grid',
                       gridTemplateColumns: 'repeat(3,minmax(0,1fr))',
                       borderTop: `1px solid ${T.border}`,
                       borderBottom: `1px solid ${T.border}`,
                       marginBottom: 24,
+                      animation:
+                        'cdrPublicFadeUp 460ms 250ms ease both',
                     }}
                   >
                     {[
@@ -1501,6 +1637,15 @@ export default function PublicUserPage() {
                                   <button
                                     key={`${section.key}-${item.entry_id}`}
                                     type="button"
+                                    className="cdr-public-card"
+                                    onMouseEnter={(event) => {
+                                      event.currentTarget.style.transform =
+                                        'translateY(-4px)';
+                                    }}
+                                    onMouseLeave={(event) => {
+                                      event.currentTarget.style.transform =
+                                        'translateY(0)';
+                                    }}
                                     onClick={() => {
                                       if (item.provider === 'tmdb') {
                                         void router.push(
@@ -1521,6 +1666,8 @@ export default function PublicUserPage() {
                                           ? 'pointer'
                                           : 'default',
                                       fontFamily: FONT.sans,
+                                      transition:
+                                        'transform 180ms ease',
                                     }}
                                   >
                                     <div
@@ -1612,7 +1759,7 @@ export default function PublicUserPage() {
                         style={{
                           margin: 0,
                           fontFamily: FONT.display,
-                          fontSize: 23,
+                          fontSize: 24,
                         }}
                       >
                         Recensioni
@@ -1650,6 +1797,15 @@ export default function PublicUserPage() {
                         {reviews.map((review) => (
                           <article
                             key={review.entry_id}
+                            className="cdr-public-card"
+                            onMouseEnter={(event) => {
+                              event.currentTarget.style.transform =
+                                'translateY(-2px)';
+                            }}
+                            onMouseLeave={(event) => {
+                              event.currentTarget.style.transform =
+                                'translateY(0)';
+                            }}
                             style={{
                               border: `1px solid ${T.border}`,
                               background: T.surface,
@@ -1657,6 +1813,8 @@ export default function PublicUserPage() {
                               display: 'grid',
                               gridTemplateColumns: '62px minmax(0,1fr)',
                               gap: 13,
+                              transition:
+                                'transform 180ms ease, border-color 180ms ease',
                             }}
                           >
                             <button
@@ -1816,36 +1974,7 @@ export default function PublicUserPage() {
           )}
         </div>
 
-        <style>{`
-          @media (max-width: 620px) {
-            .cdr-public-profile-head {
-              grid-template-columns: 1fr !important;
-              text-align: center;
-              justify-items: center;
-            }
 
-            .cdr-public-profile-head > div:last-child {
-              width: 100%;
-            }
-
-            .cdr-public-stats {
-              grid-template-columns: 1fr !important;
-            }
-
-            .cdr-public-stats > div {
-              border-right: 0 !important;
-              border-bottom: 1px solid ${T.border};
-            }
-
-            .cdr-public-stats > div:last-child {
-              border-bottom: 0;
-            }
-
-            .cdr-compatibility-grid {
-              grid-template-columns: 1fr !important;
-            }
-          }
-        `}</style>
       </main>
 
       <ReportModal

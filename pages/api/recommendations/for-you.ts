@@ -10,20 +10,22 @@ type SeedReason =
   | 'room_winner'
   | 'explicit_more_like_this';
 
+type SeedGroup = 'personal' | 'rooms';
+
 type Seed = {
   tmdbId: number;
   title: string | null;
   score: number;
   reasons: SeedReason[];
+  group: SeedGroup;
 };
 
-
-type TasteProfile = {
-  genreWeights: Map<number, number>;
-  actorWeights: Map<number, number>;
-  genreNames: Map<number, string>;
-  actorNames: Map<number, string>;
-};
+type RecommendationSource =
+  | 'favorite'
+  | 'room'
+  | 'cast'
+  | 'profile_genre'
+  | 'exploration';
 
 type Recommendation = {
   tmdb_id: number;
@@ -36,6 +38,7 @@ type Recommendation = {
   genre_ids: number[];
   score: number;
   reason: string;
+  source: RecommendationSource;
   based_on: Array<{
     tmdb_id: number;
     title: string | null;
@@ -48,6 +51,7 @@ type RecommendationCollections = {
   from_rooms: Recommendation[];
   cast_affinity: Recommendation[];
   profile_genres: Recommendation[];
+  exploration: Recommendation[];
 };
 
 type SuccessResponse = {
@@ -74,60 +78,53 @@ type SuccessResponse = {
     }>;
     profile_genres: string[];
     cold_start_used: boolean;
+    source_mix?: {
+      favorite: number;
+      room: number;
+      cast: number;
+      profile_genre: number;
+      exploration: number;
+    };
   };
 };
 
-type ErrorResponse = { error: string };
-
-const MAX_SEEDS = 8;
-const MAX_RECOMMENDATIONS = 20;
-const MAX_NEGATIVE_PROFILE_MOVIES = 12;
-const MAX_ACTOR_CANDIDATES = 18;
-const TMDB_CACHE_TTL_MS = 15 * 60 * 1000;
-
-type CacheEntry<T> = {
-  value: T;
-  expiresAt: number;
+type ErrorResponse = {
+  error: string;
 };
 
-const similarCache = new Map<number, CacheEntry<any[]>>();
-const tasteDetailsCache = new Map<
-  number,
-  CacheEntry<{
-    genres: number[];
-    actors: number[];
-    genreNames: Record<number, string>;
-    actorNames: Record<number, string>;
-  }>
->();
-let trendingCache: CacheEntry<any[]> | null = null;
+type TasteDetails = {
+  genres: number[];
+  actors: number[];
+  genreNames: Record<number, string>;
+  actorNames: Record<number, string>;
+};
 
-function readCache<T>(cache: Map<number, CacheEntry<T>>, key: number): T | null {
-  const cached = cache.get(key);
-  if (!cached) return null;
+type Candidate = {
+  movie: any;
+  score: number;
+  source: RecommendationSource;
+  basedOn: Array<{
+    seed: Seed;
+    weight: number;
+  }>;
+};
 
-  if (cached.expiresAt <= Date.now()) {
-    cache.delete(key);
-    return null;
-  }
+const MAX_PERSONAL_SEEDS = 6;
+const MAX_ROOM_SEEDS = 4;
+const MAX_RECOMMENDATIONS = 24;
+const COLLECTION_SIZE = 8;
 
-  return cached.value;
-}
-
-function recencyMultiplier(value: unknown): number {
-  if (!value) return 1;
-
-  const timestamp = new Date(String(value)).getTime();
-  if (!Number.isFinite(timestamp)) return 1;
-
-  const ageDays = Math.max(0, (Date.now() - timestamp) / 86_400_000);
-
-  if (ageDays <= 7) return 1.25;
-  if (ageDays <= 30) return 1.15;
-  if (ageDays <= 90) return 1.08;
-  if (ageDays <= 180) return 1.03;
-  return 1;
-}
+const SOURCE_QUOTAS: Record<
+  RecommendationSource,
+  number
+> = {
+  favorite: 9,
+  room: 5,
+  cast: 4,
+  profile_genre: 6,
+  exploration: 4,
+};
+const TMDB_CACHE_TTL_MS = 15 * 60 * 1000;
 
 const PROFILE_GENRE_TO_TMDB: Record<string, number> = {
   azione: 28,
@@ -163,42 +160,119 @@ const PROFILE_GENRE_TO_TMDB: Record<string, number> = {
   western: 37,
 };
 
-function normalizeProfileGenre(value: string) {
-  return value.trim().toLowerCase();
-}
+type CacheEntry<T> = {
+  value: T;
+  expiresAt: number;
+};
+
+const similarCache = new Map<number, CacheEntry<any[]>>();
+const detailsCache = new Map<number, CacheEntry<TasteDetails>>();
+const discoverGenreCache = new Map<string, CacheEntry<any[]>>();
+const discoverCastCache = new Map<string, CacheEntry<any[]>>();
+let trendingCache: CacheEntry<any[]> | null = null;
 
 function getBearerToken(req: NextApiRequest) {
   const authorization = req.headers.authorization;
-  if (!authorization?.startsWith('Bearer ')) return null;
+
+  if (!authorization?.startsWith('Bearer ')) {
+    return null;
+  }
+
   return authorization.slice('Bearer '.length).trim() || null;
 }
 
 function parseTmdbMovieId(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+  if (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value > 0
+  ) {
     return value;
   }
 
   const text = String(value ?? '').trim();
+
   if (!text) return null;
 
-  if (/^\\d+$/.test(text)) {
+  if (/^\d+$/.test(text)) {
     const numeric = Number(text);
-    return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
+
+    return Number.isInteger(numeric) && numeric > 0
+      ? numeric
+      : null;
   }
 
-  const match = text.match(/^tmdb_(\\d+)$/i);
+  const match = text.match(/^tmdb_(\d+)$/i);
+
   if (!match) return null;
 
   const numeric = Number(match[1]);
-  return Number.isInteger(numeric) && numeric > 0 ? numeric : null;
+
+  return Number.isInteger(numeric) && numeric > 0
+    ? numeric
+    : null;
+}
+
+function normalizeProfileGenre(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function recencyMultiplier(value: unknown): number {
+  if (!value) return 1;
+
+  const timestamp = new Date(String(value)).getTime();
+
+  if (!Number.isFinite(timestamp)) return 1;
+
+  const ageDays = Math.max(
+    0,
+    (Date.now() - timestamp) / 86_400_000,
+  );
+
+  if (ageDays <= 7) return 1.2;
+  if (ageDays <= 30) return 1.12;
+  if (ageDays <= 90) return 1.06;
+
+  return 1;
+}
+
+function readCache<T>(
+  cache: Map<string | number, CacheEntry<T>>,
+  key: string | number,
+): T | null {
+  const cached = cache.get(key);
+
+  if (!cached) return null;
+
+  if (cached.expiresAt <= Date.now()) {
+    cache.delete(key);
+    return null;
+  }
+
+  return cached.value;
+}
+
+function writeCache<T>(
+  cache: Map<string | number, CacheEntry<T>>,
+  key: string | number,
+  value: T,
+) {
+  cache.set(key, {
+    value,
+    expiresAt: Date.now() + TMDB_CACHE_TTL_MS,
+  });
 }
 
 function posterUrl(path: string | null | undefined) {
-  return path ? `https://image.tmdb.org/t/p/w500${path}` : null;
+  return path
+    ? `https://image.tmdb.org/t/p/w500${path}`
+    : null;
 }
 
 function backdropUrl(path: string | null | undefined) {
-  return path ? `https://image.tmdb.org/t/p/w780${path}` : null;
+  return path
+    ? `https://image.tmdb.org/t/p/w780${path}`
+    : null;
 }
 
 function addSeed(
@@ -207,6 +281,7 @@ function addSeed(
   title: string | null,
   points: number,
   reason: SeedReason,
+  group: SeedGroup,
 ) {
   if (!tmdbId || points <= 0) return;
 
@@ -215,81 +290,153 @@ function addSeed(
     title,
     score: 0,
     reasons: [],
+    group,
   };
 
   current.score += points;
-  if (!current.title && title) current.title = title;
-  if (!current.reasons.includes(reason)) current.reasons.push(reason);
+
+  if (!current.title && title) {
+    current.title = title;
+  }
+
+  if (!current.reasons.includes(reason)) {
+    current.reasons.push(reason);
+  }
+
+  if (group === 'personal') {
+    current.group = 'personal';
+  }
 
   map.set(tmdbId, current);
 }
 
-function recommendationReason(seed: Seed | undefined) {
-  if (!seed) return 'Scelto per i tuoi gusti';
+function seedReason(seed: Seed | undefined) {
+  if (!seed) {
+    return 'Scelto per i tuoi gusti';
+  }
 
   if (seed.reasons.includes('explicit_more_like_this')) {
     return seed.title
-      ? `Perché hai chiesto più film come ${seed.title}`
-      : 'Basato sui feedback che hai dato ai consigli';
+      ? `Perché vuoi più film come ${seed.title}`
+      : 'Basato sui feedback che hai dato';
   }
 
   if (seed.reasons.includes('favorite')) {
     return seed.title
-      ? `Perché hai messo ${seed.title} tra i preferiti`
-      : 'Basato sui tuoi preferiti';
+      ? `Perché ami ${seed.title}`
+      : 'Basato sui tuoi film preferiti';
   }
 
   if (seed.reasons.includes('high_rating')) {
     return seed.title
-      ? `Perché hai dato un voto alto a ${seed.title}`
+      ? `Perché hai apprezzato molto ${seed.title}`
       : 'Basato sui film che hai valutato meglio';
   }
 
   if (seed.reasons.includes('room_winner')) {
     return seed.title
-      ? `Perché avete scelto ${seed.title} in una stanza`
+      ? `Dopo la scelta di ${seed.title} in una stanza`
       : 'Basato sui film scelti nelle tue stanze';
   }
 
   if (seed.reasons.includes('room_match')) {
     return seed.title
-      ? `Simile a un tuo match: ${seed.title}`
+      ? `Vicino a un tuo match: ${seed.title}`
       : 'Basato sui tuoi match';
   }
 
   if (seed.reasons.includes('room_like')) {
     return seed.title
-      ? `Perché hai apprezzato ${seed.title} durante uno swipe`
+      ? `Dopo il tuo swipe su ${seed.title}`
       : 'Basato sui tuoi swipe positivi';
   }
 
   if (seed.reasons.includes('watchlist')) {
     return seed.title
-      ? `Simile a ${seed.title}, che vuoi vedere`
-      : 'Basato sulla tua lista Da vedere';
+      ? `Potrebbe piacerti se ti interessa ${seed.title}`
+      : 'Basato su un titolo della tua lista';
   }
 
   return 'Scelto per i tuoi gusti';
 }
 
-async function fetchTmdbSimilar(tmdbId: number, apiKey: string) {
-  const cached = readCache(similarCache, tmdbId);
+function qualityScore(movie: any) {
+  const rating = Number(movie?.vote_average ?? 0);
+  const votes = Number(movie?.vote_count ?? 0);
+  const popularity = Number(movie?.popularity ?? 0);
+
+  const ratingBoost =
+    votes >= 500
+      ? Math.max(0, rating - 6.2) * 0.7
+      : votes >= 100
+        ? Math.max(0, rating - 6.4) * 0.35
+        : 0;
+
+  const popularityBoost = Math.min(
+    popularity / 140,
+    1.2,
+  );
+
+  return ratingBoost + popularityBoost;
+}
+
+function movieIsUsable(movie: any) {
+  const tmdbId = Number(movie?.id);
+
+  return (
+    Number.isInteger(tmdbId) &&
+    tmdbId > 0 &&
+    Boolean(movie?.title || movie?.original_title)
+  );
+}
+
+async function fetchTmdbSimilar(
+  tmdbId: number,
+  apiKey: string,
+) {
+  const cached = readCache(
+    similarCache as Map<string | number, CacheEntry<any[]>>,
+    tmdbId,
+  );
+
   if (cached) return cached;
 
   try {
     const response = await fetch(
-      `https://api.themoviedb.org/3/movie/${tmdbId}/similar?api_key=${encodeURIComponent(apiKey)}&language=it-IT&page=1`,
+      `https://api.themoviedb.org/3/movie/${tmdbId}/recommendations?api_key=${encodeURIComponent(apiKey)}&language=it-IT&page=1`,
     );
 
-    if (!response.ok) return [];
+    if (!response.ok) {
+      const fallback = await fetch(
+        `https://api.themoviedb.org/3/movie/${tmdbId}/similar?api_key=${encodeURIComponent(apiKey)}&language=it-IT&page=1`,
+      );
+
+      if (!fallback.ok) return [];
+
+      const fallbackData = await fallback.json();
+      const fallbackMovies = Array.isArray(fallbackData?.results)
+        ? fallbackData.results
+        : [];
+
+      writeCache(
+        similarCache as Map<string | number, CacheEntry<any[]>>,
+        tmdbId,
+        fallbackMovies,
+      );
+
+      return fallbackMovies;
+    }
 
     const data = await response.json();
-    const movies = Array.isArray(data?.results) ? data.results : [];
+    const movies = Array.isArray(data?.results)
+      ? data.results
+      : [];
 
-    similarCache.set(tmdbId, {
-      value: movies,
-      expiresAt: Date.now() + TMDB_CACHE_TTL_MS,
-    });
+    writeCache(
+      similarCache as Map<string | number, CacheEntry<any[]>>,
+      tmdbId,
+      movies,
+    );
 
     return movies;
   } catch {
@@ -297,54 +444,15 @@ async function fetchTmdbSimilar(tmdbId: number, apiKey: string) {
   }
 }
 
-async function fetchTrending(apiKey: string) {
-  if (trendingCache && trendingCache.expiresAt > Date.now()) {
-    return trendingCache.value;
-  }
-
-  try {
-    const response = await fetch(
-      `https://api.themoviedb.org/3/trending/movie/week?api_key=${encodeURIComponent(apiKey)}&language=it-IT`,
-    );
-
-    if (!response.ok) return [];
-
-    const data = await response.json();
-    const movies = Array.isArray(data?.results) ? data.results : [];
-
-    trendingCache = {
-      value: movies,
-      expiresAt: Date.now() + TMDB_CACHE_TTL_MS,
-    };
-
-    return movies;
-  } catch {
-    return [];
-  }
-}
-
-async function fetchDiscoverByGenres(
-  genreIds: number[],
+async function fetchMovieDetails(
+  tmdbId: number,
   apiKey: string,
-) {
-  if (genreIds.length === 0) return [];
+): Promise<TasteDetails> {
+  const cached = readCache(
+    detailsCache as Map<string | number, CacheEntry<TasteDetails>>,
+    tmdbId,
+  );
 
-  try {
-    const response = await fetch(
-      `https://api.themoviedb.org/3/discover/movie?api_key=${encodeURIComponent(apiKey)}&language=it-IT&sort_by=popularity.desc&include_adult=false&vote_count.gte=80&with_genres=${genreIds.join('|')}&page=1`,
-    );
-
-    if (!response.ok) return [];
-
-    const data = await response.json();
-    return Array.isArray(data?.results) ? data.results : [];
-  } catch {
-    return [];
-  }
-}
-
-async function fetchTmdbTasteDetails(tmdbId: number, apiKey: string) {
-  const cached = readCache(tasteDetailsCache, tmdbId);
   if (cached) return cached;
 
   try {
@@ -354,10 +462,10 @@ async function fetchTmdbTasteDetails(tmdbId: number, apiKey: string) {
 
     if (!response.ok) {
       return {
-        genres: [] as number[],
-        actors: [] as number[],
-        genreNames: {} as Record<number, string>,
-        actorNames: {} as Record<number, string>,
+        genres: [],
+        actors: [],
+        genreNames: {},
+        actorNames: {},
       };
     }
 
@@ -371,7 +479,9 @@ async function fetchTmdbTasteDetails(tmdbId: number, apiKey: string) {
           }))
           .filter(
             (genre: { id: number; name: string }) =>
-              Number.isInteger(genre.id) && genre.id > 0 && !!genre.name,
+              Number.isInteger(genre.id) &&
+              genre.id > 0 &&
+              Boolean(genre.name),
           )
       : [];
 
@@ -384,159 +494,719 @@ async function fetchTmdbTasteDetails(tmdbId: number, apiKey: string) {
           }))
           .filter(
             (person: { id: number; name: string }) =>
-              Number.isInteger(person.id) && person.id > 0 && !!person.name,
+              Number.isInteger(person.id) &&
+              person.id > 0 &&
+              Boolean(person.name),
           )
       : [];
 
-    const details = {
-      genres: genreRows.map((genre: { id: number }) => genre.id),
-      actors: actorRows.map((person: { id: number }) => person.id),
+    const details: TasteDetails = {
+      genres: genreRows.map(
+        (genre: { id: number }) => genre.id,
+      ),
+      actors: actorRows.map(
+        (person: { id: number }) => person.id,
+      ),
       genreNames: Object.fromEntries(
-        genreRows.map((genre: { id: number; name: string }) => [
-          genre.id,
-          genre.name,
-        ]),
-      ) as Record<number, string>,
+        genreRows.map(
+          (genre: { id: number; name: string }) => [
+            genre.id,
+            genre.name,
+          ],
+        ),
+      ),
       actorNames: Object.fromEntries(
-        actorRows.map((person: { id: number; name: string }) => [
-          person.id,
-          person.name,
-        ]),
-      ) as Record<number, string>,
+        actorRows.map(
+          (person: { id: number; name: string }) => [
+            person.id,
+            person.name,
+          ],
+        ),
+      ),
     };
 
-    tasteDetailsCache.set(tmdbId, {
-      value: details,
-      expiresAt: Date.now() + TMDB_CACHE_TTL_MS,
-    });
+    writeCache(
+      detailsCache as Map<string | number, CacheEntry<TasteDetails>>,
+      tmdbId,
+      details,
+    );
 
     return details;
   } catch {
     return {
-      genres: [] as number[],
-      actors: [] as number[],
-      genreNames: {} as Record<number, string>,
-      actorNames: {} as Record<number, string>,
+      genres: [],
+      actors: [],
+      genreNames: {},
+      actorNames: {},
     };
   }
 }
 
+async function fetchDiscoverByGenres(
+  genreIds: number[],
+  apiKey: string,
+) {
+  const ids = [...new Set(genreIds)]
+    .filter(Number.isInteger)
+    .slice(0, 4);
+
+  if (ids.length === 0) return [];
+
+  const key = ids.sort((a, b) => a - b).join('|');
+
+  const cached = readCache(
+    discoverGenreCache as Map<
+      string | number,
+      CacheEntry<any[]>
+    >,
+    key,
+  );
+
+  if (cached) return cached;
+
+  try {
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      language: 'it-IT',
+      sort_by: 'popularity.desc',
+      include_adult: 'false',
+      'vote_count.gte': '150',
+      with_genres: ids.join('|'),
+      page: '1',
+    });
+
+    const response = await fetch(
+      `https://api.themoviedb.org/3/discover/movie?${params.toString()}`,
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const movies = Array.isArray(data?.results)
+      ? data.results
+      : [];
+
+    writeCache(
+      discoverGenreCache as Map<
+        string | number,
+        CacheEntry<any[]>
+      >,
+      key,
+      movies,
+    );
+
+    return movies;
+  } catch {
+    return [];
+  }
+}
+
+async function fetchDiscoverByCast(
+  actorIds: number[],
+  apiKey: string,
+) {
+  const ids = [...new Set(actorIds)]
+    .filter(Number.isInteger)
+    .slice(0, 2);
+
+  if (ids.length === 0) return [];
+
+  const key = ids.join('|');
+
+  const cached = readCache(
+    discoverCastCache as Map<
+      string | number,
+      CacheEntry<any[]>
+    >,
+    key,
+  );
+
+  if (cached) return cached;
+
+  try {
+    const params = new URLSearchParams({
+      api_key: apiKey,
+      language: 'it-IT',
+      sort_by: 'popularity.desc',
+      include_adult: 'false',
+      'vote_count.gte': '100',
+      with_cast: ids.join('|'),
+      page: '1',
+    });
+
+    const response = await fetch(
+      `https://api.themoviedb.org/3/discover/movie?${params.toString()}`,
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const movies = Array.isArray(data?.results)
+      ? data.results
+      : [];
+
+    writeCache(
+      discoverCastCache as Map<
+        string | number,
+        CacheEntry<any[]>
+      >,
+      key,
+      movies,
+    );
+
+    return movies;
+  } catch {
+    return [];
+  }
+}
+
+async function fetchTrending(apiKey: string) {
+  if (
+    trendingCache &&
+    trendingCache.expiresAt > Date.now()
+  ) {
+    return trendingCache.value;
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.themoviedb.org/3/trending/movie/week?api_key=${encodeURIComponent(apiKey)}&language=it-IT`,
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const movies = Array.isArray(data?.results)
+      ? data.results
+      : [];
+
+    trendingCache = {
+      value: movies,
+      expiresAt:
+        Date.now() + TMDB_CACHE_TTL_MS,
+    };
+
+    return movies;
+  } catch {
+    return [];
+  }
+}
+
+function addCandidate(
+  map: Map<number, Candidate>,
+  movie: any,
+  source: RecommendationSource,
+  score: number,
+  seed?: Seed,
+) {
+  if (!movieIsUsable(movie)) return;
+
+  const tmdbId = Number(movie.id);
+
+  const current = map.get(tmdbId);
+
+  if (!current) {
+    map.set(tmdbId, {
+      movie,
+      score,
+      source,
+      basedOn: seed
+        ? [{ seed, weight: score }]
+        : [],
+    });
+
+    return;
+  }
+
+  current.score += score;
+
+  if (seed) {
+    current.basedOn.push({
+      seed,
+      weight: score,
+    });
+  }
+
+  if (
+    source === 'favorite' &&
+    current.source !== 'favorite'
+  ) {
+    current.source = 'favorite';
+  } else if (
+    source === 'room' &&
+    current.source === 'exploration'
+  ) {
+    current.source = 'room';
+  }
+}
+
+function candidateToRecommendation(
+  candidate: Candidate,
+  genreNames: Map<number, string>,
+  actorNames: Map<number, string>,
+  topActorIds: number[],
+) : Recommendation {
+  const movie = candidate.movie;
+
+  const strongestSeed = [...candidate.basedOn]
+    .sort((a, b) => b.weight - a.weight)[0]
+    ?.seed;
+
+  let reason = seedReason(strongestSeed);
+
+  if (candidate.source === 'profile_genre') {
+    const movieGenres = Array.isArray(movie?.genre_ids)
+      ? movie.genre_ids
+          .map(Number)
+          .map((id: number) => genreNames.get(id))
+          .filter(Boolean)
+          .slice(0, 2)
+      : [];
+
+    reason =
+      movieGenres.length > 0
+        ? `Perché tra i tuoi gusti ci sono ${movieGenres.join(' e ')}`
+        : 'Scelto dai generi che hai indicato';
+  }
+
+  if (candidate.source === 'cast') {
+    const actor = topActorIds
+      .map((id) => actorNames.get(id))
+      .find(Boolean);
+
+    reason = actor
+      ? `Perché guardi spesso film con ${actor}`
+      : 'Basato sugli attori che ricorrono nei tuoi gusti';
+  }
+
+  if (candidate.source === 'exploration') {
+    reason =
+      'Un titolo diverso dai tuoi soliti segnali, per allargare il tuo Per te';
+  }
+
+  const contributions = [...candidate.basedOn]
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 3)
+    .map(({ seed, weight }) => ({
+      tmdb_id: seed.tmdbId,
+      title: seed.title,
+      weight: Number(weight.toFixed(3)),
+    }));
+
+  return {
+    tmdb_id: Number(movie.id),
+    title: String(
+      movie.title ??
+        movie.original_title ??
+        'Senza titolo',
+    ),
+    year:
+      typeof movie.release_date === 'string' &&
+      movie.release_date.length >= 4
+        ? Number(movie.release_date.slice(0, 4))
+        : null,
+    cover: posterUrl(movie.poster_path),
+    backdrop: backdropUrl(movie.backdrop_path),
+    rating: Number(movie.vote_average ?? 0),
+    vote_count: Number(movie.vote_count ?? 0),
+    genre_ids: Array.isArray(movie.genre_ids)
+      ? movie.genre_ids.map(Number).filter(Number.isFinite)
+      : [],
+    score: Number(candidate.score.toFixed(3)),
+    reason,
+    source: candidate.source,
+    based_on: contributions,
+  };
+}
+
+function diversify(
+  recommendations: Recommendation[],
+  limit: number,
+) {
+  const output: Recommendation[] = [];
+  const genreUsage = new Map<number, number>();
+
+  for (const movie of recommendations) {
+    if (output.length >= limit) break;
+
+    const genres = movie.genre_ids;
+
+    const overloaded =
+      genres.length > 0 &&
+      genres.every(
+        (genreId) =>
+          (genreUsage.get(genreId) ?? 0) >= 5,
+      );
+
+    if (overloaded && output.length < 12) {
+      continue;
+    }
+
+    output.push(movie);
+
+    for (const genreId of genres) {
+      genreUsage.set(
+        genreId,
+        (genreUsage.get(genreId) ?? 0) + 1,
+      );
+    }
+  }
+
+  return output;
+}
+
+function mixSources(
+  recommendations: Recommendation[],
+  limit: number,
+) {
+  const selected: Recommendation[] = [];
+  const selectedIds = new Set<number>();
+  const sourceUsage = new Map<
+    RecommendationSource,
+    number
+  >();
+
+  const take = (
+    movie: Recommendation,
+    ignoreQuota = false,
+  ) => {
+    if (
+      selected.length >= limit ||
+      selectedIds.has(movie.tmdb_id)
+    ) {
+      return false;
+    }
+
+    const used =
+      sourceUsage.get(movie.source) ?? 0;
+
+    const quota =
+      SOURCE_QUOTAS[movie.source];
+
+    if (!ignoreQuota && used >= quota) {
+      return false;
+    }
+
+    selected.push(movie);
+    selectedIds.add(movie.tmdb_id);
+    sourceUsage.set(
+      movie.source,
+      used + 1,
+    );
+
+    return true;
+  };
+
+  /*
+   * Primo passaggio:
+   * assicuriamo che il feed non sia composto quasi tutto
+   * da una sola sorgente, anche quando quella sorgente ha
+   * score leggermente superiori.
+   */
+  const sourceOrder: RecommendationSource[] = [
+    'favorite',
+    'profile_genre',
+    'room',
+    'cast',
+    'exploration',
+  ];
+
+  for (const source of sourceOrder) {
+    const sourceMovies =
+      recommendations.filter(
+        (movie) => movie.source === source,
+      );
+
+    const minimum =
+      source === 'favorite'
+        ? 4
+        : source === 'profile_genre'
+          ? 3
+          : source === 'room'
+            ? 2
+            : source === 'cast'
+              ? 2
+              : 1;
+
+    let added = 0;
+
+    for (const movie of sourceMovies) {
+      if (added >= minimum) break;
+
+      if (take(movie)) {
+        added += 1;
+      }
+    }
+  }
+
+  /*
+   * Secondo passaggio:
+   * riempiamo in ordine di score rispettando le quote.
+   */
+  for (const movie of recommendations) {
+    if (selected.length >= limit) break;
+    take(movie);
+  }
+
+  /*
+   * Ultimo fallback:
+   * se una sorgente non aveva abbastanza candidati, non lasciamo
+   * buchi: riempiamo coi migliori rimanenti anche oltre quota.
+   */
+  for (const movie of recommendations) {
+    if (selected.length >= limit) break;
+    take(movie, true);
+  }
+
+  return selected;
+}
+
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<SuccessResponse | ErrorResponse>,
+  res: NextApiResponse<
+    SuccessResponse | ErrorResponse
+  >,
 ) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
-    return res.status(405).json({ error: 'Method not allowed' });
+
+    return res.status(405).json({
+      error: 'Method not allowed',
+    });
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const tmdbApiKey = process.env.TMDB_API_KEY;
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const tmdbApiKey =
+    process.env.TMDB_API_KEY;
 
-  if (!supabaseUrl || !supabaseAnonKey || !serviceRoleKey || !tmdbApiKey) {
-    return res.status(500).json({ error: 'Configurazione server incompleta' });
+  if (
+    !supabaseUrl ||
+    !supabaseAnonKey ||
+    !serviceRoleKey ||
+    !tmdbApiKey
+  ) {
+    return res.status(500).json({
+      error:
+        'Configurazione server incompleta',
+    });
   }
 
   const token = getBearerToken(req);
+
   if (!token) {
-    return res.status(401).json({ error: 'Autenticazione richiesta' });
+    return res.status(401).json({
+      error: 'Autenticazione richiesta',
+    });
   }
 
-  const authClient = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
+  const authClient = createClient(
+    supabaseUrl,
+    supabaseAnonKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
     },
-  });
+  );
 
   const {
     data: { user },
     error: authError,
-  } = await authClient.auth.getUser(token);
+  } =
+    await authClient.auth.getUser(token);
 
   if (authError || !user) {
-    return res.status(401).json({ error: 'Sessione non valida' });
+    return res.status(401).json({
+      error: 'Sessione non valida',
+    });
   }
 
-  const admin = createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
+  const admin = createClient(
+    supabaseUrl,
+    serviceRoleKey,
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
     },
-  });
+  );
 
   try {
-    const seedMap = new Map<number, Seed>();
-    const excluded = new Set<number>();
-    const negativeSwipeIds = new Set<number>();
-    const negativeGenreWeights = new Map<number, number>();
-    const tasteProfile: TasteProfile = {
-      genreWeights: new Map<number, number>(),
-      actorWeights: new Map<number, number>(),
-      genreNames: new Map<number, string>(),
-      actorNames: new Map<number, string>(),
-    };
+    const personalSeedMap =
+      new Map<number, Seed>();
+    const roomSeedMap =
+      new Map<number, Seed>();
+    const excluded =
+      new Set<number>();
+    const explicitNegativeIds =
+      new Set<number>();
+    const roomNegativeIds =
+      new Set<number>();
 
-    const { data: profileRow } = await admin
-      .from('users')
-      .select('favorite_genres')
-      .eq('id', user.id)
-      .maybeSingle();
+    const impressionMap =
+      new Map<
+        number,
+        {
+          count: number;
+          lastSeenAt: string | null;
+        }
+      >();
 
-    const profileGenres = Array.isArray((profileRow as any)?.favorite_genres)
+    const genreWeights =
+      new Map<number, number>();
+    const actorWeights =
+      new Map<number, number>();
+    const genreNames =
+      new Map<number, string>();
+    const actorNames =
+      new Map<number, string>();
+
+    const { data: profileRow } =
+      await admin
+        .from('users')
+        .select('favorite_genres')
+        .eq('id', user.id)
+        .maybeSingle();
+
+    const profileGenres = Array.isArray(
+      (profileRow as any)?.favorite_genres,
+    )
       ? (profileRow as any).favorite_genres
-          .map((genre: unknown) => String(genre ?? '').trim())
+          .map((genre: unknown) =>
+            String(genre ?? '').trim(),
+          )
           .filter(Boolean)
       : [];
 
     const profileGenreIds = profileGenres
-      .map((genre: string) => PROFILE_GENRE_TO_TMDB[normalizeProfileGenre(genre)])
-      .filter((genreId: number | undefined): genreId is number =>
-        Number.isInteger(genreId),
+      .map(
+        (genre: string) =>
+          PROFILE_GENRE_TO_TMDB[
+            normalizeProfileGenre(genre)
+          ],
+      )
+      .filter(
+        (
+          genreId: number | undefined,
+        ): genreId is number =>
+          Number.isInteger(genreId),
       );
 
-    // I generi dichiarati nel profilo sono un segnale leggero:
-    // servono soprattutto per il cold start, ma non devono superare
-    // preferiti, voti o feedback espliciti.
     for (const genreId of profileGenreIds) {
-      tasteProfile.genreWeights.set(
+      genreWeights.set(
         genreId,
-        (tasteProfile.genreWeights.get(genreId) ?? 0) + 2.5,
+        (genreWeights.get(genreId) ?? 0) + 2,
       );
     }
 
-    const { data: explicitFeedback, error: explicitFeedbackError } = await admin
-      .from('user_recommendation_feedback')
-      .select('tmdb_id, feedback, updated_at')
+    const {
+      data: impressionRows,
+      error: impressionsError,
+    } = await admin
+      .from('user_recommendation_impressions')
+      .select('tmdb_id, impression_count, last_seen_at')
       .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
+      .order('last_seen_at', {
+        ascending: false,
+      })
+      .limit(500);
+
+    if (impressionsError) {
+      /*
+       * Durante il primo deploy la tabella potrebbe non essere
+       * stata ancora creata: non blocchiamo tutto il Per te.
+       */
+      console.warn(
+        'recommendation impressions unavailable:',
+        impressionsError.message,
+      );
+    } else {
+      for (const row of impressionRows ?? []) {
+        const tmdbId = parseTmdbMovieId(
+          (row as any).tmdb_id,
+        );
+
+        if (!tmdbId) continue;
+
+        impressionMap.set(tmdbId, {
+          count: Math.max(
+            1,
+            Number(
+              (row as any)
+                .impression_count ?? 1,
+            ),
+          ),
+          lastSeenAt:
+            typeof (row as any)
+              .last_seen_at === 'string'
+              ? (row as any)
+                  .last_seen_at
+              : null,
+        });
+      }
+    }
+
+    const {
+      data: explicitFeedback,
+      error: feedbackError,
+    } = await admin
+      .from('user_recommendation_feedback')
+      .select(
+        'tmdb_id, feedback, updated_at',
+      )
+      .eq('user_id', user.id)
+      .order('updated_at', {
+        ascending: false,
+      })
       .limit(200);
 
-    if (explicitFeedbackError) throw explicitFeedbackError;
+    if (feedbackError) {
+      throw feedbackError;
+    }
 
     for (const row of explicitFeedback ?? []) {
-      const tmdbId = parseTmdbMovieId((row as any).tmdb_id);
+      const tmdbId = parseTmdbMovieId(
+        (row as any).tmdb_id,
+      );
+
       if (!tmdbId) continue;
 
       excluded.add(tmdbId);
 
-      if ((row as any).feedback === 'more_like_this') {
-        const feedbackRecency = recencyMultiplier((row as any).updated_at);
+      if (
+        (row as any).feedback ===
+        'more_like_this'
+      ) {
         addSeed(
-          seedMap,
+          personalSeedMap,
           tmdbId,
           null,
-          8 * feedbackRecency,
+          9 *
+            recencyMultiplier(
+              (row as any).updated_at,
+            ),
           'explicit_more_like_this',
+          'personal',
         );
-      } else if ((row as any).feedback === 'not_for_me') {
-        negativeSwipeIds.add(tmdbId);
+      } else if (
+        (row as any).feedback ===
+        'not_for_me'
+      ) {
+        explicitNegativeIds.add(tmdbId);
       }
     }
 
-    const { data: entries, error: entriesError } = await admin
+    const {
+      data: entries,
+      error: entriesError,
+    } = await admin
       .from('user_movie_entries')
       .select(`
         rating,
@@ -552,526 +1222,780 @@ export default async function handler(
       `)
       .eq('user_id', user.id);
 
-    if (entriesError) throw entriesError;
+    if (entriesError) {
+      throw entriesError;
+    }
 
     for (const entry of entries ?? []) {
-      const catalog = Array.isArray((entry as any).movie_catalog)
+      const catalog = Array.isArray(
+        (entry as any).movie_catalog,
+      )
         ? (entry as any).movie_catalog[0]
         : (entry as any).movie_catalog;
 
-      if (catalog?.provider !== 'tmdb') continue;
+      if (catalog?.provider !== 'tmdb') {
+        continue;
+      }
 
-      const tmdbId = parseTmdbMovieId(catalog.provider_movie_id);
+      const tmdbId = parseTmdbMovieId(
+        catalog.provider_movie_id,
+      );
+
       if (!tmdbId) continue;
-
-      const entryRecency = recencyMultiplier((entry as any).updated_at);
 
       excluded.add(tmdbId);
 
-      if ((entry as any).is_favorite === true) {
-        addSeed(seedMap, tmdbId, catalog.title ?? null, 6 * entryRecency, 'favorite');
+      const recency = recencyMultiplier(
+        (entry as any).updated_at,
+      );
+
+      if (
+        (entry as any).is_favorite === true
+      ) {
+        addSeed(
+          personalSeedMap,
+          tmdbId,
+          catalog.title ?? null,
+          8 * recency,
+          'favorite',
+          'personal',
+        );
       }
 
-      const rating = Number((entry as any).rating ?? 0);
+      const rating = Number(
+        (entry as any).rating ?? 0,
+      );
 
       if (rating >= 4.5) {
-        addSeed(seedMap, tmdbId, catalog.title ?? null, 6 * entryRecency, 'high_rating');
+        addSeed(
+          personalSeedMap,
+          tmdbId,
+          catalog.title ?? null,
+          7 * recency,
+          'high_rating',
+          'personal',
+        );
       } else if (rating >= 4) {
-        addSeed(seedMap, tmdbId, catalog.title ?? null, 5 * entryRecency, 'high_rating');
-      } else if (rating >= 3.5) {
-        addSeed(seedMap, tmdbId, catalog.title ?? null, 3 * entryRecency, 'high_rating');
+        addSeed(
+          personalSeedMap,
+          tmdbId,
+          catalog.title ?? null,
+          5 * recency,
+          'high_rating',
+          'personal',
+        );
       }
 
-      if ((entry as any).in_watchlist === true) {
-        addSeed(seedMap, tmdbId, catalog.title ?? null, 2 * entryRecency, 'watchlist');
+      /*
+       * Watchlist = interesse, non gradimento.
+       * La lasciamo come segnale debolissimo e non la facciamo
+       * mai dominare preferiti/voti/feedback esplicito.
+       */
+      if (
+        (entry as any).in_watchlist === true &&
+        !(entry as any).is_favorite &&
+        rating < 4
+      ) {
+        addSeed(
+          personalSeedMap,
+          tmdbId,
+          catalog.title ?? null,
+          0.75 * recency,
+          'watchlist',
+          'personal',
+        );
       }
     }
 
-    const { data: swipes, error: swipesError } = await admin
+    const {
+      data: swipes,
+      error: swipesError,
+    } = await admin
       .from('room_swipes')
-      .select('movie_id, liked, updated_at')
+      .select(
+        'movie_id, liked, updated_at',
+      )
       .eq('actor_id', user.id)
       .eq('actor_type', 'user')
-      .order('updated_at', { ascending: false })
+      .order('updated_at', {
+        ascending: false,
+      })
       .limit(300);
 
-    if (swipesError) throw swipesError;
+    if (swipesError) {
+      throw swipesError;
+    }
 
     for (const swipe of swipes ?? []) {
-      const tmdbId = parseTmdbMovieId((swipe as any).movie_id);
+      const tmdbId = parseTmdbMovieId(
+        (swipe as any).movie_id,
+      );
+
       if (!tmdbId) continue;
 
       excluded.add(tmdbId);
 
       if ((swipe as any).liked === true) {
-        const swipeRecency = recencyMultiplier((swipe as any).updated_at);
-        addSeed(seedMap, tmdbId, null, 2 * swipeRecency, 'room_like');
+        addSeed(
+          roomSeedMap,
+          tmdbId,
+          null,
+          1.5 *
+            recencyMultiplier(
+              (swipe as any).updated_at,
+            ),
+          'room_like',
+          'rooms',
+        );
       } else {
-        negativeSwipeIds.add(tmdbId);
+        roomNegativeIds.add(tmdbId);
       }
     }
 
-    const { data: participantRows } = await admin
-      .from('room_match_participants')
-      .select('match_id')
-      .eq('actor_id', user.id)
-      .eq('actor_type', 'user')
-      .limit(300);
+    const { data: participantRows } =
+      await admin
+        .from('room_match_participants')
+        .select('match_id')
+        .eq('actor_id', user.id)
+        .eq('actor_type', 'user')
+        .limit(300);
 
     const matchIds = Array.from(
       new Set(
         (participantRows ?? [])
-          .map((row: any) => row.match_id)
+          .map(
+            (row: any) => row.match_id,
+          )
           .filter(Boolean),
       ),
     );
 
     if (matchIds.length > 0) {
-      const { data: matchedRows } = await admin
-        .from('room_matches')
-        .select('id, movie_id, created_at')
-        .in('id', matchIds);
+      const { data: matchedRows } =
+        await admin
+          .from('room_matches')
+          .select(
+            'id, movie_id, created_at',
+          )
+          .in('id', matchIds);
 
       for (const match of matchedRows ?? []) {
-        const tmdbId = parseTmdbMovieId((match as any).movie_id);
+        const tmdbId = parseTmdbMovieId(
+          (match as any).movie_id,
+        );
+
         if (!tmdbId) continue;
 
-        const matchRecency = recencyMultiplier((match as any).created_at);
-        addSeed(seedMap, tmdbId, null, 2 * matchRecency, 'room_match');
+        addSeed(
+          roomSeedMap,
+          tmdbId,
+          null,
+          3 *
+            recencyMultiplier(
+              (match as any).created_at,
+            ),
+          'room_match',
+          'rooms',
+        );
       }
     }
 
-    const { data: memberships } = await admin
-      .from('room_participants')
-      .select('room_id')
-      .eq('actor_id', user.id)
-      .eq('actor_type', 'user')
-      .limit(300);
+    const { data: memberships } =
+      await admin
+        .from('room_participants')
+        .select('room_id')
+        .eq('actor_id', user.id)
+        .eq('actor_type', 'user')
+        .limit(300);
 
     const roomIds = Array.from(
       new Set(
         (memberships ?? [])
-          .map((row: any) => row.room_id)
+          .map(
+            (row: any) => row.room_id,
+          )
           .filter(Boolean),
       ),
     );
 
     if (roomIds.length > 0) {
-      const { data: rooms } = await admin
-        .from('rooms')
-        .select('id, selected_movie_id, selected_movie_at')
-        .in('id', roomIds)
-        .not('selected_movie_id', 'is', null);
+      const { data: rooms } =
+        await admin
+          .from('rooms')
+          .select(
+            'id, selected_movie_id, selected_movie_at',
+          )
+          .in('id', roomIds)
+          .not(
+            'selected_movie_id',
+            'is',
+            null,
+          );
 
       for (const room of rooms ?? []) {
-        const tmdbId = parseTmdbMovieId((room as any).selected_movie_id);
+        const tmdbId = parseTmdbMovieId(
+          (room as any)
+            .selected_movie_id,
+        );
+
         if (!tmdbId) continue;
 
-        const winnerRecency = recencyMultiplier((room as any).selected_movie_at);
-        addSeed(seedMap, tmdbId, null, 4 * winnerRecency, 'room_winner');
         excluded.add(tmdbId);
+
+        addSeed(
+          roomSeedMap,
+          tmdbId,
+          null,
+          5 *
+            recencyMultiplier(
+              (room as any)
+                .selected_movie_at,
+            ),
+          'room_winner',
+          'rooms',
+        );
       }
     }
 
-    for (const tmdbId of negativeSwipeIds) {
-      seedMap.delete(tmdbId);
+    for (const tmdbId of explicitNegativeIds) {
+      personalSeedMap.delete(tmdbId);
+      roomSeedMap.delete(tmdbId);
       excluded.add(tmdbId);
     }
 
-    // Costruiamo un profilo negativo leggero dai dislike recenti.
-    // Limitiamo il campione per evitare troppe chiamate a TMDB e per non
-    // far pesare per sempre vecchi swipe negativi.
-    const recentNegativeIds = [...negativeSwipeIds].slice(
-      0,
-      MAX_NEGATIVE_PROFILE_MOVIES,
-    );
-
-    if (recentNegativeIds.length > 0) {
-      const negativeDetails = await Promise.all(
-        recentNegativeIds.map((tmdbId) =>
-          fetchTmdbTasteDetails(tmdbId, tmdbApiKey),
-        ),
-      );
-
-      for (const details of negativeDetails) {
-        for (const genreId of details.genres) {
-          negativeGenreWeights.set(
-            genreId,
-            (negativeGenreWeights.get(genreId) ?? 0) + 1,
-          );
-        }
-      }
+    for (const tmdbId of roomNegativeIds) {
+      roomSeedMap.delete(tmdbId);
+      excluded.add(tmdbId);
     }
 
-    const seeds = [...seedMap.values()]
+    const personalSeeds = [
+      ...personalSeedMap.values(),
+    ]
       .sort((a, b) => b.score - a.score)
-      .slice(0, MAX_SEEDS);
+      .slice(0, MAX_PERSONAL_SEEDS);
 
-    // Profilo gusti positivo: generi + attori dei seed migliori.
-    // Limitiamo ai seed principali per contenere le chiamate a TMDB.
-    if (seeds.length > 0) {
-      const tasteDetails = await Promise.all(
-        seeds.map(async (seed) => ({
-          seed,
-          details: await fetchTmdbTasteDetails(seed.tmdbId, tmdbApiKey),
-        })),
-      );
+    const roomSeeds = [
+      ...roomSeedMap.values(),
+    ]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, MAX_ROOM_SEEDS);
 
-      for (const { seed, details } of tasteDetails) {
-        const seedWeight = Math.max(1, seed.score);
+    const allTasteSeeds = [
+      ...personalSeeds,
+      ...roomSeeds,
+    ].slice(0, 8);
+
+    if (allTasteSeeds.length > 0) {
+      const detailsRows =
+        await Promise.all(
+          allTasteSeeds.map(
+            async (seed) => ({
+              seed,
+              details:
+                await fetchMovieDetails(
+                  seed.tmdbId,
+                  tmdbApiKey,
+                ),
+            }),
+          ),
+        );
+
+      for (const {
+        seed,
+        details,
+      } of detailsRows) {
+        const base =
+          seed.group === 'personal'
+            ? seed.score
+            : seed.score * 0.7;
 
         for (const genreId of details.genres) {
-          tasteProfile.genreWeights.set(
+          genreWeights.set(
             genreId,
-            (tasteProfile.genreWeights.get(genreId) ?? 0) + seedWeight,
+            (genreWeights.get(genreId) ?? 0) +
+              base,
           );
 
-          const genreName = details.genreNames[genreId];
-          if (genreName) tasteProfile.genreNames.set(genreId, genreName);
+          const name =
+            details.genreNames[genreId];
+
+          if (name) {
+            genreNames.set(
+              genreId,
+              name,
+            );
+          }
         }
 
         for (const actorId of details.actors) {
-          tasteProfile.actorWeights.set(
+          actorWeights.set(
             actorId,
-            (tasteProfile.actorWeights.get(actorId) ?? 0) + seedWeight * 0.65,
+            (actorWeights.get(actorId) ?? 0) +
+              base * 0.45,
           );
 
-          const actorName = details.actorNames[actorId];
-          if (actorName) tasteProfile.actorNames.set(actorId, actorName);
+          const name =
+            details.actorNames[actorId];
+
+          if (name) {
+            actorNames.set(
+              actorId,
+              name,
+            );
+          }
         }
       }
     }
 
-    const candidateMap = new Map<
-      number,
-      {
-        movie: any;
-        score: number;
-        seedContributions: Array<{ seed: Seed; weight: number }>;
-        actorIds?: number[];
-      }
-    >();
+    /*
+     * Profilo negativo: non penalizziamo un genere per un solo dislike.
+     * Solo dopo almeno 3 segnali negativi sullo stesso genere applichiamo
+     * una penalità leggera.
+     */
+    const recentNegativeIds = [
+      ...explicitNegativeIds,
+      ...roomNegativeIds,
+    ].slice(0, 12);
 
-    if (seeds.length > 0) {
-      const similarLists = await Promise.all(
-        seeds.map(async (seed) => ({
-          seed,
-          movies: await fetchTmdbSimilar(seed.tmdbId, tmdbApiKey),
-        })),
-      );
+    const negativeGenreCounts =
+      new Map<number, number>();
 
-      for (const { seed, movies } of similarLists) {
-        for (let index = 0; index < movies.length; index += 1) {
-          const movie = movies[index];
-          const tmdbId = Number(movie?.id);
-
-          if (!Number.isInteger(tmdbId) || tmdbId <= 0) continue;
-          if (excluded.has(tmdbId)) continue;
-          if (!movie?.title) continue;
-
-          const rankFactor = Math.max(0.35, 1 - index * 0.025);
-          const popularityBoost = Math.min(Number(movie.popularity ?? 0) / 100, 1.5);
-          const qualityBoost =
-            Number(movie.vote_count ?? 0) >= 100
-              ? Math.max(0, (Number(movie.vote_average ?? 0) - 6) * 0.35)
-              : 0;
-
-          const genrePenalty = Array.isArray(movie.genre_ids)
-            ? movie.genre_ids.reduce((total: number, genreId: number) => {
-                const dislikesForGenre = negativeGenreWeights.get(Number(genreId)) ?? 0;
-
-                if (dislikesForGenre <= 1) return total;
-                return total + Math.min((dislikesForGenre - 1) * 0.55, 2.2);
-              }, 0)
-            : 0;
-
-          const positiveGenreBoost = Array.isArray(movie.genre_ids)
-            ? movie.genre_ids.reduce((total: number, genreId: number) => {
-                const weight = tasteProfile.genreWeights.get(Number(genreId)) ?? 0;
-                return total + Math.min(weight * 0.08, 1.4);
-              }, 0)
-            : 0;
-
-          const contribution =
-            seed.score * rankFactor +
-            popularityBoost +
-            qualityBoost +
-            positiveGenreBoost -
-            genrePenalty;
-
-          const current = candidateMap.get(tmdbId) ?? {
-            movie,
-            score: 0,
-            seedContributions: [],
-          };
-
-          current.score += contribution;
-          current.seedContributions.push({
-            seed,
-            weight: contribution,
-          });
-
-          candidateMap.set(tmdbId, current);
-        }
-      }
-    }
-
-    // Attori: controlliamo solo i candidati più forti, così non moltiplichiamo
-    // troppo le chiamate API. L'overlap del cast diventa un boost aggiuntivo.
-    const coldStartUsed = seeds.length === 0 && profileGenreIds.length > 0;
-
-    if (candidateMap.size < 8 && profileGenreIds.length > 0) {
-      const discovered = await fetchDiscoverByGenres(
-        profileGenreIds.slice(0, 4),
-        tmdbApiKey,
-      );
-
-      for (const movie of discovered) {
-        const tmdbId = Number(movie?.id);
-
-        if (!Number.isInteger(tmdbId) || tmdbId <= 0) continue;
-        if (excluded.has(tmdbId) || candidateMap.has(tmdbId)) continue;
-        if (!movie?.title) continue;
-
-        const genreBoost = Array.isArray(movie.genre_ids)
-          ? movie.genre_ids.reduce((total: number, genreId: number) => {
-              const weight = tasteProfile.genreWeights.get(Number(genreId)) ?? 0;
-              return total + Math.min(weight * 0.45, 2.4);
-            }, 0)
-          : 0;
-
-        candidateMap.set(tmdbId, {
-          movie,
-          score:
-            genreBoost +
-            Math.min(Number(movie.popularity ?? 0) / 90, 1.8) +
-            Math.max(0, (Number(movie.vote_average ?? 0) - 6) * 0.25),
-          seedContributions: [],
-        });
-      }
-    }
-
-    const actorCandidatePool = [...candidateMap.values()]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, MAX_ACTOR_CANDIDATES);
-
-    await Promise.all(
-      actorCandidatePool.map(async (candidate) => {
-        const tmdbId = Number(candidate.movie?.id);
-        if (!Number.isInteger(tmdbId) || tmdbId <= 0) return;
-
-        const details = await fetchTmdbTasteDetails(tmdbId, tmdbApiKey);
-        candidate.actorIds = details.actors;
-
-        const actorBoost = details.actors.reduce(
-          (total: number, actorId: number) => {
-            const weight = tasteProfile.actorWeights.get(actorId) ?? 0;
-            return total + Math.min(weight * 0.05, 1.2);
-          },
-          0,
+    if (recentNegativeIds.length > 0) {
+      const negativeDetails =
+        await Promise.all(
+          recentNegativeIds.map(
+            (tmdbId) =>
+              fetchMovieDetails(
+                tmdbId,
+                tmdbApiKey,
+              ),
+          ),
         );
 
-        candidate.score += Math.min(actorBoost, 3.2);
-      }),
-    );
+      for (const details of negativeDetails) {
+        for (const genreId of details.genres) {
+          negativeGenreCounts.set(
+            genreId,
+            (negativeGenreCounts.get(
+              genreId,
+            ) ?? 0) + 1,
+          );
+        }
+      }
+    }
 
-    const sortedCandidates = [...candidateMap.values()]
-      .sort((a, b) => {
-        const aCrossSeed = Math.max(0, a.seedContributions.length - 1) * 2.5;
-        const bCrossSeed = Math.max(0, b.seedContributions.length - 1) * 2.5;
-
-        return b.score + bCrossSeed - (a.score + aCrossSeed);
-      });
-
-    // Un po' di diversità: evitiamo che i primi 20 siano quasi tutti
-    // dello stesso genere pur mantenendo lo score come criterio principale.
-    const genreUsage = new Map<number, number>();
-    const ranked: typeof sortedCandidates = [];
-
-    for (const candidate of sortedCandidates) {
-      if (ranked.length >= MAX_RECOMMENDATIONS) break;
-
-      const genres = Array.isArray(candidate.movie?.genre_ids)
-        ? candidate.movie.genre_ids.map(Number).filter(Number.isFinite)
+    const negativeGenrePenalty = (
+      movie: any,
+    ) => {
+      const genres = Array.isArray(
+        movie?.genre_ids,
+      )
+        ? movie.genre_ids.map(Number)
         : [];
 
-      const overloaded =
-        genres.length > 0 &&
-        genres.every((genreId: number) => (genreUsage.get(genreId) ?? 0) >= 6);
+      return genres.reduce(
+        (total: number, genreId: number) => {
+          const count =
+            negativeGenreCounts.get(
+              genreId,
+            ) ?? 0;
 
-      if (overloaded && ranked.length < 12) {
-        continue;
+          if (count < 3) {
+            return total;
+          }
+
+          return (
+            total +
+            Math.min(
+              (count - 2) * 0.35,
+              1.4,
+            )
+          );
+        },
+        0,
+      );
+    };
+
+    const impressionPenalty = (
+      tmdbId: number,
+    ) => {
+      const impression =
+        impressionMap.get(tmdbId);
+
+      if (!impression) {
+        return 0;
       }
 
-      ranked.push(candidate);
+      const lastSeen =
+        impression.lastSeenAt
+          ? new Date(
+              impression.lastSeenAt,
+            ).getTime()
+          : NaN;
 
-      for (const genreId of genres) {
-        genreUsage.set(genreId, (genreUsage.get(genreId) ?? 0) + 1);
+      const ageHours =
+        Number.isFinite(lastSeen)
+          ? Math.max(
+              0,
+              (Date.now() -
+                lastSeen) /
+                3_600_000,
+            )
+          : 9999;
+
+      /*
+       * Un film appena mostrato perde parecchia priorità.
+       * Col passare dei giorni la penalità si attenua e
+       * il titolo può tornare se continua ad essere molto affine.
+       */
+      let recencyPenalty = 0;
+
+      if (ageHours < 6) {
+        recencyPenalty = 5.5;
+      } else if (ageHours < 24) {
+        recencyPenalty = 4;
+      } else if (ageHours < 72) {
+        recencyPenalty = 2.6;
+      } else if (ageHours < 168) {
+        recencyPenalty = 1.4;
+      } else if (ageHours < 336) {
+        recencyPenalty = 0.6;
       }
-    }
 
-    const personalized =
-      ranked.length > 0 && (seeds.length > 0 || profileGenreIds.length > 0);
+      const repetitionPenalty =
+        Math.min(
+          Math.max(
+            impression.count - 1,
+            0,
+          ) * 0.35,
+          1.75,
+        );
 
-    if (ranked.length < 8) {
-      const trending = await fetchTrending(tmdbApiKey);
+      return (
+        recencyPenalty +
+        repetitionPenalty
+      );
+    };
 
-      for (const movie of trending) {
-        const tmdbId = Number(movie?.id);
-        if (!Number.isInteger(tmdbId) || tmdbId <= 0) continue;
-        if (excluded.has(tmdbId) || candidateMap.has(tmdbId)) continue;
+    const positiveGenreBoost = (
+      movie: any,
+    ) => {
+      const genres = Array.isArray(
+        movie?.genre_ids,
+      )
+        ? movie.genre_ids.map(Number)
+        : [];
 
-        candidateMap.set(tmdbId, {
-          movie,
-          score: Number(movie.popularity ?? 0) / 20,
-          seedContributions: [],
-        });
+      return genres.reduce(
+        (total: number, genreId: number) =>
+          total +
+          Math.min(
+            (genreWeights.get(
+              genreId,
+            ) ?? 0) * 0.06,
+            1.2,
+          ),
+        0,
+      );
+    };
+
+    const candidateMap =
+      new Map<number, Candidate>();
+
+    const buildFromSeeds = async (
+      seeds: Seed[],
+      source: RecommendationSource,
+    ) => {
+      const lists = await Promise.all(
+        seeds.map(
+          async (seed) => ({
+            seed,
+            movies:
+              await fetchTmdbSimilar(
+                seed.tmdbId,
+                tmdbApiKey,
+              ),
+          }),
+        ),
+      );
+
+      for (const {
+        seed,
+        movies,
+      } of lists) {
+        for (
+          let index = 0;
+          index < movies.length;
+          index += 1
+        ) {
+          const movie = movies[index];
+
+          if (!movieIsUsable(movie)) {
+            continue;
+          }
+
+          const tmdbId = Number(
+            movie.id,
+          );
+
+          if (
+            excluded.has(tmdbId) ||
+            explicitNegativeIds.has(
+              tmdbId,
+            )
+          ) {
+            continue;
+          }
+
+          const rankFactor = Math.max(
+            0.35,
+            1 - index * 0.03,
+          );
+
+          const score =
+            seed.score * rankFactor +
+            qualityScore(movie) +
+            positiveGenreBoost(movie) -
+            negativeGenrePenalty(movie) -
+            impressionPenalty(tmdbId);
+
+          addCandidate(
+            candidateMap,
+            movie,
+            source,
+            score,
+            seed,
+          );
+        }
       }
+    };
 
-      const fallbackRanked = [...candidateMap.values()]
-        .sort((a, b) => {
-          const aCrossSeed = Math.max(0, a.seedContributions.length - 1) * 2.5;
-          const bCrossSeed = Math.max(0, b.seedContributions.length - 1) * 2.5;
+    await Promise.all([
+      buildFromSeeds(
+        personalSeeds,
+        'favorite',
+      ),
+      buildFromSeeds(
+        roomSeeds,
+        'room',
+      ),
+    ]);
 
-          return b.score + bCrossSeed - (a.score + aCrossSeed);
-        })
-        .slice(0, MAX_RECOMMENDATIONS);
-
-      ranked.splice(0, ranked.length, ...fallbackRanked);
-    }
-
-    const topGenreIds = [...tasteProfile.genreWeights.entries()]
+    const topGenreIds = [
+      ...genreWeights.entries(),
+    ]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
       .map(([genreId]) => genreId);
 
-    const topActorIds = [...tasteProfile.actorWeights.entries()]
+    const profileSourceGenreIds =
+      topGenreIds.length > 0
+        ? topGenreIds
+        : profileGenreIds;
+
+    if (
+      profileSourceGenreIds.length > 0
+    ) {
+      const discovered =
+        await fetchDiscoverByGenres(
+          profileSourceGenreIds,
+          tmdbApiKey,
+        );
+
+      for (const movie of discovered) {
+        if (!movieIsUsable(movie)) {
+          continue;
+        }
+
+        const tmdbId = Number(movie.id);
+
+        if (
+          excluded.has(tmdbId) ||
+          explicitNegativeIds.has(
+            tmdbId,
+          )
+        ) {
+          continue;
+        }
+
+        const score =
+          2.2 +
+          qualityScore(movie) +
+          positiveGenreBoost(movie) -
+          negativeGenrePenalty(movie) -
+          impressionPenalty(tmdbId);
+
+        addCandidate(
+          candidateMap,
+          movie,
+          'profile_genre',
+          score,
+        );
+      }
+    }
+
+    const topActorIds = [
+      ...actorWeights.entries(),
+    ]
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 8)
+      .slice(0, 2)
       .map(([actorId]) => actorId);
 
-    const topGenres = [...tasteProfile.genreWeights.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([id, weight]) => ({
-        id,
-        name: tasteProfile.genreNames.get(id) ?? `Genere ${id}`,
-        weight: Number(weight.toFixed(2)),
-      }));
+    if (topActorIds.length > 0) {
+      const castMovies =
+        await fetchDiscoverByCast(
+          topActorIds,
+          tmdbApiKey,
+        );
 
-    const topActors = [...tasteProfile.actorWeights.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6)
-      .map(([id, weight]) => ({
-        id,
-        name: tasteProfile.actorNames.get(id) ?? `Attore ${id}`,
-        weight: Number(weight.toFixed(2)),
-      }));
+      for (const movie of castMovies) {
+        if (!movieIsUsable(movie)) {
+          continue;
+        }
 
-    const recommendations: Recommendation[] = ranked.map((candidate) => {
-      const movie = candidate.movie;
+        const tmdbId = Number(movie.id);
 
-      const strongestContribution = candidate.seedContributions
-        .slice()
-        .sort((a, b) => b.weight - a.weight)[0];
+        if (
+          excluded.has(tmdbId) ||
+          explicitNegativeIds.has(
+            tmdbId,
+          )
+        ) {
+          continue;
+        }
 
-      return {
-        tmdb_id: Number(movie.id),
-        title: String(movie.title),
-        year:
-          typeof movie.release_date === 'string' && movie.release_date.length >= 4
-            ? Number(movie.release_date.slice(0, 4))
-            : null,
-        cover: posterUrl(movie.poster_path),
-        backdrop: backdropUrl(movie.backdrop_path),
-        rating: Number(movie.vote_average ?? 0),
-        vote_count: Number(movie.vote_count ?? 0),
-        genre_ids: Array.isArray(movie.genre_ids)
-          ? movie.genre_ids.map(Number).filter(Number.isFinite)
-          : [],
-        score: Number(candidate.score.toFixed(3)),
-        reason: (() => {
-          const candidateGenres = Array.isArray(movie.genre_ids)
-            ? movie.genre_ids.map(Number)
-            : [];
+        const score =
+          2.8 +
+          qualityScore(movie) +
+          positiveGenreBoost(movie) -
+          negativeGenrePenalty(movie) -
+          impressionPenalty(tmdbId);
 
-          const genreOverlap = candidateGenres.some((genreId: number) =>
-            topGenreIds.includes(genreId),
-          );
+        addCandidate(
+          candidateMap,
+          movie,
+          'cast',
+          score,
+        );
+      }
+    }
 
-          const actorOverlap = Array.isArray(candidate.actorIds)
-            ? candidate.actorIds.some((actorId: number) =>
-                topActorIds.includes(actorId),
-              )
-            : false;
+    /*
+     * Esplorazione controllata:
+     * pochi titoli trending, mai più forti dei segnali personali.
+     */
+    const trending =
+      await fetchTrending(tmdbApiKey);
 
-          if (actorOverlap && strongestContribution) {
-            return `${recommendationReason(strongestContribution.seed)} · cast affine ai tuoi gusti`;
-          }
+    let explorationAdded = 0;
 
-          if (genreOverlap && strongestContribution) {
-            return `${recommendationReason(strongestContribution.seed)} · genere affine ai tuoi gusti`;
-          }
+    for (const movie of trending) {
+      if (explorationAdded >= 8) {
+        break;
+      }
 
-          if (strongestContribution) {
-            return recommendationReason(strongestContribution.seed);
-          }
+      if (!movieIsUsable(movie)) {
+        continue;
+      }
 
-          if (coldStartUsed && profileGenres.length > 0) {
-            return `Perché hai indicato ${profileGenres
-              .slice(0, 2)
-              .join(' e ')} tra i tuoi generi preferiti`;
-          }
+      const tmdbId = Number(movie.id);
 
-          return 'Tra i film più interessanti del momento';
-        })(),
-        based_on: candidate.seedContributions
-          .slice()
-          .sort((a, b) => b.weight - a.weight)
-          .slice(0, 3)
-          .map(({ seed, weight }) => ({
-            tmdb_id: seed.tmdbId,
-            title: seed.title,
-            weight: Number(weight.toFixed(2)),
-          })),
-      };
-    });
+      if (
+        excluded.has(tmdbId) ||
+        explicitNegativeIds.has(
+          tmdbId,
+        ) ||
+        candidateMap.has(tmdbId)
+      ) {
+        continue;
+      }
 
+      const score =
+        0.8 +
+        qualityScore(movie) * 0.65 +
+        positiveGenreBoost(movie) * 0.35 -
+        negativeGenrePenalty(movie) -
+        impressionPenalty(tmdbId) * 0.8;
+
+      addCandidate(
+        candidateMap,
+        movie,
+        'exploration',
+        score,
+      );
+
+      explorationAdded += 1;
+    }
+
+    const allRecommendations = [
+      ...candidateMap.values(),
+    ]
+      .sort((a, b) => b.score - a.score)
+      .map((candidate) =>
+        candidateToRecommendation(
+          candidate,
+          genreNames,
+          actorNames,
+          topActorIds,
+        ),
+      );
+
+    const recommendations =
+      diversify(
+        mixSources(
+          allRecommendations,
+          MAX_RECOMMENDATIONS,
+        ),
+        MAX_RECOMMENDATIONS,
+      );
+
+    /*
+     * Collezioni vere: non derivano più dal testo di reason.
+     * Ogni candidato viene assegnato alla sorgente che lo ha generato.
+     */
     const collections: RecommendationCollections = {
-      from_favorites: recommendations
-        .filter((movie) => {
-          const reason = movie.reason.toLowerCase();
-          return (
-            reason.includes('preferit') ||
-            reason.includes('voto alto') ||
-            reason.includes('valutat') ||
-            reason.includes('più film come')
-          );
-        })
-        .slice(0, 8),
+      from_favorites:
+        allRecommendations
+          .filter(
+            (movie) =>
+              movie.source ===
+              'favorite',
+          )
+          .slice(0, COLLECTION_SIZE),
 
-      from_rooms: recommendations
-        .filter((movie) => {
-          const reason = movie.reason.toLowerCase();
-          return (
-            reason.includes('match') ||
-            reason.includes('stanza') ||
-            reason.includes('swipe')
-          );
-        })
-        .slice(0, 8),
+      from_rooms:
+        allRecommendations
+          .filter(
+            (movie) =>
+              movie.source === 'room',
+          )
+          .slice(0, COLLECTION_SIZE),
 
-      cast_affinity: recommendations
-        .filter((movie) =>
-          movie.reason.toLowerCase().includes('cast affine'),
-        )
-        .slice(0, 8),
+      cast_affinity:
+        allRecommendations
+          .filter(
+            (movie) =>
+              movie.source === 'cast',
+          )
+          .slice(0, COLLECTION_SIZE),
 
-      profile_genres: recommendations
-        .filter((movie) =>
-          movie.reason.toLowerCase().includes('hai indicato'),
-        )
-        .slice(0, 8),
+      profile_genres:
+        allRecommendations
+          .filter(
+            (movie) =>
+              movie.source ===
+              'profile_genre',
+          )
+          .slice(0, COLLECTION_SIZE),
+
+      exploration:
+        allRecommendations
+          .filter(
+            (movie) =>
+              movie.source ===
+              'exploration',
+          )
+          .slice(0, 6),
     };
 
     const feedbackMap: Record<
@@ -1080,18 +2004,78 @@ export default async function handler(
     > = {};
 
     for (const row of explicitFeedback ?? []) {
-      const tmdbId = parseTmdbMovieId((row as any).tmdb_id);
-      const feedback = (row as any).feedback;
+      const tmdbId = parseTmdbMovieId(
+        (row as any).tmdb_id,
+      );
+      const feedback =
+        (row as any).feedback;
 
       if (
         tmdbId &&
-        (feedback === 'more_like_this' || feedback === 'not_for_me')
+        (
+          feedback ===
+            'more_like_this' ||
+          feedback ===
+            'not_for_me'
+        )
       ) {
-        feedbackMap[tmdbId] = feedback;
+        feedbackMap[tmdbId] =
+          feedback;
       }
     }
 
-    res.setHeader('Cache-Control', 'private, no-store');
+    const topGenres = [
+      ...genreWeights.entries(),
+    ]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id, weight]) => ({
+        id,
+        name:
+          genreNames.get(id) ??
+          profileGenres.find(
+            (genre: string) =>
+              PROFILE_GENRE_TO_TMDB[
+                normalizeProfileGenre(
+                  genre,
+                )
+              ] === id,
+          ) ??
+          `Genere ${id}`,
+        weight: Number(
+          weight.toFixed(2),
+        ),
+      }));
+
+    const topActors = [
+      ...actorWeights.entries(),
+    ]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id, weight]) => ({
+        id,
+        name:
+          actorNames.get(id) ??
+          `Attore ${id}`,
+        weight: Number(
+          weight.toFixed(2),
+        ),
+      }));
+
+    const coldStartUsed =
+      personalSeeds.length === 0 &&
+      roomSeeds.length === 0 &&
+      profileGenreIds.length > 0;
+
+    const personalized =
+      personalSeeds.length > 0 ||
+      roomSeeds.length > 0 ||
+      profileGenreIds.length > 0;
+
+    res.setHeader(
+      'Cache-Control',
+      'private, no-store',
+    );
 
     return res.status(200).json({
       recommendations,
@@ -1099,20 +2083,53 @@ export default async function handler(
       feedback: feedbackMap,
       meta: {
         personalized,
-        seeds_used: seeds.length,
-        positive_signals: seedMap.size,
-        excluded_movies: excluded.size,
-        negative_genres: negativeGenreWeights.size,
-        taste_genres: tasteProfile.genreWeights.size,
-        taste_actors: tasteProfile.actorWeights.size,
+        seeds_used:
+          personalSeeds.length +
+          roomSeeds.length,
+        positive_signals:
+          personalSeedMap.size +
+          roomSeedMap.size,
+        excluded_movies:
+          excluded.size,
+        negative_genres: [
+          ...negativeGenreCounts.values(),
+        ].filter(
+          (count) => count >= 3,
+        ).length,
+        taste_genres:
+          genreWeights.size,
+        taste_actors:
+          actorWeights.size,
         top_genres: topGenres,
         top_actors: topActors,
-        profile_genres: profileGenres,
-        cold_start_used: coldStartUsed,
+        profile_genres:
+          profileGenres,
+        cold_start_used:
+          coldStartUsed,
+        source_mix: {
+          favorite: recommendations.filter(
+            (movie) => movie.source === 'favorite',
+          ).length,
+          room: recommendations.filter(
+            (movie) => movie.source === 'room',
+          ).length,
+          cast: recommendations.filter(
+            (movie) => movie.source === 'cast',
+          ).length,
+          profile_genre: recommendations.filter(
+            (movie) => movie.source === 'profile_genre',
+          ).length,
+          exploration: recommendations.filter(
+            (movie) => movie.source === 'exploration',
+          ).length,
+        },
       },
     });
   } catch (error) {
-    console.error('recommendations/for-you failed:', error);
+    console.error(
+      'recommendations/for-you v2 failed:',
+      error,
+    );
 
     return res.status(500).json({
       error:

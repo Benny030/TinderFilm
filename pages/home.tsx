@@ -140,6 +140,7 @@ type RecommendationCollections = {
   from_rooms: RecommendationMovie[];
   cast_affinity: RecommendationMovie[];
   profile_genres: RecommendationMovie[];
+  exploration?: RecommendationMovie[];
 };
 
 type RecentFilm = {
@@ -217,6 +218,9 @@ export default function HomePage() {
     Record<number, 'more_like_this' | 'not_for_me'>
   >({});
   const [feedbackBusyId, setFeedbackBusyId] = useState<number | null>(null);
+  const [recommendationGeneration, setRecommendationGeneration] = useState(0);
+  const recommendationImpressionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 
   const displayName = currentUser && !currentUser.isGuest
     ? currentUser.username || fallbackUsername || '...'
@@ -518,6 +522,7 @@ export default function HomePage() {
         from_rooms: [],
         cast_affinity: [],
         profile_genres: [],
+        exploration: [],
       });
       setCommunityPick(null);
       return;
@@ -568,7 +573,7 @@ export default function HomePage() {
             ? recommendationData.recommendations
             : [];
 
-          setForYouMovies(recommendations.slice(0, 10));
+          setForYouMovies(recommendations.slice(0, 7));
           setSimilarPick(recommendations[0] ?? null);
 
           setRecommendationCollections({
@@ -584,7 +589,12 @@ export default function HomePage() {
             profile_genres: Array.isArray(recommendationData?.collections?.profile_genres)
               ? recommendationData.collections.profile_genres
               : [],
+            exploration: Array.isArray(recommendationData?.collections?.exploration)
+              ? recommendationData.collections.exploration
+              : [],
           });
+
+          setRecommendationGeneration((current) => current + 1);
 
           setRecommendationFeedback(
             recommendationData?.feedback &&
@@ -643,6 +653,85 @@ export default function HomePage() {
     };
   }, [currentUser, supabase]);
 
+  useEffect(() => {
+    if (
+      !currentUser ||
+      currentUser.isGuest ||
+      recommendationGeneration <= 0 ||
+      forYouMovies.length === 0
+    ) {
+      return;
+    }
+
+    if (recommendationImpressionTimerRef.current) {
+      clearTimeout(recommendationImpressionTimerRef.current);
+    }
+
+    recommendationImpressionTimerRef.current = setTimeout(() => {
+      const record = async () => {
+        try {
+          const {
+            data: { session },
+          } = await supabase.auth.getSession();
+
+          const token = session?.access_token;
+
+          if (!token) return;
+
+          /*
+           * In Home registriamo solo i film effettivamente esposti
+           * nella sezione Per te, non l'intero payload ricevuto.
+           */
+          const tmdbIds = Array.from(
+            new Set(
+              forYouMovies
+                .slice(0, 7)
+                .map((movie) => movie.tmdb_id)
+                .filter(
+                  (id) =>
+                    Number.isInteger(id) &&
+                    id > 0
+                )
+            )
+          );
+
+          if (tmdbIds.length === 0) return;
+
+          await fetch('/api/recommendations/impressions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              tmdb_ids: tmdbIds,
+            }),
+            keepalive: true,
+          });
+        } catch (error) {
+          console.warn(
+            'Home recommendation impression recording failed:',
+            error
+          );
+        }
+      };
+
+      void record();
+    }, 1800);
+
+    return () => {
+      if (recommendationImpressionTimerRef.current) {
+        clearTimeout(recommendationImpressionTimerRef.current);
+        recommendationImpressionTimerRef.current = null;
+      }
+    };
+  }, [
+    currentUser,
+    forYouMovies,
+    recommendationGeneration,
+    supabase,
+  ]);
+
   const handleCreateRoom = () => router.push('/crea-stanza?tab=create');
   const handleJoinRoom = () => router.push('/crea-stanza?tab=join');
   const handleEnterRoom = (roomId: string) => router.push(`/stanza?room=${roomId}`);
@@ -664,153 +753,92 @@ export default function HomePage() {
     return P.gold;
   };
 
-  const favoriteDrivenMovies =
-    recommendationCollections.from_favorites.slice(0, 5);
 
-  const roomDrivenMovies =
-    recommendationCollections.from_rooms.slice(0, 5);
+  const reloadForYouRecommendations = async () => {
+    if (!currentUser || currentUser.isGuest) return;
 
-  const actorDrivenMovies =
-    recommendationCollections.cast_affinity.slice(0, 5);
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-  const profileGenreMovies =
-    recommendationCollections.profile_genres.slice(0, 5);
+      const token = session?.access_token;
 
-  const renderMiniDiscoveryRow = (
-    title: string,
-    subtitle: string,
-    movies: RecommendationMovie[],
-    accent: string,
-  ) => {
-    if (movies.length === 0) return null;
+      if (!token) return;
 
-    return (
-      <section style={{ padding: '10px 20px 4px' }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'space-between',
-            gap: 10,
-            marginBottom: 10,
-          }}
-        >
-          <div>
-            <div
-              style={{
-                color: accent,
-                fontSize: 10,
-                fontWeight: 900,
-                textTransform: 'uppercase',
-                letterSpacing: '.1em',
-              }}
-            >
-              {title}
-            </div>
-            <div
-              style={{
-                color: P.textFaint,
-                fontSize: 11,
-                marginTop: 3,
-              }}
-            >
-              {subtitle}
-            </div>
-          </div>
+      const response = await fetch(
+        '/api/recommendations/for-you',
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: 'no-store',
+        }
+      );
 
-          <button
-            type="button"
-            onClick={() => router.push('/per-te')}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              color: P.textFaint,
-              cursor: 'pointer',
-              fontFamily: FONT.sans,
-              fontSize: 10,
-              fontWeight: 800,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 4,
-              padding: 0,
-            }}
-          >
-            Tutti
-            <ArrowRight size={10} weight="bold" />
-          </button>
-        </div>
+      const data = await response
+        .json()
+        .catch(() => ({}));
 
-        <div
-          style={{
-            display: 'flex',
-            gap: 9,
-            overflowX: 'auto',
-            paddingBottom: 6,
-            scrollbarWidth: 'none',
-          }}
-        >
-          {movies.map((movie) => (
-            <button
-              key={`${title}-${movie.tmdb_id}`}
-              type="button"
-              onClick={() => router.push(`/film/${movie.tmdb_id}`)}
-              style={{
-                flex: '0 0 clamp(112px, 12vw, 136px)',
-                padding: 0,
-                border: `1px solid ${P.border}`,
-                background: P.card,
-                color: P.text,
-                textAlign: 'left',
-                cursor: 'pointer',
-                fontFamily: FONT.sans,
-                overflow: 'hidden',
-              }}
-            >
-              {movie.cover ? (
-                <img
-                  src={movie.cover}
-                  alt={movie.title}
-                  style={{
-                    width: '100%',
-                    aspectRatio: '2 / 3',
-                    objectFit: 'cover',
-                    display: 'block',
-                    background: P.bgSoft,
-                  }}
-                />
-              ) : (
-                <div
-                  style={{
-                    width: '100%',
-                    aspectRatio: '2 / 3',
-                    background: P.bgSoft,
-                    display: 'grid',
-                    placeItems: 'center',
-                    color: P.textFaint,
-                  }}
-                >
-                  <FilmSlate size={24} weight="duotone" />
-                </div>
-              )}
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            'Impossibile aggiornare i consigli'
+        );
+      }
 
-              <div style={{ padding: '8px 8px 9px' }}>
-                <div
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 850,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {movie.title}
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      </section>
-    );
+      const recommendations =
+        Array.isArray(data?.recommendations)
+          ? data.recommendations
+          : [];
+
+      setForYouMovies(recommendations.slice(0, 7));
+      setSimilarPick(recommendations[0] ?? null);
+
+      setRecommendationCollections({
+        from_favorites: Array.isArray(
+          data?.collections?.from_favorites
+        )
+          ? data.collections.from_favorites
+          : [],
+        from_rooms: Array.isArray(
+          data?.collections?.from_rooms
+        )
+          ? data.collections.from_rooms
+          : [],
+        cast_affinity: Array.isArray(
+          data?.collections?.cast_affinity
+        )
+          ? data.collections.cast_affinity
+          : [],
+        profile_genres: Array.isArray(
+          data?.collections?.profile_genres
+        )
+          ? data.collections.profile_genres
+          : [],
+        exploration: Array.isArray(
+          data?.collections?.exploration
+        )
+          ? data.collections.exploration
+          : [],
+      });
+
+      setRecommendationFeedback(
+        data?.feedback &&
+          typeof data.feedback === 'object'
+          ? data.feedback
+          : {}
+      );
+
+      setRecommendationGeneration(
+        (current) => current + 1
+      );
+    } catch (error) {
+      console.error(
+        'Home recommendation refresh failed:',
+        error
+      );
+    }
   };
 
   const sendRecommendationFeedback = async (
@@ -884,6 +912,12 @@ export default function HomePage() {
           ),
         }));
       }
+
+
+      // Il feedback modifica subito anche il feed della Home.
+      window.setTimeout(() => {
+        void reloadForYouRecommendations();
+      }, 220);
     } catch (error) {
       console.error('Recommendation feedback failed:', error);
     } finally {
@@ -1546,7 +1580,7 @@ export default function HomePage() {
                           letterSpacing: '.12em',
                         }}
                       >
-                        Live
+                        Live · aggiornamento 5s
                       </div>
 
                       <div
@@ -1736,7 +1770,7 @@ export default function HomePage() {
 
               {/* ─── PER TE ──────────────────────────────────────────── */}
               {!isGuest && (
-                <section style={{ padding: '22px 20px 18px', margin: '4px 0 0', background: `linear-gradient(180deg, ${P.goldGlow} 0%, transparent 100%)`, borderTop: `1px solid ${P.gold}22`, borderBottom: `1px solid ${P.border}80` }}>
+                <section style={{ padding: '18px 20px 16px', margin: '4px 0 0', background: `linear-gradient(180deg, ${P.goldGlow} 0%, transparent 100%)`, borderTop: `1px solid ${P.gold}22`, borderBottom: `1px solid ${P.border}80` }}>
                   <div
                     style={{
                       display: 'flex',
@@ -1778,7 +1812,7 @@ export default function HomePage() {
                           marginTop: 4,
                         }}
                       >
-                        Una selezione personale costruita da preferiti, voti, match e stanze.
+                        I consigli migliori per te, aggiornati con i tuoi gusti.
                       </div>
                     </div>
 
@@ -2002,37 +2036,6 @@ export default function HomePage() {
                 </section>
               )}
 
-              {!isGuest && !loadingSuggestions && (
-                <>
-                  {renderMiniDiscoveryRow(
-                    'Perché ti è piaciuto',
-                    'Titoli costruiti sui tuoi preferiti e sulle valutazioni più alte',
-                    favoriteDrivenMovies,
-                    P.pink,
-                  )}
-
-                  {renderMiniDiscoveryRow(
-                    'Dai tuoi match',
-                    'Film vicini a ciò che hai apprezzato durante le stanze',
-                    roomDrivenMovies,
-                    P.gold,
-                  )}
-
-                  {renderMiniDiscoveryRow(
-                    'Cast che torna nei tuoi gusti',
-                    'Titoli con attori ricorrenti nei film che ami',
-                    actorDrivenMovies,
-                    P.success,
-                  )}
-
-                  {renderMiniDiscoveryRow(
-                    'Dai generi che hai scelto',
-                    'Un punto di partenza mentre TinderFilm impara meglio i tuoi gusti',
-                    profileGenreMovies,
-                    P.purple,
-                  )}
-                </>
-              )}
 
               {/* ─── PERSONE AFFINI / SOCIAL ───────────────────────── */}
               {!isGuest && (

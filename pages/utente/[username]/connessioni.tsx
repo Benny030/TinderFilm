@@ -257,6 +257,55 @@ export default function UserConnectionsPage() {
 
   return (
     <AppShell activeNav="recensioni">
+      <style>{`
+        @keyframes cdrConnectionsFadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes cdrConnectionsRowIn {
+          from {
+            opacity: 0;
+            transform: translateX(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .cdr-connections-animate,
+          .cdr-connection-row {
+            animation: none !important;
+            transition: none !important;
+            transform: none !important;
+          }
+        }
+
+        @media (max-width: 620px) {
+          .cdr-connection-row {
+            grid-template-columns:
+              44px minmax(0,1fr) !important;
+          }
+
+          .cdr-connection-action {
+            grid-column: 1 / -1;
+            justify-self: stretch !important;
+          }
+
+          .cdr-connection-action button {
+            width: 100%;
+            justify-content: center;
+          }
+        }
+      `}</style>
       <main
         style={{
           minHeight: '100vh',
@@ -293,7 +342,10 @@ export default function UserConnectionsPage() {
           </div>
 
           <header
+            className="cdr-connections-animate"
             style={{
+              animation:
+                'cdrConnectionsFadeUp 380ms ease both',
               borderBottom: `1px solid ${T.border}`,
               paddingBottom: 17,
               marginBottom: 16,
@@ -329,11 +381,15 @@ export default function UserConnectionsPage() {
           </header>
 
           <div
+            className="cdr-connections-animate"
             style={{
               display: 'grid',
               gridTemplateColumns: '1fr 1fr',
-              border: `1px solid ${T.border}`,
+              borderTop: `1px solid ${T.border}`,
+              borderBottom: `1px solid ${T.border}`,
               marginBottom: 14,
+              animation:
+                'cdrConnectionsFadeUp 380ms 60ms ease both',
             }}
           >
             <button
@@ -355,6 +411,12 @@ export default function UserConnectionsPage() {
                 fontFamily: FONT.sans,
                 fontSize: 10.5,
                 fontWeight: 850,
+                boxShadow:
+                  tab === 'follower'
+                    ? `inset 0 -2px 0 ${T.primary}`
+                    : 'none',
+                transition:
+                  'background 160ms ease, color 160ms ease',
               }}
             >
               Follower
@@ -378,6 +440,12 @@ export default function UserConnectionsPage() {
                 fontFamily: FONT.sans,
                 fontSize: 10.5,
                 fontWeight: 850,
+                boxShadow:
+                  tab === 'seguiti'
+                    ? `inset 0 -2px 0 ${T.accent}`
+                    : 'none',
+                transition:
+                  'background 160ms ease, color 160ms ease',
               }}
             >
               Seguiti
@@ -386,9 +454,12 @@ export default function UserConnectionsPage() {
 
           {users.length > 1 && (
             <div
+              className="cdr-connections-animate"
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
+                animation:
+                  'cdrConnectionsFadeUp 380ms 100ms ease both',
                 alignItems: 'center',
                 gap: 10,
                 marginBottom: 12,
@@ -475,8 +546,8 @@ export default function UserConnectionsPage() {
               }}
             >
               {tab === 'follower'
-                ? 'Questo utente non ha ancora follower.'
-                : 'Questo utente non segue ancora nessuno.'}
+                ? 'Ancora nessun follower da mostrare.'
+                : 'Ancora nessun profilo seguito da mostrare.'}
             </div>
           ) : (
             <div
@@ -485,7 +556,7 @@ export default function UserConnectionsPage() {
                 borderTop: `1px solid ${T.border}`,
               }}
             >
-              {visibleUsers.map((user) => {
+              {visibleUsers.map((user, index) => {
                 const isMe = currentUser.id === user.user_id;
                 const busy = busyId === user.user_id;
                 const compatibility = Number(
@@ -496,6 +567,18 @@ export default function UserConnectionsPage() {
                   <article
                     key={user.user_id}
                     className="cdr-connection-row"
+                    onMouseEnter={(event) => {
+                      event.currentTarget.style.background =
+                        T.surface;
+                      event.currentTarget.style.transform =
+                        'translateX(3px)';
+                    }}
+                    onMouseLeave={(event) => {
+                      event.currentTarget.style.background =
+                        'transparent';
+                      event.currentTarget.style.transform =
+                        'translateX(0)';
+                    }}
                     style={{
                       borderBottom: `1px solid ${T.border}`,
                       padding: '13px 0',
@@ -504,6 +587,10 @@ export default function UserConnectionsPage() {
                         '48px minmax(0,1fr) auto',
                       gap: 12,
                       alignItems: 'center',
+                      animation:
+                        `cdrConnectionsRowIn 360ms ${120 + index * 38}ms ease both`,
+                      transition:
+                        'background 160ms ease, transform 160ms ease',
                     }}
                   >
                     <button
@@ -632,6 +719,14 @@ export default function UserConnectionsPage() {
                         type="button"
                         onClick={() => void toggleFollow(user)}
                         disabled={busy}
+                        onMouseEnter={(event) => {
+                          event.currentTarget.style.transform =
+                            'translateY(-1px)';
+                        }}
+                        onMouseLeave={(event) => {
+                          event.currentTarget.style.transform =
+                            'translateY(0)';
+                        }}
                         style={{
                           border: `1px solid ${
                             user.is_following
