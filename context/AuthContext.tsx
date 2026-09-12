@@ -12,7 +12,6 @@ import { useRouter } from 'next/router';
 import type { Session } from '@supabase/supabase-js';
 import { createBrowserClient } from '@/utils/supabase/browser';
 import type { CurrentUser } from '@/types';
-import { generateGuestName } from '@/utils/guestName';
 
 type AuthContextType = {
   currentUser: CurrentUser | null;
@@ -20,7 +19,7 @@ type AuthContextType = {
   isGuest: boolean;
   guestId: string | null;
   guestName: string | null;
-  enterAsGuest: () => void;
+  enterAsGuest: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -30,12 +29,9 @@ const AuthContext = createContext<AuthContextType>({
   isGuest: false,
   guestId: null,
   guestName: null,
-  enterAsGuest: () => {},
+  enterAsGuest: async () => {},
   signOut: async () => {},
 });
-
-const GUEST_TTL_MS = 24 * 60 * 60 * 1000;
-const GUEST_COOKIE_MAX_AGE = 60 * 60 * 24;
 
 const GUEST_STORAGE_KEY = 'cineDateGuestSession';
 
@@ -44,19 +40,6 @@ type StoredGuestSession = {
   name: string;
   expiresAt: number;
 };
-
-function setGuestCookie(enabled: boolean) {
-  if (typeof document === 'undefined') return;
-
-  if (enabled) {
-    document.cookie =
-      `cineDateGuest=true; path=/; max-age=${GUEST_COOKIE_MAX_AGE}; samesite=lax`;
-    return;
-  }
-
-  document.cookie =
-    'cineDateGuest=; path=/; max-age=0; samesite=lax';
-}
 
 function clearLegacyGuestStorage() {
   if (typeof window === 'undefined') return;
@@ -71,7 +54,6 @@ function clearStoredGuestSession() {
 
   localStorage.removeItem(GUEST_STORAGE_KEY);
   clearLegacyGuestStorage();
-  setGuestCookie(false);
 }
 
 function readStoredGuestSession(): StoredGuestSession | null {
@@ -109,14 +91,10 @@ function readStoredGuestSession(): StoredGuestSession | null {
   }
 }
 
-function writeStoredGuestSession(id: string, name: string) {
+function writeStoredGuestSession(
+  session: StoredGuestSession
+) {
   if (typeof window === 'undefined') return;
-
-  const session: StoredGuestSession = {
-    id,
-    name,
-    expiresAt: Date.now() + GUEST_TTL_MS,
-  };
 
   localStorage.setItem(
     GUEST_STORAGE_KEY,
@@ -124,7 +102,50 @@ function writeStoredGuestSession(id: string, name: string) {
   );
 
   clearLegacyGuestStorage();
-  setGuestCookie(true);
+}
+
+async function requestGuestSession(): Promise<StoredGuestSession> {
+  const response = await fetch('/api/auth/guest', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      data.error || 'Impossibile creare la sessione ospite'
+    );
+  }
+
+  if (
+    typeof data.id !== 'string' ||
+    typeof data.name !== 'string' ||
+    typeof data.expiresAt !== 'number'
+  ) {
+    throw new Error('Sessione ospite non valida');
+  }
+
+  return {
+    id: data.id,
+    name: data.name,
+    expiresAt: data.expiresAt,
+  };
+}
+
+async function revokeGuestServerSession() {
+  try {
+    await fetch('/api/auth/guest', {
+      method: 'DELETE',
+    });
+  } catch (error) {
+    console.warn(
+      'Unable to clear server guest session:',
+      error
+    );
+  }
 }
 
 async function getUserProfile(
@@ -208,6 +229,7 @@ export function AuthProvider({
     }));
 
     clearStoredGuestSession();
+    await revokeGuestServerSession();
 
     setIsGuest(false);
     setGuestId(null);
@@ -223,15 +245,6 @@ export function AuthProvider({
       return;
     }
 
-    /*
-     * Prima controlliamo Supabase.
-     *
-     * Se esiste un account autenticato, l'account
-     * ha sempre priorità sul guest.
-     *
-     * Se non esiste una sessione Supabase,
-     * proviamo a ripristinare il guest persistente.
-     */
     const init = async () => {
       try {
         const {
@@ -260,20 +273,29 @@ export function AuthProvider({
           readStoredGuestSession();
 
         if (storedGuest) {
-          setIsGuest(true);
-          setGuestId(
-            storedGuest.id
-          );
-          setGuestName(
-            storedGuest.name
+          /*
+           * Non ci fidiamo dell'UUID nel localStorage.
+           * Chiediamo sempre al server l'identità guest firmata.
+           *
+           * - Se il cookie firmato è valido, il server restituisce
+           *   la stessa identità.
+           * - Se il browser proviene dalla vecchia implementazione,
+           *   il server crea una nuova identità autorevole.
+           */
+          const serverGuest =
+            await requestGuestSession();
+
+          writeStoredGuestSession(
+            serverGuest
           );
 
-          /*
-           * Rinnova solo il cookie tecnico per il tempo
-           * residuo massimo previsto dal guest.
-           * L'identità vera rimane governata da expiresAt.
-           */
-          setGuestCookie(true);
+          setIsGuest(true);
+          setGuestId(
+            serverGuest.id
+          );
+          setGuestName(
+            serverGuest.name
+          );
           return;
         }
 
@@ -285,6 +307,12 @@ export function AuthProvider({
           'Authentication initialization failed:',
           error
         );
+
+        clearStoredGuestSession();
+        setCurrentUser(null);
+        setIsGuest(false);
+        setGuestId(null);
+        setGuestName(null);
       } finally {
         setIsLoading(false);
       }
@@ -298,11 +326,18 @@ export function AuthProvider({
       },
     } =
       supabase.auth.onAuthStateChange(
-        async (
-          event,
-          session
-        ) => {
-          try {
+  async (
+    event,
+    session
+  ) => {
+    // L'inizializzazione iniziale è già gestita da init().
+    // Evita che isLoading diventi false mentre il guest
+    // firmato è ancora in fase di ripristino.
+    if (event === 'INITIAL_SESSION') {
+      return;
+    }
+
+    try {
             if (
               event ===
               'SIGNED_OUT'
@@ -317,14 +352,21 @@ export function AuthProvider({
               if (
                 storedGuest
               ) {
+                const serverGuest =
+                  await requestGuestSession();
+
+                writeStoredGuestSession(
+                  serverGuest
+                );
+
                 setIsGuest(
                   true
                 );
                 setGuestId(
-                  storedGuest.id
+                  serverGuest.id
                 );
                 setGuestName(
-                  storedGuest.name
+                  serverGuest.name
                 );
               } else {
                 setIsGuest(
@@ -376,44 +418,23 @@ export function AuthProvider({
     supabase,
   ]);
 
-  const enterAsGuest = () => {
-    /*
-     * Se esiste già un guest valido, lo riutilizziamo.
-     * Così anche se il pulsante viene premuto di nuovo
-     * non creiamo una seconda identità.
-     */
-    const existing =
-      readStoredGuestSession();
-
-    if (existing) {
-      setIsGuest(true);
-      setGuestId(existing.id);
-      setGuestName(
-        existing.name
-      );
-      setGuestCookie(true);
-      return;
-    }
-
-    const newId =
-      crypto.randomUUID();
-
-    const newName =
-      generateGuestName();
+  const enterAsGuest = async () => {
+    const serverGuest =
+      await requestGuestSession();
 
     writeStoredGuestSession(
-      newId,
-      newName
+      serverGuest
     );
 
     setCurrentUser(null);
     setIsGuest(true);
-    setGuestId(newId);
-    setGuestName(newName);
+    setGuestId(serverGuest.id);
+    setGuestName(serverGuest.name);
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    await revokeGuestServerSession();
 
     clearStoredGuestSession();
 

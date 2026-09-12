@@ -299,10 +299,10 @@ export default function WelcomeRoom({
       membershipStatus === 'active' &&
       maxMembers > 0 &&
       participantCount >= maxMembers &&
+      !hostActionBusy &&
       !isExpired &&
       !isFinished &&
       !autoStartRef.current;
-
     if (!shouldShowAutoStart) return;
 
     autoStartRef.current = true;

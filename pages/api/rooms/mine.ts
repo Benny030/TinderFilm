@@ -1,24 +1,20 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/utils/supabase/server';
-
-const isUuid = (value: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+import { resolveActor } from '@/utils/auth/serverActor';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const rawActorId = Array.isArray(req.query.actorId) ? req.query.actorId[0] : req.query.actorId;
-  const actorId = typeof rawActorId === 'string' ? rawActorId.trim() : '';
+  const actor = await resolveActor(req, res);
 
-  if (!actorId || !isUuid(actorId)) {
-    return res.status(400).json({ error: 'actorId valido obbligatorio' });
+  if (!actor) {
+    return res.status(401).json({ error: 'Sessione non valida o scaduta' });
   }
 
   const supabase = createClient();
 
-  // Aggiorna prima lo stato delle stanze pubbliche vuote/stale.
   const { error: cleanupError } = await supabase.rpc('cleanup_empty_public_rooms');
   if (cleanupError) {
     console.error('Empty public rooms cleanup failed:', cleanupError.message);
@@ -30,7 +26,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { data: memberships, error: membershipsError } = await supabase
     .from('room_participants')
     .select('room_id, role, membership_status, joined_at, expires_at')
-    .eq('actor_id', actorId)
+    .eq('actor_id', actor.id)
+    .eq('actor_type', actor.type)
     .in('membership_status', ['active', 'pending'])
     .or(`expires_at.is.null,expires_at.gt.${now}`)
     .order('joined_at', { ascending: false });
@@ -40,43 +37,57 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   const rows = memberships ?? [];
+
   if (rows.length === 0) {
-    return res.status(200).json({ active: [], pending: [], finished: [] });
+    return res.status(200).json({
+      active: [],
+      pending: [],
+      finished: [],
+      expired: [],
+    });
   }
 
   const roomIds = Array.from(new Set(rows.map((row: any) => row.room_id)));
 
-  const [{ data: rooms, error: roomsError }, { data: participants, error: participantsError }] =
-    await Promise.all([
-      supabase
-        .from('rooms')
-        .select(`
-          id,
-          mode,
-          room_type,
-          min_members,
-          max_members,
-          city,
-          province,
-          visibility,
-          requires_approval,
-          host_actor_id,
-          is_locked,
-          room_phase,
-          created_at
-        `)
-        .in('id', roomIds),
-      supabase
-        .from('room_participants')
-        .select('room_id, actor_id, display_name, role, membership_status, expires_at, last_seen_at')
-        .in('room_id', roomIds)
-        .eq('membership_status', 'active')
-        .or(`expires_at.is.null,expires_at.gt.${now}`)
-        .gte('last_seen_at', liveCutoff),
-    ]);
+  const [
+    { data: rooms, error: roomsError },
+    { data: participants, error: participantsError },
+  ] = await Promise.all([
+    supabase
+      .from('rooms')
+      .select(`
+        id,
+        mode,
+        room_type,
+        min_members,
+        max_members,
+        city,
+        province,
+        visibility,
+        requires_approval,
+        host_actor_id,
+        is_locked,
+        room_phase,
+        created_at
+      `)
+      .in('id', roomIds),
 
-  if (roomsError) return res.status(500).json({ error: roomsError.message });
-  if (participantsError) return res.status(500).json({ error: participantsError.message });
+    supabase
+      .from('room_participants')
+      .select('room_id, actor_id, display_name, role, membership_status, expires_at, last_seen_at')
+      .in('room_id', roomIds)
+      .eq('membership_status', 'active')
+      .or(`expires_at.is.null,expires_at.gt.${now}`)
+      .gte('last_seen_at', liveCutoff),
+  ]);
+
+  if (roomsError) {
+    return res.status(500).json({ error: roomsError.message });
+  }
+
+  if (participantsError) {
+    return res.status(500).json({ error: participantsError.message });
+  }
 
   const roomMap = new Map((rooms ?? []).map((room: any) => [room.id, room]));
   const countByRoom = new Map<string, number>();
@@ -130,13 +141,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const active = normalizedActive.filter(
     (room: any) => !['finished', 'expired'].includes(room.room_phase)
   );
-  const finished = normalizedActive.filter((room: any) => room.room_phase === 'finished');
-  const expired = normalizedActive.filter((room: any) => room.room_phase === 'expired');
+
+  const finished = normalizedActive.filter(
+    (room: any) => room.room_phase === 'finished'
+  );
+
+  const expired = normalizedActive.filter(
+    (room: any) => room.room_phase === 'expired'
+  );
 
   const pending = rows
     .filter((row: any) => row.membership_status === 'pending')
     .map(normalize)
     .filter(Boolean);
 
-  return res.status(200).json({ active, pending, finished, expired });
+  return res.status(200).json({
+    active,
+    pending,
+    finished,
+    expired,
+  });
 }

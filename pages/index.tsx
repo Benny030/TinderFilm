@@ -243,10 +243,14 @@ export default function LandingPage() {
     return () => observer.disconnect();
   }, [mounted, trending]);
 
-  const handleGuest = () => {
-    enterAsGuest();
+const handleGuest = async () => {
+  try {
+    await enterAsGuest();
     window.location.href = '/home';
-  };
+  } catch (error) {
+    console.error('Guest session creation failed:', error);
+  }
+};
 
   const handleJoinByCode = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();

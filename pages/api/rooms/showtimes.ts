@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { createClient } from '@/utils/supabase/server';
+import { resolveActor } from '@/utils/auth/serverActor';
 
 function normalizeTitle(value: string) {
   return String(value ?? '')
@@ -93,6 +94,14 @@ export default async function handler(
       return res.status(405).json({ error: 'Method not allowed' });
     }
 
+    const actor = await resolveActor(req, res);
+
+    if (!actor) {
+      return res.status(401).json({
+        error: 'Sessione non valida o scaduta',
+      });
+    }
+
     const roomId = String(
       firstQueryValue(req.query.roomId) ?? ''
     )
@@ -159,6 +168,41 @@ export default async function handler(
       });
     }
 
+    const now = new Date().toISOString();
+
+    const {
+      data: participant,
+      error: participantError,
+    } = await supabase
+      .from('room_participants')
+      .select('actor_id, actor_type, membership_status, expires_at')
+      .eq('room_id', roomId)
+      .eq('actor_id', actor.id)
+      .eq('actor_type', actor.type)
+      .eq('membership_status', 'active')
+      .maybeSingle();
+
+    if (participantError) {
+      return res.status(500).json({
+        error: participantError.message,
+      });
+    }
+
+    if (!participant) {
+      return res.status(403).json({
+        error: 'Non sei un partecipante attivo della stanza',
+      });
+    }
+
+    if (
+      participant.expires_at &&
+      new Date(participant.expires_at).getTime() <= Date.now()
+    ) {
+      return res.status(403).json({
+        error: 'La partecipazione alla stanza è scaduta',
+      });
+    }
+
     const { data: cinemas, error: cinemasError } = await supabase
       .from('cinemas')
       .select('id, name, city, address, lat, lng, slug');
@@ -213,7 +257,6 @@ export default async function handler(
         );
     }
 
-    // Fallback per cinema senza coordinate.
     if (nearbyCinemas.length === 0 && room.city) {
       const wantedCity = normalizeTitle(room.city);
 
@@ -248,11 +291,6 @@ export default async function handler(
       (cinema: any) => cinema.id
     );
 
-    /*
-     * Anche qui niente filtro data SQL:
-     * leggiamo a pagine le proiezioni dei cinema vicini,
-     * poi filtriamo esattamente i prossimi N giorni in JS.
-     */
     const allRows: any[] = [];
     const PAGE_SIZE = 1000;
     const MAX_ROWS = 10000;

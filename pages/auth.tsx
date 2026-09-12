@@ -387,10 +387,14 @@ export default function AuthPage() {
     }
   };
 
-  const handleGuest = () => {
-    enterAsGuest();
+const handleGuest = async () => {
+  try {
+    await enterAsGuest();
     window.location.href = '/home';
-  };
+  } catch (error) {
+    console.error('Guest session creation failed:', error);
+  }
+};
 
   const vars = {
     '--auth-bg': T.bg,

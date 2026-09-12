@@ -19,6 +19,7 @@ import WelcomeRoom from '@/components/screens/WelcomeRoom';
 import EmptyState from '@/components/screens/EmptyState';
 import { C, TEXT, S } from '@/styles/token';
 import { FilmSlate, ArrowLeft } from '@phosphor-icons/react';
+import { useGroupMatchSync } from '@/hooks/useGroupMatchSync';
 
 import type { Movie, RoomUser, SwipeState, Props } from '@/types';
 import type { ExtendedMovie, MatchEntry } from '@/types/stanza';
@@ -45,6 +46,12 @@ export default function StanzaPage({ movies: initialMovies, roomId }: Props) {
   const userId      = currentUser?.id ?? guestId ?? '';
   const displayName = currentUser && !currentUser.isGuest ? currentUser.username : guestName ?? 'Ospite';
   const isLoggedIn  = !!currentUser && !currentUser.isGuest;
+useGroupMatchSync({
+  movies,
+  setLastMatch,
+  setMatches,
+  setScreen,
+});
 
   // ── Redirect ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -420,7 +427,52 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
 
     return () => window.clearInterval(timer);
   }, [roomId, roomPhase, userId]);
+useEffect(() => {
+  if (membershipStatus !== 'active') return;
 
+  if (roomPhase === 'voting') {
+    setScreen('swipe');
+    return;
+  }
+
+  if (
+    (roomPhase === 'matched' || roomPhase === 'planning') &&
+    selectedMovieId
+  ) {
+    if (
+      roomType === 'cinema_pair' ||
+      roomType === 'cinema_group'
+    ) {
+      setScreen('plan');
+      return;
+    }
+
+    const winnerMovie = movies.find(
+      (movie) =>
+        String(movie.id) === String(selectedMovieId)
+    );
+
+    if (winnerMovie) {
+      setLastMatch(winnerMovie);
+    }
+
+    setScreen('match');
+    return;
+  }
+
+  if (
+    roomPhase === 'finished' ||
+    roomPhase === 'expired'
+  ) {
+    setScreen('welcome');
+  }
+}, [
+  roomPhase,
+  roomType,
+  selectedMovieId,
+  membershipStatus,
+  movies,
+]);
   async function runHostAction(
     action: 'lock' | 'unlock' | 'start_voting' | 'select_winner' | 'finish_room' | 'remove_member' | 'approve_member' | 'reject_member',
     targetActorId?: string,
@@ -592,7 +644,48 @@ const { card, isDragging, handleStart, handleMove, handleEnd, triggerSwipe } = u
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Errore durante lo swipe');
+
+if (!response.ok) {
+  if (
+    response.status === 409 &&
+    data?.code === 'MOVIE_ALREADY_MATCHED' &&
+    data?.match?.movie_id
+  ) {
+    const matchedMovieId = String(data.match.movie_id);
+
+    const matchedMovie = movies.find(
+      (m) => String(m.id) === matchedMovieId
+    );
+
+    if (matchedMovie) {
+      setLastMatch(matchedMovie);
+
+      setMatches((prev) =>
+        prev.some(
+          (entry) =>
+            String(entry.movie.id) === matchedMovieId
+        )
+          ? prev
+          : [
+              ...prev,
+              {
+                movie: matchedMovie,
+                timestamp: Date.now(),
+              },
+            ]
+      );
+
+      setScreen('match');
+    }
+
+    return;
+  }
+
+  throw new Error(
+    data.error || 'Errore durante lo swipe'
+  );
+}
+
 
       channelRef.current?.send({
         type: 'broadcast', event: 'swipe',
