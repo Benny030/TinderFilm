@@ -7,6 +7,7 @@ import '../styles/pages/auth.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import RoomLifecycleGuard from '@/components/RoomLifecycleGuard';
+import SharedRoomFlowGuard from '@/components/SharedRoomFlowGuard';
 
 export default function App({ Component, pageProps }: AppProps) {
   return (
@@ -22,6 +23,7 @@ export default function App({ Component, pageProps }: AppProps) {
 
       <ThemeProvider>
         <AuthProvider>
+          <SharedRoomFlowGuard />
           <RoomLifecycleGuard />
           <Component {...pageProps} />
         </AuthProvider>

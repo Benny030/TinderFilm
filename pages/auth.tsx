@@ -141,7 +141,7 @@ export default function AuthPage() {
   const supabase = useRef(createBrowserClient()).current;
   const { enterAsGuest } = useAuth();
   const { theme, toggleTheme } = useTheme();
-
+ 
   const T = theme === 'dark' ? THEME.dark : THEME.light;
   const isDark = theme === 'dark';
 
@@ -387,12 +387,52 @@ export default function AuthPage() {
     }
   };
 
+
 const handleGuest = async () => {
   try {
     await enterAsGuest();
-    window.location.href = '/home';
+
+    let destination = '/home';
+
+    try {
+      const rawPending =
+        window.sessionStorage.getItem(
+          'cinedate:pending-room-return'
+        );
+
+      if (rawPending) {
+        const pending =
+          JSON.parse(rawPending) as {
+            path?: unknown;
+            createdAt?: unknown;
+          };
+
+        if (
+          typeof pending.path === 'string' &&
+          pending.path.startsWith('/stanza?room=')
+        ) {
+          destination =
+            pending.path;
+
+          window.sessionStorage.removeItem(
+            'cinedate:pending-room-return'
+          );
+        }
+      }
+    } catch (storageError) {
+      console.warn(
+        'Unable to restore shared room destination:',
+        storageError
+      );
+    }
+
+    window.location.href =
+      destination;
   } catch (error) {
-    console.error('Guest session creation failed:', error);
+    console.error(
+      'Guest session creation failed:',
+      error
+    );
   }
 };
 
@@ -646,8 +686,8 @@ const handleGuest = async () => {
           animation: cdrAuthIn .45s ease both;
         }
 
-        .cdr-auth-card::after {
-          content: '';
+        .cdr-auth-card::after { 
+          content: attr(data-empty);
           position: absolute;
           left: 50%;
           bottom: -1px;
@@ -732,6 +772,7 @@ const handleGuest = async () => {
 
         <section
           className="cdr-auth-card"
+          data-empty=""
           style={{
             width: '100%',
             maxWidth: 430,
