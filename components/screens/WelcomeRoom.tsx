@@ -363,27 +363,36 @@ export default function WelcomeRoom({
     }
   };
 
-  const handleShare = async () => {
-    const shareText = `Entra nella mia stanza Cinedate con il codice ${roomId}`;
+const handleShare = async () => {
+  const roomUrl =
+    `${window.location.origin}/stanza?room=${encodeURIComponent(roomId)}`;
 
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: 'Cinedate',
-          text: shareText,
-        });
-        setShared(true);
-        window.setTimeout(() => setShared(false), 1800);
-        return;
-      }
+  const shareText =
+    `Entra nella mia stanza Cinedate con il codice ${roomId}`;
 
-      await navigator.clipboard.writeText(shareText);
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: 'Cinedate',
+        text: shareText,
+        url: roomUrl,
+      });
+
       setShared(true);
       window.setTimeout(() => setShared(false), 1800);
-    } catch {
-      // L'utente può annullare la condivisione nativa.
+      return;
     }
-  };
+
+    await navigator.clipboard.writeText(
+      `${shareText}\n${roomUrl}`
+    );
+
+    setShared(true);
+    window.setTimeout(() => setShared(false), 1800);
+  } catch {
+    // L'utente può annullare la condivisione nativa.
+  }
+};
 
   const vars = {
     '--cdr-room-bg': P.bg,

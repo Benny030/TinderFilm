@@ -9,7 +9,11 @@ import {
   type ReactNode,
 } from 'react';
 import { useRouter } from 'next/router';
-import type { Session } from '@supabase/supabase-js';
+import type {
+  AuthChangeEvent,
+  Session,
+} from '@supabase/supabase-js';
+
 import { createBrowserClient } from '@/utils/supabase/browser';
 import type { CurrentUser } from '@/types';
 
@@ -245,6 +249,9 @@ export function AuthProvider({
       return;
     }
 
+    let disposed = false;
+    let authTaskTimer: number | null = null;
+
     const init = async () => {
       try {
         const {
@@ -260,6 +267,8 @@ export function AuthProvider({
           );
         }
 
+        if (disposed) return;
+
         if (data.session?.user) {
           await applySessionUser(
             data.session
@@ -267,23 +276,18 @@ export function AuthProvider({
           return;
         }
 
+        if (disposed) return;
+
         setCurrentUser(null);
 
         const storedGuest =
           readStoredGuestSession();
 
         if (storedGuest) {
-          /*
-           * Non ci fidiamo dell'UUID nel localStorage.
-           * Chiediamo sempre al server l'identità guest firmata.
-           *
-           * - Se il cookie firmato è valido, il server restituisce
-           *   la stessa identità.
-           * - Se il browser proviene dalla vecchia implementazione,
-           *   il server crea una nuova identità autorevole.
-           */
           const serverGuest =
             await requestGuestSession();
+
+          if (disposed) return;
 
           writeStoredGuestSession(
             serverGuest
@@ -303,6 +307,8 @@ export function AuthProvider({
         setGuestId(null);
         setGuestName(null);
       } catch (error) {
+        if (disposed) return;
+
         console.error(
           'Authentication initialization failed:',
           error
@@ -314,9 +320,91 @@ export function AuthProvider({
         setGuestId(null);
         setGuestName(null);
       } finally {
-        setIsLoading(false);
+        if (!disposed) {
+          setIsLoading(false);
+        }
       }
     };
+
+    const handleAuthStateChange =
+      async (
+        event: AuthChangeEvent,
+        session: Session | null
+      ) => {
+        try {
+          if (
+            event ===
+            'SIGNED_OUT'
+          ) {
+            setCurrentUser(
+              null
+            );
+
+            const storedGuest =
+              readStoredGuestSession();
+
+            if (
+              storedGuest
+            ) {
+              const serverGuest =
+                await requestGuestSession();
+
+              if (disposed) return;
+
+              writeStoredGuestSession(
+                serverGuest
+              );
+
+              setIsGuest(
+                true
+              );
+              setGuestId(
+                serverGuest.id
+              );
+              setGuestName(
+                serverGuest.name
+              );
+            } else {
+              setIsGuest(
+                false
+              );
+              setGuestId(
+                null
+              );
+              setGuestName(
+                null
+              );
+            }
+
+            return;
+          }
+
+          if (
+            session?.user
+          ) {
+            await applySessionUser(
+              session
+            );
+          } else {
+            setCurrentUser(
+              null
+            );
+          }
+        } catch (error) {
+          if (disposed) return;
+
+          console.error(
+            'Authentication state update failed:',
+            error
+          );
+        } finally {
+          if (!disposed) {
+            setIsLoading(
+              false
+            );
+          }
+        }
+      };
 
     void init();
 
@@ -326,93 +414,58 @@ export function AuthProvider({
       },
     } =
       supabase.auth.onAuthStateChange(
-  async (
-    event,
-    session
-  ) => {
-    // L'inizializzazione iniziale è già gestita da init().
-    // Evita che isLoading diventi false mentre il guest
-    // firmato è ancora in fase di ripristino.
-    if (event === 'INITIAL_SESSION') {
-      return;
-    }
+        (
+          event,
+          session
+        ) => {
+          if (
+            event ===
+            'INITIAL_SESSION'
+          ) {
+            return;
+          }
 
-    try {
-            if (
-              event ===
-              'SIGNED_OUT'
-            ) {
-              setCurrentUser(
-                null
-              );
-
-              const storedGuest =
-                readStoredGuestSession();
-
-              if (
-                storedGuest
-              ) {
-                const serverGuest =
-                  await requestGuestSession();
-
-                writeStoredGuestSession(
-                  serverGuest
-                );
-
-                setIsGuest(
-                  true
-                );
-                setGuestId(
-                  serverGuest.id
-                );
-                setGuestName(
-                  serverGuest.name
-                );
-              } else {
-                setIsGuest(
-                  false
-                );
-                setGuestId(
-                  null
-                );
-                setGuestName(
-                  null
-                );
-              }
-
-              setIsLoading(
-                false
-              );
-
-              return;
-            }
-
-            if (
-              session?.user
-            ) {
-              await applySessionUser(
-                session
-              );
-            } else {
-              setCurrentUser(
-                null
-              );
-            }
-          } catch (error) {
-            console.error(
-              'Authentication state update failed:',
-              error
-            );
-          } finally {
-            setIsLoading(
-              false
+          if (
+            authTaskTimer !== null
+          ) {
+            window.clearTimeout(
+              authTaskTimer
             );
           }
+
+          authTaskTimer =
+            window.setTimeout(
+              () => {
+                authTaskTimer =
+                  null;
+
+                if (disposed) {
+                  return;
+                }
+
+                void handleAuthStateChange(
+                  event,
+                  session
+                );
+              },
+              0
+            );
         }
       );
 
-    return () =>
+    return () => {
+      disposed = true;
+
+      if (
+        authTaskTimer !== null
+      ) {
+        window.clearTimeout(
+          authTaskTimer
+        );
+      }
+
       subscription.unsubscribe();
+    };
   }, [
     router.pathname,
     supabase,

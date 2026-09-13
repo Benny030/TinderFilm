@@ -28,6 +28,7 @@ import type { ExtendedMovie, MatchEntry } from '@/types/stanza';
 type Screen = 'welcome' | 'swipe' | 'matches' | 'match' | 'plan';
 
 export default function StanzaPage({ movies: initialMovies, roomId }: Props) {
+  
   const router = useRouter();
   const { currentUser, isGuest, isLoading, guestId, guestName } = useAuth();
 
@@ -73,11 +74,27 @@ export default function StanzaPage({ movies: initialMovies, roomId }: Props) {
   // ── Redirect ────────────────────────────────────────────────────────────
 
 useEffect(() => {
-  if (isLoading) return;
+  console.log('[ROOM RETURN DEBUG]', {
+    pathname: router.pathname,
+    roomId,
+    isLoading,
+    hasCurrentUser: Boolean(currentUser),
+    isGuest,
+  });
+
+  if (isLoading) {
+    console.log('[ROOM RETURN DEBUG] auth ancora loading');
+    return;
+  }
 
   if (!currentUser && !isGuest) {
     const roomPath =
       `/stanza?room=${encodeURIComponent(roomId)}`;
+
+    console.log(
+      '[ROOM RETURN DEBUG] provo a salvare:',
+      roomPath
+    );
 
     try {
       window.sessionStorage.setItem(
@@ -87,12 +104,23 @@ useEffect(() => {
           createdAt: Date.now(),
         })
       );
+
+      console.log(
+        '[ROOM RETURN DEBUG] valore appena salvato:',
+        window.sessionStorage.getItem(
+          'cinedate:pending-room-return'
+        )
+      );
     } catch (storageError) {
-      console.warn(
-        'Unable to save pending room destination:',
+      console.error(
+        '[ROOM RETURN DEBUG] setItem FALLITO:',
         storageError
       );
     }
+
+    console.log(
+      '[ROOM RETURN DEBUG] redirect verso auth'
+    );
 
     void router.replace(
       `/auth?fromRoom=${encodeURIComponent(roomId)}`

@@ -1,22 +1,31 @@
-import { useEffect, useMemo } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+} from 'react';
 import { useRouter } from 'next/router';
 
 import { useAuth } from '@/hooks/useAuth';
 import { normalizeRoomCode } from '@/utils/roomCode';
 
-const STORAGE_KEY = 'cinedate:pending-room-return';
-const MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const STORAGE_KEY =
+  'cinedate:pending-room-return';
+
+const MAX_AGE_MS =
+  24 * 60 * 60 * 1000;
 
 type PendingRoomReturn = {
   path: string;
   createdAt: number;
 };
 
-function getRoomPath(roomId: string) {
-  return `/stanza?room=${encodeURIComponent(roomId)}`;
-}
+const useBrowserLayoutEffect =
+  typeof window !== 'undefined'
+    ? useLayoutEffect
+    : useEffect;
 
-function getStoredReturn(): PendingRoomReturn | null {
+function getStoredReturn():
+  | PendingRoomReturn
+  | null {
   if (typeof window === 'undefined') {
     return null;
   }
@@ -68,8 +77,57 @@ function getStoredReturn(): PendingRoomReturn | null {
     window.sessionStorage.removeItem(
       STORAGE_KEY
     );
+
     return null;
   }
+}
+
+function saveCurrentRoomReturn() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  if (
+    window.location.pathname !==
+    '/stanza'
+  ) {
+    return;
+  }
+
+  const params =
+    new URLSearchParams(
+      window.location.search
+    );
+
+  const rawRoom =
+    params.get('room');
+
+  if (!rawRoom) {
+    return;
+  }
+
+  const roomId =
+    normalizeRoomCode(
+      rawRoom
+    );
+
+  if (!roomId) {
+    return;
+  }
+
+  const payload: PendingRoomReturn = {
+    path:
+      `/stanza?room=${encodeURIComponent(
+        roomId
+      )}`,
+    createdAt:
+      Date.now(),
+  };
+
+  window.sessionStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify(payload)
+  );
 }
 
 function clearRoomReturn() {
@@ -82,37 +140,6 @@ function clearRoomReturn() {
   );
 }
 
-function temporarilyMarkShared(
-  button: HTMLButtonElement
-) {
-  const textNode =
-    Array.from(
-      button.childNodes
-    ).find(
-      (node) =>
-        node.nodeType ===
-          Node.TEXT_NODE &&
-        node.textContent?.trim()
-    );
-
-  if (!textNode) {
-    return;
-  }
-
-  const previousText =
-    textNode.textContent;
-
-  textNode.textContent =
-    ' Condiviso';
-
-  window.setTimeout(() => {
-    if (textNode.isConnected) {
-      textNode.textContent =
-        previousText;
-    }
-  }, 1800);
-}
-
 export default function SharedRoomFlowGuard() {
   const router = useRouter();
 
@@ -122,50 +149,54 @@ export default function SharedRoomFlowGuard() {
     isLoading,
   } = useAuth();
 
-  const roomId =
-    useMemo(() => {
-      const rawRoom =
-        router.query.room;
-
-      const value =
-        Array.isArray(rawRoom)
-          ? rawRoom[0]
-          : rawRoom;
-
-      if (
-        typeof value !== 'string'
-      ) {
-        return '';
-      }
-
-      return normalizeRoomCode(
-        value
-      );
-    }, [router.query.room]);
-
   /*
-   * IMPORTANTE
-   * ----------
-   * NON facciamo più redirect da /stanza a /auth qui.
+   * Salva il deep-link PRIMA dei normali useEffect
+   * della pagina stanza.
    *
-   * Quello viene gestito direttamente da pages/stanza.tsx:
-   * 1. salva cinedate:pending-room-return
-   * 2. poi esegue router.replace('/auth?...')
-   *
-   * In questo modo non esiste più la race tra due useEffect.
+   * Non dipende da AuthContext:
+   * anche se isLoading è ancora true, il browser
+   * conosce già /stanza?room=XXXX.
    */
+  useBrowserLayoutEffect(() => {
+    saveCurrentRoomReturn();
+  }, [
+    router.asPath,
+  ]);
 
   /*
-   * Dopo login / guest / OAuth / onboarding,
-   * se il flusso esistente arriva su /home,
-   * torniamo alla stanza salvata.
-   *
-   * Il guest può anche essere mandato direttamente alla stanza
-   * da auth.tsx; in quel caso lo storage è già stato rimosso.
+   * Se siamo entrati davvero nella stanza con una
+   * sessione valida, il ritorno pendente non serve più.
    */
   useEffect(() => {
     if (
-      !router.isReady ||
+      router.pathname !==
+        '/stanza' ||
+      isLoading
+    ) {
+      return;
+    }
+
+    if (
+      currentUser ||
+      isGuest
+    ) {
+      clearRoomReturn();
+    }
+  }, [
+    router.pathname,
+    currentUser,
+    isGuest,
+    isLoading,
+  ]);
+
+  /*
+   * auth.tsx nella repo porta Guest/Login a /home.
+   *
+   * Quando la sessione è pronta, se esiste una stanza
+   * salvata torniamo automaticamente lì.
+   */
+  useEffect(() => {
+    if (
       router.pathname !== '/home' ||
       isLoading ||
       (!currentUser && !isGuest)
@@ -187,121 +218,10 @@ export default function SharedRoomFlowGuard() {
     );
   }, [
     router,
-    router.isReady,
     router.pathname,
     currentUser,
     isGuest,
     isLoading,
-  ]);
-
-  /*
-   * Condivisione link stanza.
-   *
-   * Intercettiamo il bottone esistente senza modificare WelcomeRoom.
-   */
-  useEffect(() => {
-    if (
-      router.pathname !==
-        '/stanza' ||
-      !roomId
-    ) {
-      return;
-    }
-
-    const onClickCapture =
-      async (
-        event: MouseEvent
-      ) => {
-        const target =
-          event.target as
-            HTMLElement | null;
-
-        const button =
-          target?.closest(
-            'button.cdr-room-mini-btn'
-          ) as
-            | HTMLButtonElement
-            | null;
-
-        if (!button) {
-          return;
-        }
-
-        const label =
-          button.textContent
-            ?.trim()
-            .toLowerCase() ??
-          '';
-
-        if (
-          !label.includes(
-            'condividi'
-          ) &&
-          !label.includes(
-            'condiviso'
-          )
-        ) {
-          return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation();
-
-        const relativeUrl =
-          getRoomPath(
-            roomId
-          );
-
-        const absoluteUrl =
-          `${window.location.origin}${relativeUrl}`;
-
-        const shareText =
-          `Entra nella mia stanza CineDate.\n` +
-          `Codice: ${roomId}`;
-
-        try {
-          if (
-            navigator.share
-          ) {
-            await navigator.share({
-              title:
-                'CineDate',
-              text:
-                shareText,
-              url:
-                absoluteUrl,
-            });
-          } else {
-            await navigator.clipboard.writeText(
-              `${shareText}\n${absoluteUrl}`
-            );
-          }
-
-          temporarilyMarkShared(
-            button
-          );
-        } catch {
-          // Condivisione annullata.
-        }
-      };
-
-    document.addEventListener(
-      'click',
-      onClickCapture,
-      true
-    );
-
-    return () => {
-      document.removeEventListener(
-        'click',
-        onClickCapture,
-        true
-      );
-    };
-  }, [
-    router.pathname,
-    roomId,
   ]);
 
   return null;
